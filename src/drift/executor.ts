@@ -30,6 +30,14 @@ const SPOT_INDEX: Record<string, number> = {
   ETH: 3,
 };
 
+const MARKET_INDEX: Record<string, { perp: number; spot: number }> = {
+  SOL: { perp: 0, spot: 1 },
+  BTC: { perp: 1, spot: 2 },
+  ETH: { perp: 2, spot: 3 },
+};
+
+const DEFAULT_SLIPPAGE_BPS = 50; // 0.5%
+
 export class DriftExecutor {
   private client: DriftClient;
   private defaultPriorityFee: number;
@@ -427,5 +435,73 @@ export class DriftExecutor {
 
     logger.info(`Atomic delta-neutral exit: ${asset} | ${ixs.length - 1} close IXs`);
     return this.executeBatchedIxs(ixs);
+  }
+
+  // ── Slippage-Protected Market Orders ──────────────────────────
+
+  /**
+   * Place a market order as a limit at the slippage-adjusted oracle price.
+   * Protects against frontrunning and adverse fills by capping the
+   * worst acceptable execution price.
+   *
+   * For buys (long):  limit = oracle * (1 + slippageBps / 10000)
+   * For sells (short): limit = oracle * (1 - slippageBps / 10000)
+   */
+  async placeMarketOrderWithSlippage(params: {
+    asset: string;
+    marketType: "perp" | "spot";
+    direction: "long" | "short";
+    baseAmount: BN;
+    slippageBps?: number; // default 50
+  }): Promise<string> {
+    const { asset, marketType, direction, baseAmount } = params;
+    const slippageBps = params.slippageBps ?? DEFAULT_SLIPPAGE_BPS;
+
+    const indices = MARKET_INDEX[asset];
+    if (!indices) throw new Error(`Unknown asset: ${asset}`);
+
+    const marketIndex =
+      marketType === "perp" ? indices.perp : indices.spot;
+
+    // 1. Get the current oracle price for the asset
+    const oracleData = this.client.getOracleDataForPerpMarket(indices.perp);
+    const oraclePrice = oracleData.price; // BN in PRICE_PRECISION (1e6)
+
+    // 2. Calculate slippage-adjusted limit price
+    //    oraclePrice * (10000 +/- slippageBps) / 10000
+    const limitPrice =
+      direction === "long"
+        ? oraclePrice.mul(new BN(10000 + slippageBps)).div(new BN(10000))
+        : oraclePrice.mul(new BN(10000 - slippageBps)).div(new BN(10000));
+
+    const positionDirection =
+      direction === "long"
+        ? PositionDirection.LONG
+        : PositionDirection.SHORT;
+
+    const orderParams = getOrderParams({
+      orderType: OrderType.LIMIT,
+      marketIndex,
+      direction: positionDirection,
+      baseAssetAmount: baseAmount,
+      price: limitPrice,
+    });
+
+    logger.info(
+      `Slippage-protected ${direction} ${asset} ${marketType} | ` +
+        `oracle=${convertToNumber(oraclePrice, PRICE_PRECISION).toFixed(4)} | ` +
+        `limit=${convertToNumber(limitPrice, PRICE_PRECISION).toFixed(4)} | ` +
+        `slippage=${slippageBps}bps`
+    );
+
+    // 3. Place via the appropriate order method
+    let txSig: string;
+    if (marketType === "perp") {
+      txSig = await this.client.placePerpOrder(orderParams as any);
+    } else {
+      txSig = await this.client.placeSpotOrder(orderParams as any);
+    }
+
+    return typeof txSig === "string" ? txSig : "";
   }
 }

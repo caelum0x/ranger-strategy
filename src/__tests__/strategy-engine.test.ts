@@ -8,6 +8,8 @@ jest.mock("../config", () => ({
     maxLeverage: new (require("decimal.js"))("2.0"),
     healthRatioFloor: new (require("decimal.js"))("1.10"),
     maxDrawdownPct: new (require("decimal.js"))("3.0"),
+    minFundingAPY: new (require("decimal.js"))("0.05"),
+    strategyMode: "drift-only",
     targetAssets: ["SOL", "BTC", "ETH"],
   },
 }));
@@ -119,8 +121,9 @@ describe("StrategyEngine", () => {
 
   describe("generateSignals", () => {
     it("opens positions when funding is attractive", () => {
+      // In drift-only mode, only driftRates matter
       const driftRates = [makeFundingRate("SOL", "drift", 0.10)];
-      const binanceRates = [makeFundingRate("SOL", "binance", 0.20)];
+      const binanceRates: FundingRate[] = [];
 
       const signals = engine.generateSignals(driftRates, binanceRates);
 
@@ -128,22 +131,21 @@ describe("StrategyEngine", () => {
       expect(openSignals.length).toBeGreaterThan(0);
       expect(openSignals[0].asset).toBe("SOL");
       expect(openSignals[0].spotVenue).toBe("drift");
-      expect(openSignals[0].perpVenue).toBe("binance");
+      expect(openSignals[0].perpVenue).toBe("drift");
+      expect(openSignals[0].spotSide).toBe("long");
+      expect(openSignals[0].perpSide).toBe("short");
     });
 
     it("closes positions when funding becomes unattractive", () => {
-      // Manually inject a position into the engine state
-      const state = engine.getState();
-      // We need to set state with an existing position for an asset
-      // that won't appear in the attractive ranked list
+      // Inject a position for an asset
       (engine as any).state.positions = [
         makePosition({ asset: "SOL", venue: "drift" }),
       ];
       (engine as any).state.idleCapital = new Decimal("500");
 
-      // Funding is now zero/negative — SOL won't be attractive
-      const driftRates = [makeFundingRate("SOL", "drift", -0.01)];
-      const binanceRates = [makeFundingRate("SOL", "binance", -0.01)];
+      // Funding near zero — below minFundingAPY (0.05) in both directions
+      const driftRates = [makeFundingRate("SOL", "drift", 0.001)];
+      const binanceRates: FundingRate[] = [];
 
       const signals = engine.generateSignals(driftRates, binanceRates);
 
@@ -154,11 +156,10 @@ describe("StrategyEngine", () => {
     });
 
     it("does not open when idle capital is below minimum", () => {
-      // Set idle capital to below $5 threshold
       (engine as any).state.idleCapital = new Decimal("3");
 
       const driftRates = [makeFundingRate("SOL", "drift", 0.10)];
-      const binanceRates = [makeFundingRate("SOL", "binance", 0.20)];
+      const binanceRates: FundingRate[] = [];
 
       const signals = engine.generateSignals(driftRates, binanceRates);
 

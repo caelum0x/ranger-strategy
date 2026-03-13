@@ -136,8 +136,9 @@ describe("DriftFundingAnalyzer", () => {
       expect(result).toBeNull();
     });
 
-    it("identifies unattractive funding with negative rate", () => {
-      // Negative rate and negative premium → shorts pay, unattractive
+    it("identifies negative funding as attractive for longs", () => {
+      // Negative rate → longs collect funding. Bi-directional strategy
+      // finds this attractive if |annualized| > 5%
       const market = makePerpMarketAccount({
         lastFundingRate: -0.0001,
         last24HAvgFundingRate: -0.0001,
@@ -151,7 +152,9 @@ describe("DriftFundingAnalyzer", () => {
       const result = analyzer.analyzeFundingRate("BTC", 1);
 
       expect(result).not.toBeNull();
-      expect(result!.isAttractive).toBe(false);
+      // annualized = |-0.0001 * 24 * 365.25| ≈ 0.877 > 0.05 → attractive
+      expect(result!.isAttractive).toBe(true);
+      expect(result!.attractiveDirection).toBe("long");
     });
   });
 
