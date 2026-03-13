@@ -662,10 +662,10 @@ export class DriftVaultManager {
     this.ensureInitialized();
     const vault = await this.vaultClient.getVault(vaultAddress);
 
-    // The vault's manager is the authority for the vault's Drift user account
-    // The delegate trades using the vault's authority
+    // The vault PDA owns the vault's Drift user account.
+    // When trading as delegate, set authority = vault PDA.
     return {
-      authority: vault.manager,
+      authority: vaultAddress,
       subAccountIds: [subAccountId],
       activeSubAccountId: subAccountId,
     };

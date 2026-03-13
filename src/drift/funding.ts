@@ -30,7 +30,13 @@ export interface FundingAnalysis {
   oracleTwap: Decimal;
   premium: Decimal; // mark - oracle as percentage
   longShortImbalance: Decimal;
-  isAttractive: boolean; // profitable for our strategy (short)
+  isAttractive: boolean; // profitable for either direction
+  /** Which perp side to take: "short" if funding positive, "long" if negative */
+  attractiveDirection: "short" | "long" | null;
+  /** Funding rate momentum: rising, falling, or flat */
+  momentum: "rising" | "falling" | "flat";
+  /** EMA-based momentum score (-1 to 1) */
+  momentumScore: Decimal;
 }
 
 export class DriftFundingAnalyzer {
@@ -116,9 +122,24 @@ export class DriftFundingAnalyzer {
       confidence = 0.4;
     else confidence = 0.6;
 
-    // Attractive for our strategy: positive funding (shorts collect)
-    // AND annualized > 5% to be worth the trading costs
-    const isAttractive = annualized > 0.05 && predictedDirection !== "negative";
+    // Bi-directional attractiveness:
+    // Positive funding (shorts collect) → short perp + long spot
+    // Negative funding (longs collect)  → long perp + short spot
+    // Both are delta-neutral, both collect funding
+    const absAnnualized = Math.abs(annualized);
+    const isAttractive = absAnnualized > 0.05; // 5% min either direction
+    const attractiveDirection: "short" | "long" | null = !isAttractive
+      ? null
+      : annualized > 0
+        ? "short"  // positive funding → short perp collects
+        : "long";  // negative funding → long perp collects
+
+    // Momentum: compare current rate vs 24h average
+    // If current is stronger than average, momentum is in that direction
+    const rateDelta = lastRate - avg24h;
+    const momentumScore = avg24h !== 0 ? rateDelta / Math.abs(avg24h) : 0;
+    const momentum: "rising" | "falling" | "flat" =
+      momentumScore > 0.1 ? "rising" : momentumScore < -0.1 ? "falling" : "flat";
 
     const analysis: FundingAnalysis = {
       asset,
@@ -132,6 +153,9 @@ export class DriftFundingAnalyzer {
       premium: new Decimal(premium),
       longShortImbalance: new Decimal(imbalance),
       isAttractive,
+      attractiveDirection,
+      momentum,
+      momentumScore: new Decimal(momentumScore),
     };
 
     logger.info(`Funding analysis for ${asset}`, {
@@ -143,6 +167,9 @@ export class DriftFundingAnalyzer {
       predicted: predictedDirection,
       confidence: `${(confidence * 100).toFixed(0)}%`,
       attractive: isAttractive,
+      direction: attractiveDirection || "none",
+      momentum,
+      momentumScore: momentumScore.toFixed(3),
     });
 
     return analysis;

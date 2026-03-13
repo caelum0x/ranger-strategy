@@ -8,3 +8,8 @@ coverage/
 .vscode/
 *.key
 *.pem
+
+# Generated output files
+backtest_results_*.json
+binance_trades_*.csv
+drift_funding_*.csv

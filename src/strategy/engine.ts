@@ -21,6 +21,8 @@ export class StrategyEngine {
   private fundingAnalyzer: DriftFundingAnalyzer | null = null;
   private executor: DriftExecutor | null = null;
   private state: StrategyState;
+  private lastFundingSnapshot: Decimal = new Decimal(0);
+  private startTime: number = Date.now();
 
   constructor(
     drift: DriftManager,
@@ -45,6 +47,13 @@ export class StrategyEngine {
       lastRebalance: 0,
       regime: "neutral",
     };
+  }
+
+  /**
+   * Swap the Drift client (used when switching to vault delegate mode).
+   */
+  setDrift(drift: DriftManager): void {
+    this.drift = drift;
   }
 
   /**
@@ -90,6 +99,11 @@ export class StrategyEngine {
       this.binance.getFundingRates(),
     ]);
 
+    // 4.5. Detect market regime and update state
+    const allRates = [...driftRates, ...binanceRates];
+    this.state.regime = this.detectRegime(allRates);
+    logger.info(`Market regime: ${this.state.regime}`);
+
     // 5. Generate trade signals
     const signals = this.generateSignals(driftRates, binanceRates);
 
@@ -98,7 +112,15 @@ export class StrategyEngine {
       await this.executeSignal(signal);
     }
 
-    // 7. Settle funding on Drift
+    // 7. Track funding collected
+    const fundingPnl = this.drift.getUnrealizedFundingPnl();
+    const newFunding = fundingPnl.sub(this.lastFundingSnapshot);
+    if (newFunding.gt(0)) {
+      this.state.totalFundingCollected = this.state.totalFundingCollected.add(newFunding);
+    }
+    this.lastFundingSnapshot = fundingPnl;
+
+    // 7.1. Settle funding on Drift
     await this.drift.settleFunding();
 
     // 7.5. Settle PnL via executor if available
@@ -113,11 +135,22 @@ export class StrategyEngine {
     // 8. Update state again
     await this.refreshState();
 
+    // 9. Update last rebalance timestamp and estimate APY
+    this.state.lastRebalance = Date.now();
+    const elapsedMs = Date.now() - this.startTime;
+    const elapsedDays = elapsedMs / (86400 * 1000);
+    if (elapsedDays > 0 && this.state.totalCapital.gt(0)) {
+      const returnSoFar = this.state.totalFundingCollected.div(this.state.totalCapital);
+      this.state.apyEstimate = returnSoFar.div(elapsedDays).mul(365.25).mul(100);
+    }
+
     logger.info("=== Strategy cycle complete ===", {
       totalPnl: this.state.totalPnl.toFixed(4),
       healthRatio: this.state.healthRatio.toFixed(4),
       positions: this.state.positions.length,
-      apyEstimate: this.state.apyEstimate.toFixed(2),
+      apyEstimate: `${this.state.apyEstimate.toFixed(2)}%`,
+      fundingCollected: `$${this.state.totalFundingCollected.toFixed(4)}`,
+      regime: this.state.regime,
     });
   }
 

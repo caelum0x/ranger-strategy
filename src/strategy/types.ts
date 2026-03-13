@@ -45,6 +45,10 @@ export interface TradeSignal {
   action: "open" | "close" | "increase" | "decrease" | "rebalance";
   spotVenue: "drift";
   perpVenue: "binance" | "drift";
+  /** Direction for the spot leg (long = buy, short = borrow-sell) */
+  spotSide: "long" | "short";
+  /** Direction for the perp leg */
+  perpSide: "long" | "short";
   spotSize: Decimal;
   perpSize: Decimal;
   confidence: Decimal;

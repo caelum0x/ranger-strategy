@@ -1,4 +1,5 @@
 import Decimal from "decimal.js";
+import * as fs from "fs";
 import { BinanceManager } from "../binance/client";
 import { BacktestResult, FundingRate } from "../strategy/types";
 import { config } from "../config";
@@ -195,6 +196,32 @@ async function main() {
   console.log(`Total Funding Collected: $${result.totalFundingCollected.toFixed(2)}`);
   console.log(`Win Rate: ${result.winRate.mul(100).toFixed(1)}%`);
   console.log(`Total Periods: ${result.totalTrades}`);
+
+  // Save results to JSON for submission
+  const output = {
+    strategy: "USDC Delta-Neutral Funding Harvester",
+    period: {
+      start: result.startDate.toISOString(),
+      end: result.endDate.toISOString(),
+    },
+    performance: {
+      totalReturn: `${result.totalReturn.mul(100).toFixed(2)}%`,
+      annualizedReturn: `${result.annualizedReturn.mul(100).toFixed(2)}%`,
+      maxDrawdown: `${result.maxDrawdown.toFixed(2)}%`,
+      sharpeRatio: result.sharpeRatio.toFixed(2),
+      totalFundingCollected: `$${result.totalFundingCollected.toFixed(2)}`,
+      winRate: `${result.winRate.mul(100).toFixed(1)}%`,
+      totalPeriods: result.totalTrades,
+    },
+    equityCurve: result.dailyReturns.map((d) => ({
+      date: d.date.toISOString().split("T")[0],
+      return: d.return.toFixed(6),
+    })),
+  };
+
+  const filename = `backtest_results_${result.startDate.toISOString().split("T")[0]}_${result.endDate.toISOString().split("T")[0]}.json`;
+  fs.writeFileSync(filename, JSON.stringify(output, null, 2));
+  console.log(`\nResults saved to ${filename}`);
 }
 
 main().catch(console.error);

@@ -81,17 +81,51 @@ class StrategyAgent {
       this.engine.setExecutor(this.executor);
       logger.info("On-chain funding analyzer and executor attached");
 
-      // Initialize Drift Vault Manager if vault address is configured
+      // Initialize Drift Vault Manager if vault address is configured.
+      // When a vault is configured, create a second DriftManager that trades
+      // as the vault's delegate — orders go through the vault's Drift user account.
       const driftVaultPubkey = process.env.DRIFT_VAULT_PUBKEY;
       if (driftVaultPubkey) {
         this.driftVault = new DriftVaultManager(driftClient, this.drift.getWallet());
         await this.driftVault.initialize();
         const vaultAddress = new PublicKey(driftVaultPubkey);
+
+        // Get delegate config (vault PDA as authority)
+        const delegateConfig = await this.driftVault.getDelegateConfig(vaultAddress);
+        logger.info("Vault delegate config", {
+          authority: delegateConfig.authority.toBase58(),
+          subAccountIds: delegateConfig.subAccountIds,
+        });
+
+        // Re-initialize Drift client for delegated trading on the vault
+        const vaultDrift = new DriftManager({
+          keypair: keypairSource,
+          delegateFor: delegateConfig,
+        });
+        await vaultDrift.initialize();
+
+        // Swap out the agent's drift client so all trades go through the vault
+        const oldDrift = this.drift;
+        this.drift = vaultDrift;
+
+        // Re-wire executor and funding analyzer to the new delegated client
+        const vaultDriftClient = vaultDrift.getClient();
+        this.fundingAnalyzer = new DriftFundingAnalyzer(vaultDriftClient);
+        this.executor = new DriftExecutor(vaultDriftClient);
+
+        // Re-wire the strategy engine to use the delegated client
+        this.engine.setDrift(this.drift);
+        this.engine.setFundingAnalyzer(this.fundingAnalyzer);
+        this.engine.setExecutor(this.executor);
+
         const equity = await this.driftVault.getVaultEquity(vaultAddress);
-        logger.info("Drift Vault connected", {
+        logger.info("Drift Vault connected — trading as delegate", {
           vault: driftVaultPubkey,
           equity: `$${equity.toFixed(2)}`,
         });
+
+        // Shut down the old non-delegated client
+        await oldDrift.shutdown();
       }
     }
 

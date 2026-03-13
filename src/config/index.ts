@@ -29,9 +29,15 @@ export const config = {
   binanceTestnet: process.env.BINANCE_TESTNET === "true",
 
   // Strategy
+  /** "drift-only" keeps all capital on-chain (seedable by vault). "cross-venue" adds Binance perp leg. */
+  strategyMode: (process.env.STRATEGY_MODE || "drift-only") as
+    | "drift-only"
+    | "cross-venue",
   maxLeverage: new Decimal(process.env.MAX_LEVERAGE || "2.0"),
   healthRatioFloor: new Decimal(process.env.HEALTH_RATIO_FLOOR || "1.10"),
   maxDrawdownPct: new Decimal(process.env.MAX_DRAWDOWN_PCT || "3.0"),
+  /** Minimum annualized funding rate to open a position (below this, skip) */
+  minFundingAPY: new Decimal(process.env.MIN_FUNDING_APY || "0.05"),
   rebalanceIntervalMs: parseInt(
     process.env.REBALANCE_INTERVAL_MS || "28800000"
   ), // 8 hours
