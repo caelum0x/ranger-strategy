@@ -1,0 +1,47 @@
+{
+  "name": "ranger-delta-neutral-vault",
+  "version": "0.1.0",
+  "description": "AI-powered USDC delta-neutral funding harvester vault for Ranger Earn on Solana",
+  "main": "dist/index.js",
+  "scripts": {
+    "build": "tsc",
+    "dev": "ts-node src/index.ts",
+    "agent": "ts-node src/agent/index.ts",
+    "backtest": "ts-node src/backtest/run.ts",
+    "vault:init": "ts-node scripts/init-vault.ts",
+    "vault:deposit": "ts-node scripts/deposit-strategy.ts",
+    "vault:withdraw": "ts-node scripts/withdraw-strategy.ts",
+    "vault:status": "ts-node scripts/vault-status.ts",
+    "lint": "eslint src/",
+    "test": "jest"
+  },
+  "dependencies": {
+    "@coral-xyz/anchor": "^0.30.0",
+    "@drift-labs/sdk": "^2.80.0",
+    "@solana/web3.js": "^1.95.0",
+    "@solana/spl-token": "^0.4.0",
+    "@voltr/vault-sdk": "latest",
+    "@drift-labs/vaults-sdk": "^0.1.0",
+    "bs58": "^5.0.0",
+    "ccxt": "^4.0.0",
+    "dotenv": "^16.4.0",
+    "winston": "^3.11.0",
+    "cron": "^3.1.0",
+    "decimal.js": "^10.4.3"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "@types/cron": "^2.4.0",
+    "typescript": "^5.3.0",
+    "ts-node": "^10.9.0",
+    "jest": "^29.0.0",
+    "ts-jest": "^29.0.0",
+    "@types/jest": "^29.0.0",
+    "eslint": "^8.0.0",
+    "@typescript-eslint/eslint-plugin": "^6.0.0",
+    "@typescript-eslint/parser": "^6.0.0"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}
