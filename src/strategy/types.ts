@@ -30,12 +30,16 @@ export interface StrategyState {
   positions: Position[];
   totalPnl: Decimal;
   totalFundingCollected: Decimal;
+  totalLendingCollected: Decimal;
+  totalTradingCosts: Decimal;
   currentDrawdown: Decimal;
   maxDrawdownHit: Decimal;
   healthRatio: Decimal;
   apyEstimate: Decimal;
   lastRebalance: number;
   regime: MarketRegime;
+  cycleCount: number;
+  directionFlips: number;
 }
 
 export type MarketRegime = "bull" | "bear" | "neutral" | "volatile";
@@ -72,7 +76,9 @@ export interface BacktestResult {
   maxDrawdown: Decimal;
   sharpeRatio: Decimal;
   totalFundingCollected: Decimal;
+  totalLendingCollected: Decimal;
   totalTrades: number;
   winRate: Decimal;
+  directionFlips: number;
   dailyReturns: { date: Date; return: Decimal }[];
 }

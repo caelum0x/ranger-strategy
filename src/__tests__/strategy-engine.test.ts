@@ -11,6 +11,7 @@ jest.mock("../config", () => ({
     minFundingAPY: new (require("decimal.js"))("0.05"),
     strategyMode: "drift-only",
     targetAssets: ["SOL", "BTC", "ETH"],
+    rebalanceIntervalMs: 28800000,
   },
 }));
 
@@ -31,6 +32,14 @@ jest.mock("../drift/client", () => ({
 // Mock BinanceManager
 jest.mock("../binance/client", () => ({
   BinanceManager: jest.fn(),
+}));
+
+// Mock DriftDataAPI
+jest.mock("../drift/data-api", () => ({
+  DriftDataAPI: jest.fn().mockImplementation(() => ({
+    getDepositRateHistory: jest.fn().mockResolvedValue([]),
+    getBorrowRateHistory: jest.fn().mockResolvedValue([]),
+  })),
 }));
 
 // Mock RiskManager — let the real implementation run since it's pure logic
@@ -57,9 +66,11 @@ function makeDriftMock() {
     getPositions: jest.fn().mockResolvedValue([]),
     getHealthRatio: jest.fn().mockResolvedValue(new Decimal("5")),
     getUnrealizedFundingPnl: jest.fn().mockReturnValue(new Decimal("0")),
+    getFreeCollateral: jest.fn().mockReturnValue(new Decimal("1000")),
     buySpot: jest.fn().mockResolvedValue(undefined),
     sellSpot: jest.fn().mockResolvedValue(undefined),
     shortPerp: jest.fn().mockResolvedValue(undefined),
+    longPerp: jest.fn().mockResolvedValue(undefined),
     closePerp: jest.fn().mockResolvedValue(undefined),
     settleFunding: jest.fn().mockResolvedValue(undefined),
   } as any;
@@ -70,6 +81,7 @@ function makeBinanceMock() {
     getFundingRates: jest.fn().mockResolvedValue([]),
     getPositions: jest.fn().mockResolvedValue([]),
     shortPerp: jest.fn().mockResolvedValue(undefined),
+    longPerp: jest.fn().mockResolvedValue(undefined),
     closePerp: jest.fn().mockResolvedValue(undefined),
   } as any;
 }
@@ -120,8 +132,7 @@ describe("StrategyEngine", () => {
   // ── generateSignals ────────────────────────────────────────────────
 
   describe("generateSignals", () => {
-    it("opens positions when funding is attractive", () => {
-      // In drift-only mode, only driftRates matter
+    it("opens positions when funding is attractive (positive)", () => {
       const driftRates = [makeFundingRate("SOL", "drift", 0.10)];
       const binanceRates: FundingRate[] = [];
 
@@ -132,12 +143,27 @@ describe("StrategyEngine", () => {
       expect(openSignals[0].asset).toBe("SOL");
       expect(openSignals[0].spotVenue).toBe("drift");
       expect(openSignals[0].perpVenue).toBe("drift");
+      // Positive funding → short perp + long spot
       expect(openSignals[0].spotSide).toBe("long");
       expect(openSignals[0].perpSide).toBe("short");
     });
 
+    it("opens positions for negative funding (bi-directional)", () => {
+      // Negative funding → long perp (longs collect) + short spot
+      const driftRates = [makeFundingRate("ETH", "drift", -0.12)];
+      const binanceRates: FundingRate[] = [];
+
+      const signals = engine.generateSignals(driftRates, binanceRates);
+
+      const openSignals = signals.filter(
+        (s) => s.action === "open" && s.asset === "ETH"
+      );
+      expect(openSignals.length).toBeGreaterThan(0);
+      expect(openSignals[0].perpSide).toBe("long");
+      expect(openSignals[0].spotSide).toBe("short");
+    });
+
     it("closes positions when funding becomes unattractive", () => {
-      // Inject a position for an asset
       (engine as any).state.positions = [
         makePosition({ asset: "SOL", venue: "drift" }),
       ];
@@ -155,6 +181,32 @@ describe("StrategyEngine", () => {
       expect(closeSignals[0].reason).toContain("no longer attractive");
     });
 
+    it("generates rebalance signal on direction flip", () => {
+      // We have a long spot (= short perp) position on SOL
+      (engine as any).state.positions = [
+        makePosition({
+          asset: "SOL",
+          side: "long",     // spot side is long → perp is short
+          venue: "drift",
+          notionalValue: new Decimal("100"),
+        }),
+      ];
+      (engine as any).state.idleCapital = new Decimal("500");
+
+      // Funding flips to negative → now long perp should collect
+      const driftRates = [makeFundingRate("SOL", "drift", -0.10)];
+      const binanceRates: FundingRate[] = [];
+
+      const signals = engine.generateSignals(driftRates, binanceRates);
+
+      const rebalanceSignals = signals.filter((s) => s.action === "rebalance");
+      expect(rebalanceSignals.length).toBe(1);
+      expect(rebalanceSignals[0].asset).toBe("SOL");
+      expect(rebalanceSignals[0].perpSide).toBe("long");
+      expect(rebalanceSignals[0].spotSide).toBe("short");
+      expect(rebalanceSignals[0].reason).toContain("Direction flip");
+    });
+
     it("does not open when idle capital is below minimum", () => {
       (engine as any).state.idleCapital = new Decimal("3");
 
@@ -165,6 +217,50 @@ describe("StrategyEngine", () => {
 
       const openSignals = signals.filter((s) => s.action === "open");
       expect(openSignals).toHaveLength(0);
+    });
+
+    it("ranks assets by absolute yield for bi-directional", () => {
+      const driftRates = [
+        makeFundingRate("SOL", "drift", 0.08),    // 8% positive
+        makeFundingRate("BTC", "drift", -0.15),   // 15% negative (higher abs)
+        makeFundingRate("ETH", "drift", 0.06),    // 6% positive
+      ];
+
+      const signals = engine.generateSignals(driftRates, []);
+
+      const openSignals = signals.filter((s) => s.action === "open");
+      // BTC should be first (highest |yield|), then SOL, then ETH
+      expect(openSignals.length).toBe(3);
+      expect(openSignals[0].asset).toBe("BTC");
+      expect(openSignals[0].perpSide).toBe("long"); // negative funding → long perp
+      expect(openSignals[1].asset).toBe("SOL");
+      expect(openSignals[1].perpSide).toBe("short"); // positive funding → short perp
+    });
+  });
+
+  // ── Settlement-Aware Timing ────────────────────────────────────────
+
+  describe("settlement-aware timing", () => {
+    it("defers execution near settlement", async () => {
+      // Set up rates with settlement very close (1 minute away)
+      const nearSettlementRate: FundingRate = {
+        asset: "SOL",
+        venue: "drift",
+        rate: new Decimal("0.001"),
+        annualizedRate: new Decimal("0.10"),
+        timestamp: Date.now(),
+        nextSettlement: Date.now() + 60_000, // 1 minute away
+      };
+
+      drift.getFundingRates.mockResolvedValue([nearSettlementRate]);
+      drift.getPositions.mockResolvedValue([]);
+      drift.getHealthRatio.mockResolvedValue(new Decimal("5"));
+
+      await engine.runCycle();
+
+      // Should NOT have called buySpot or shortPerp since we're near settlement
+      expect(drift.buySpot).not.toHaveBeenCalled();
+      expect(drift.shortPerp).not.toHaveBeenCalled();
     });
   });
 
@@ -199,7 +295,6 @@ describe("StrategyEngine", () => {
     });
 
     it("classifies volatile when stddev is high", () => {
-      // Large spread between rates creates high variance
       const rates = [
         makeFundingRate("SOL", "drift", 1.0),
         makeFundingRate("BTC", "drift", -1.0),
@@ -210,6 +305,86 @@ describe("StrategyEngine", () => {
 
     it("returns neutral for empty rates", () => {
       expect(engine.detectRegime([])).toBe("neutral");
+    });
+  });
+
+  // ── autoCompound ─────────────────────────────────────────────────
+
+  describe("autoCompound", () => {
+    it("increases idle capital when net yield is positive", () => {
+      (engine as any).state.totalFundingCollected = new Decimal("5.0");
+      (engine as any).state.totalLendingCollected = new Decimal("1.0");
+      (engine as any).state.totalTradingCosts = new Decimal("0.5");
+      (engine as any).state.totalCapital = new Decimal("1000");
+      (engine as any).state.totalPnl = new Decimal("5.5");
+      (engine as any).state.deployedCapital = new Decimal("500");
+      (engine as any).state.idleCapital = new Decimal("500");
+
+      const result = engine.autoCompound();
+      // totalCapital + totalPnl - deployedCapital = 1005.5 - 500 = 505.5
+      // compounded = 505.5 - 500 = 5.5
+      expect(result.compounded.gt(0)).toBe(true);
+      expect(result.newIdle.eq(new Decimal("505.5"))).toBe(true);
+    });
+
+    it("does not compound when net yield is negligible", () => {
+      (engine as any).state.totalFundingCollected = new Decimal("0.001");
+      (engine as any).state.totalLendingCollected = new Decimal("0");
+      (engine as any).state.totalTradingCosts = new Decimal("0");
+
+      const result = engine.autoCompound();
+      expect(result.compounded.eq(0)).toBe(true);
+    });
+
+    it("does not compound when idle already reflects PnL", () => {
+      (engine as any).state.totalFundingCollected = new Decimal("5.0");
+      (engine as any).state.totalLendingCollected = new Decimal("0");
+      (engine as any).state.totalTradingCosts = new Decimal("0");
+      (engine as any).state.totalCapital = new Decimal("1000");
+      (engine as any).state.totalPnl = new Decimal("0");
+      (engine as any).state.deployedCapital = new Decimal("500");
+      (engine as any).state.idleCapital = new Decimal("500");
+
+      const result = engine.autoCompound();
+      // 1000 + 0 - 500 = 500 = idleCapital, no change
+      expect(result.compounded.eq(0)).toBe(true);
+    });
+  });
+
+  // ── State persistence helpers ────────────────────────────────────
+
+  describe("state persistence", () => {
+    it("exports and restores predictor history", () => {
+      // Feed some data to predictor
+      const rates: import("../strategy/types").FundingRate[] = [
+        makeFundingRate("SOL", "drift", 0.10),
+        makeFundingRate("BTC", "drift", 0.15),
+      ];
+      // Access predictor through the engine's runCycle mechanism
+      // Instead, test the raw methods
+      const history = engine.getPredictorHistory();
+      expect(history.size).toBe(0);
+
+      // Manually set and restore
+      const saved = new Map<string, Decimal[]>();
+      saved.set("SOL", [new Decimal("0.10"), new Decimal("0.12")]);
+      engine.restorePredictorHistory(saved);
+
+      const restored = engine.getPredictorHistory();
+      expect(restored.get("SOL")).toHaveLength(2);
+    });
+
+    it("restores cumulative state fields", () => {
+      engine.restoreState({
+        totalFundingCollected: new Decimal("42.5"),
+        cycleCount: 100,
+        directionFlips: 5,
+      });
+
+      const state = engine.getState();
+      expect(state.totalFundingCollected.eq(new Decimal("42.5"))).toBe(true);
+      expect(state.cycleCount).toBe(100);
+      expect(state.directionFlips).toBe(5);
     });
   });
 });

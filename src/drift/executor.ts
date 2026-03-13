@@ -211,11 +211,15 @@ export class DriftExecutor {
 
   /**
    * Build an atomic cancel-all + delta-neutral-entry transaction.
-   * Cancel any existing orders, then place spot buy + perp short.
+   * Bi-directional: supports both positive funding (short perp + long spot)
+   * and negative funding (long perp + short spot).
+   *
+   * @param perpDirection - "short" for positive funding, "long" for negative funding
    */
   async atomicCancelAndEnterDeltaNeutral(
     asset: string,
-    usdcAmount: Decimal
+    usdcAmount: Decimal,
+    perpDirection: "short" | "long" = "short"
   ): Promise<string> {
     const perpIdx = PERP_INDEX[asset];
     const spotIdx = SPOT_INDEX[asset];
@@ -223,39 +227,72 @@ export class DriftExecutor {
       throw new Error(`Unknown asset: ${asset}`);
 
     const oracleData = this.client.getOracleDataForPerpMarket(perpIdx);
-    const price = convertToNumber(oracleData.price, PRICE_PRECISION);
+    const oraclePrice = oracleData.price; // BN in PRICE_PRECISION
+    const price = convertToNumber(oraclePrice, PRICE_PRECISION);
+
+    // Validate oracle price is sane (non-zero, non-negative)
+    if (price <= 0) {
+      throw new Error(
+        `Invalid oracle price for ${asset}: ${price} — aborting to prevent bad fills`
+      );
+    }
+
     const baseAmount = new Decimal(usdcAmount.toNumber() / price);
+
+    // Slippage-protected limit prices (50bps)
+    const slippageBps = DEFAULT_SLIPPAGE_BPS;
+    const spotDirection = perpDirection === "short"
+      ? PositionDirection.LONG
+      : PositionDirection.SHORT;
+    const perpDir = perpDirection === "short"
+      ? PositionDirection.SHORT
+      : PositionDirection.LONG;
+
+    // Spot limit: buying → oracle * (1 + slip), selling → oracle * (1 - slip)
+    const spotLimitPrice = perpDirection === "short"
+      ? oraclePrice.mul(new BN(10000 + slippageBps)).div(new BN(10000))
+      : oraclePrice.mul(new BN(10000 - slippageBps)).div(new BN(10000));
+
+    // Perp limit: shorting → oracle * (1 - slip), longing → oracle * (1 + slip)
+    const perpLimitPrice = perpDirection === "short"
+      ? oraclePrice.mul(new BN(10000 - slippageBps)).div(new BN(10000))
+      : oraclePrice.mul(new BN(10000 + slippageBps)).div(new BN(10000));
 
     // Cancel all existing orders
     const cancelIx = await this.client.getCancelOrdersIx(null, null, null);
 
-    // Buy spot
-    const buySpotIx = await this.client.getPlaceSpotOrderIx(
-      getMarketOrderParams({
+    // Spot leg (slippage-protected limit order)
+    const spotIx = await this.client.getPlaceSpotOrderIx(
+      getOrderParams({
+        orderType: OrderType.LIMIT,
         marketIndex: spotIdx,
-        marketType: MarketType.SPOT,
-        direction: PositionDirection.LONG,
+        direction: spotDirection,
         baseAssetAmount: new BN(baseAmount.mul(1e9).toFixed(0)),
+        price: spotLimitPrice,
       })
     );
 
-    // Short perp
-    const shortPerpIx = await this.client.getPlacePerpOrderIx(
-      getMarketOrderParams({
+    // Perp leg (slippage-protected limit order)
+    const perpIx = await this.client.getPlacePerpOrderIx(
+      getOrderParams({
+        orderType: OrderType.LIMIT,
         marketIndex: perpIdx,
-        marketType: MarketType.PERP,
-        direction: PositionDirection.SHORT,
+        direction: perpDir,
         baseAssetAmount: this.client.convertToPerpPrecision(
           parseFloat(baseAmount.toFixed(9))
         ),
+        price: perpLimitPrice,
       })
     );
 
+    const spotSideStr = perpDirection === "short" ? "LONG" : "SHORT";
     logger.info(
-      `Atomic cancel+enter: ${asset} | $${usdcAmount.toFixed(2)} | ${baseAmount.toFixed(6)} base`
+      `Atomic cancel+enter: ${asset} | ${spotSideStr} spot + ${perpDirection.toUpperCase()} perp | ` +
+        `$${usdcAmount.toFixed(2)} | ${baseAmount.toFixed(6)} base | ` +
+        `oracle=$${price.toFixed(2)} | slippage=${slippageBps}bps`
     );
 
-    return this.executeBatchedIxs([cancelIx, buySpotIx, shortPerpIx]);
+    return this.executeBatchedIxs([cancelIx, spotIx, perpIx]);
   }
 
   // ── Jupiter Swap ────────────────────────────────────────────────
@@ -408,24 +445,29 @@ export class DriftExecutor {
       ixs.push(closePerpIx);
     }
 
-    // Sell spot position
+    // Close spot position (direction depends on current side)
     const tokenAmount = user.getTokenAmount(spotIdx);
-    const spotAmount = Math.abs(
-      convertToNumber(tokenAmount, new BN(1e9))
-    );
+    const spotAmountRaw = convertToNumber(tokenAmount, new BN(1e9));
+    const spotAmount = Math.abs(spotAmountRaw);
 
     if (spotAmount > 0.0001) {
-      const sellSpotIx = await this.client.getPlaceSpotOrderIx(
+      // Positive tokenAmount = we hold spot (long) → sell (SHORT) to close
+      // Negative tokenAmount = we borrowed spot (short) → buy (LONG) to close
+      const spotCloseDirection = spotAmountRaw > 0
+        ? PositionDirection.SHORT
+        : PositionDirection.LONG;
+
+      const closeSpotIx = await this.client.getPlaceSpotOrderIx(
         getMarketOrderParams({
           marketIndex: spotIdx,
           marketType: MarketType.SPOT,
-          direction: PositionDirection.SHORT,
+          direction: spotCloseDirection,
           baseAssetAmount: new BN(
             new Decimal(spotAmount).mul(1e9).toFixed(0)
           ),
         })
       );
-      ixs.push(sellSpotIx);
+      ixs.push(closeSpotIx);
     }
 
     if (ixs.length <= 1) {
@@ -466,6 +508,13 @@ export class DriftExecutor {
     // 1. Get the current oracle price for the asset
     const oracleData = this.client.getOracleDataForPerpMarket(indices.perp);
     const oraclePrice = oracleData.price; // BN in PRICE_PRECISION (1e6)
+
+    // Validate oracle price
+    if (oraclePrice.isZero() || oraclePrice.isNeg()) {
+      throw new Error(
+        `Invalid oracle price for ${asset}: ${oraclePrice.toString()} — aborting`
+      );
+    }
 
     // 2. Calculate slippage-adjusted limit price
     //    oraclePrice * (10000 +/- slippageBps) / 10000

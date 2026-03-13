@@ -76,6 +76,23 @@ async function main() {
     }
   }
 
+  // Lending rates (spot deposit APY)
+  console.log("\n--- Spot Lending Rates ---");
+  for (const asset of config.targetAssets) {
+    try {
+      const depositRates = await dataApi.getDepositRateHistory(asset, 1);
+      if (depositRates.length > 0) {
+        console.log(
+          `  ${asset}: ${(depositRates[0].rate * 100).toFixed(2)}% deposit APY`
+        );
+      } else {
+        console.log(`  ${asset}: N/A`);
+      }
+    } catch {
+      console.log(`  ${asset}: N/A`);
+    }
+  }
+
   // Oracle prices
   console.log("\n--- Oracle Prices ---");
   for (const asset of config.targetAssets) {

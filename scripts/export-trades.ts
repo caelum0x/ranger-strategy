@@ -174,7 +174,97 @@ async function main() {
     console.error("Drift funding export failed:", err);
   }
 
-  // ── 3. Wallet Info ───────────────────────────────────────────────
+  // ── 3. Drift On-Chain Trades ────────────────────────────────────
+  console.log("\n--- Drift On-Chain Trades ---");
+  try {
+    const dataApi2 = new DriftDataAPI();
+
+    for (const asset of config.targetAssets) {
+      const symbol = `${asset}-PERP`;
+      const trades = await dataApi2.getTrades(symbol, 200);
+
+      const filtered = trades.filter(
+        (t) =>
+          t.ts * 1000 >= startDate.getTime() &&
+          t.ts * 1000 <= endDate.getTime()
+      );
+
+      if (filtered.length === 0) {
+        console.log(`  ${asset}: No on-chain trades in window`);
+        continue;
+      }
+
+      const headers = [
+        "datetime",
+        "asset",
+        "direction",
+        "base_amount",
+        "quote_amount",
+        "oracle_price",
+        "fee",
+        "action",
+      ];
+
+      const rows = filtered.map((t) => [
+        new Date(t.ts * 1000).toISOString(),
+        asset,
+        t.direction,
+        t.baseAssetAmount,
+        t.quoteAssetAmount,
+        t.oraclePrice,
+        t.fee,
+        t.actionExplanation,
+      ]);
+
+      const csv = [headers.join(","), ...rows.map((r) => r.join(","))].join(
+        "\n"
+      );
+
+      const filename = `drift_trades_${asset}_${startDate.toISOString().split("T")[0]}_${endDate.toISOString().split("T")[0]}.csv`;
+      fs.writeFileSync(filename, csv);
+      console.log(`  ${asset}: ${filtered.length} trades → ${filename}`);
+    }
+  } catch (err) {
+    console.error("Drift trade export failed:", err);
+  }
+
+  // ── 4. Lending Rate History ───────────────────────────────────────
+  console.log("\n--- Drift Lending Rate History ---");
+  try {
+    const dataApi3 = new DriftDataAPI();
+
+    for (const asset of config.targetAssets) {
+      const rates = await dataApi3.getDepositRateHistory(asset, 200);
+
+      if (rates.length === 0) {
+        console.log(`  ${asset}: No lending rate data`);
+        continue;
+      }
+
+      const headers = ["datetime", "asset", "deposit_rate_annualized"];
+      const rows = rates.map((r) => [
+        new Date(r.ts * 1000).toISOString(),
+        asset,
+        (r.rate * 100).toFixed(4) + "%",
+      ]);
+
+      const csv = [headers.join(","), ...rows.map((r) => r.join(","))].join(
+        "\n"
+      );
+
+      const filename = `drift_lending_${asset}_${startDate.toISOString().split("T")[0]}_${endDate.toISOString().split("T")[0]}.csv`;
+      fs.writeFileSync(filename, csv);
+      console.log(`  ${asset}: ${rates.length} rates → ${filename}`);
+
+      const avgRate =
+        rates.reduce((s, r) => s + r.rate, 0) / rates.length;
+      console.log(`    Avg lending APY: ${(avgRate * 100).toFixed(2)}%`);
+    }
+  } catch (err) {
+    console.error("Lending rate export failed:", err);
+  }
+
+  // ── 5. Wallet Info ───────────────────────────────────────────────
   console.log("\n--- On-Chain Verification ---");
   const keypairSource = process.env.ANCHOR_WALLET || config.solanaPrivateKey;
   if (keypairSource) {
@@ -202,9 +292,11 @@ async function main() {
 
   console.log("\n=== EXPORT COMPLETE ===");
   console.log("\nFor hackathon submission, include:");
-  console.log("  1. Binance trade CSV file above");
-  console.log("  2. Read-only Binance API key for verification");
-  console.log("  3. Wallet/vault addresses for on-chain verification");
+  console.log("  1. Binance trade CSV (if cross-venue mode)");
+  console.log("  2. Drift funding rate CSVs");
+  console.log("  3. Drift on-chain trade CSVs");
+  console.log("  4. Drift lending rate CSVs");
+  console.log("  5. Wallet/vault addresses for on-chain verification");
 }
 
 main().catch(console.error);

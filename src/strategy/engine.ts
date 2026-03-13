@@ -14,6 +14,9 @@ import {
   TradeSignal,
 } from "./types";
 import { logger } from "../utils/logger";
+import { withRetry } from "../utils/retry";
+import { FundingPredictor } from "./predictor";
+import { OracleGuard } from "../risk/oracle-guard";
 
 export class StrategyEngine {
   private drift: DriftManager;
@@ -23,9 +26,16 @@ export class StrategyEngine {
   private executor: DriftExecutor | null = null;
   private dataApi: DriftDataAPI = new DriftDataAPI();
   private state: StrategyState;
+  private predictor: FundingPredictor = new FundingPredictor();
+  private oracleGuard: OracleGuard = new OracleGuard();
+  private latestPredictions: import("./predictor").FundingPrediction[] = [];
   private lastFundingSnapshot: Decimal = new Decimal(0);
   private startTime: number = Date.now();
   private totalLendingCollected: Decimal = new Decimal(0);
+  /** Track last direction flip time per asset to prevent rapid flipping */
+  private lastFlipTime: Map<string, number> = new Map();
+  /** Minimum time between direction flips per asset (24 hours) */
+  private readonly MIN_FLIP_INTERVAL_MS = 24 * 3600 * 1000;
 
   constructor(
     drift: DriftManager,
@@ -43,12 +53,16 @@ export class StrategyEngine {
       positions: [],
       totalPnl: new Decimal(0),
       totalFundingCollected: new Decimal(0),
+      totalLendingCollected: new Decimal(0),
+      totalTradingCosts: new Decimal(0),
       currentDrawdown: new Decimal(0),
       maxDrawdownHit: new Decimal(0),
       healthRatio: new Decimal(999),
       apyEstimate: new Decimal(0),
       lastRebalance: 0,
       regime: "neutral",
+      cycleCount: 0,
+      directionFlips: 0,
     };
   }
 
@@ -108,6 +122,36 @@ export class StrategyEngine {
     this.state.regime = this.detectRegime(allRates);
     logger.info(`Market regime: ${this.state.regime}`);
 
+    // 4.6. Feed data to AI predictor for future rate forecasting
+    this.predictor.update(driftRates);
+    if (binanceRates.length > 0) this.predictor.update(binanceRates);
+
+    this.latestPredictions = this.predictor.predictAll(config.targetAssets);
+    const predictions = this.latestPredictions;
+    if (predictions.length > 0) {
+      logger.info("AI funding predictions", {
+        predictions: predictions.map((p) => ({
+          asset: p.asset,
+          predicted: `${p.predictedRate.mul(100).toFixed(2)}%`,
+          confidence: `${p.confidence.mul(100).toFixed(0)}%`,
+          direction: p.direction,
+          strength: p.signalStrength,
+        })),
+      });
+    }
+
+    // 4.7. Validate we have recent funding data (stale data = bad signals)
+    const staleThreshold = 3600 * 1000; // 1 hour
+    const staleAssets = driftRates.filter(
+      (r) => Date.now() - r.timestamp > staleThreshold
+    );
+    if (staleAssets.length > 0 && driftRates.length > 0) {
+      logger.warn("Stale funding rate data detected", {
+        staleAssets: staleAssets.map((r) => r.asset),
+        ageMs: staleAssets.map((r) => Date.now() - r.timestamp),
+      });
+    }
+
     // 5. Generate trade signals
     const signals = this.generateSignals(driftRates, binanceRates);
 
@@ -156,14 +200,17 @@ export class StrategyEngine {
     // 8. Update state again
     await this.refreshState();
 
-    // 9. Update last rebalance timestamp and estimate APY
+    // 9. Update last rebalance timestamp, cycle count, and estimate APY
     this.state.lastRebalance = Date.now();
+    this.state.cycleCount++;
+    this.state.totalLendingCollected = this.totalLendingCollected;
+
     const elapsedMs = Date.now() - this.startTime;
     const elapsedDays = elapsedMs / (86400 * 1000);
     if (elapsedDays > 0 && this.state.totalCapital.gt(0)) {
-      const totalYield = this.state.totalFundingCollected.add(
-        this.totalLendingCollected
-      );
+      const totalYield = this.state.totalFundingCollected
+        .add(this.totalLendingCollected)
+        .sub(this.state.totalTradingCosts);
       const returnSoFar = totalYield.div(this.state.totalCapital);
       this.state.apyEstimate = returnSoFar
         .div(elapsedDays)
@@ -171,14 +218,20 @@ export class StrategyEngine {
         .mul(100);
     }
 
+    // 10. Auto-compound: reinvest yield into idle capital
+    this.autoCompound();
+
     logger.info("=== Strategy cycle complete ===", {
       mode: config.strategyMode,
+      cycle: this.state.cycleCount,
       totalPnl: this.state.totalPnl.toFixed(4),
       healthRatio: this.state.healthRatio.toFixed(4),
       positions: this.state.positions.length,
       apyEstimate: `${this.state.apyEstimate.toFixed(2)}%`,
       fundingCollected: `$${this.state.totalFundingCollected.toFixed(4)}`,
       lendingCollected: `$${this.totalLendingCollected.toFixed(4)}`,
+      tradingCosts: `$${this.state.totalTradingCosts.toFixed(4)}`,
+      directionFlips: this.state.directionFlips,
       regime: this.state.regime,
     });
   }
@@ -196,6 +249,7 @@ export class StrategyEngine {
       : [];
 
     // Rank assets by funding yield — bi-directional (positive OR negative)
+    // For negative funding (short spot), we check that funding income > borrow cost
     const rankedAssets = config.targetAssets
       .map((asset) => {
         const binanceRate = binanceRates.find((r) => r.asset === asset);
@@ -217,9 +271,13 @@ export class StrategyEngine {
         const perpSide: "short" | "long" = primaryRate.gte(0) ? "short" : "long";
         const spotSide: "short" | "long" = perpSide === "short" ? "long" : "short";
 
-        const confidence = onChain
-          ? onChain.confidence
-          : new Decimal("0.5");
+        // Use AI predictor confidence when available, falling back to on-chain analysis
+        const prediction = this.latestPredictions.find((p) => p.asset === asset);
+        const confidence = prediction
+          ? prediction.confidence
+          : onChain
+            ? onChain.confidence
+            : new Decimal("0.5");
 
         // Use on-chain bi-directional attractiveness when available
         const isAttractive = onChain
@@ -278,6 +336,40 @@ export class StrategyEngine {
           reason: "Funding rate no longer attractive",
           predictedFundingRate: new Decimal(0),
         });
+        continue;
+      }
+
+      // Rebalance if funding direction has flipped
+      // e.g., we're short perp but funding went negative → should be long perp now
+      const currentPerpSide = pos.side === "long" ? "short" : "long"; // infer perp side from spot side
+      if (currentPerpSide !== ranked.perpSide) {
+        // Circuit breaker: prevent rapid flipping (min 24h between flips per asset)
+        const lastFlip = this.lastFlipTime.get(pos.asset) || 0;
+        const timeSinceFlip = Date.now() - lastFlip;
+        if (timeSinceFlip < this.MIN_FLIP_INTERVAL_MS) {
+          logger.info(
+            `${pos.asset} direction flip suppressed — last flip ${(timeSinceFlip / 3600000).toFixed(1)}h ago (min 24h)`
+          );
+          continue;
+        }
+
+        logger.info(
+          `${pos.asset} funding direction flipped: ${currentPerpSide} → ${ranked.perpSide}`
+        );
+        this.lastFlipTime.set(pos.asset, Date.now());
+        signals.push({
+          asset: pos.asset,
+          action: "rebalance",
+          spotVenue: "drift",
+          perpVenue: isDriftOnly ? "drift" : "binance",
+          spotSide: ranked.spotSide,
+          perpSide: ranked.perpSide,
+          spotSize: pos.notionalValue,
+          perpSize: pos.notionalValue,
+          confidence: ranked.confidence,
+          reason: `Direction flip: ${currentPerpSide} → ${ranked.perpSide} perp (${ranked.primaryRate.toFixed(4)} APY)`,
+          predictedFundingRate: ranked.primaryRate,
+        });
       }
     }
 
@@ -288,12 +380,19 @@ export class StrategyEngine {
       );
 
       if (!existingPos && this.state.idleCapital.gt(new Decimal(5))) {
-        const positionSize = this.riskManager.calculatePositionSize(
+        // Regime-aware sizing: increase allocation in favorable regimes
+        const regimeMultiplier = this.getRegimeSizeMultiplier(
+          this.state.regime,
+          ranked.perpSide
+        );
+
+        const baseSize = this.riskManager.calculatePositionSize(
           this.state.idleCapital,
           ranked.asset,
           ranked.absYield,
           ranked.confidence
         );
+        const positionSize = baseSize.mul(regimeMultiplier);
 
         if (positionSize.gte(new Decimal(5))) {
           const premium = ranked.onChainAnalysis
@@ -339,17 +438,33 @@ export class StrategyEngine {
     try {
       switch (signal.action) {
         case "open":
-          await this.executeOpen(signal);
+          await withRetry(
+            () => this.executeOpen(signal),
+            `open ${signal.asset}`,
+            2
+          );
           break;
 
         case "close":
-          await this.executeClose(signal);
+          await withRetry(
+            () => this.executeClose(signal),
+            `close ${signal.asset}`,
+            2
+          );
           break;
 
         case "rebalance":
-          // Adjust sizes — close and re-open with new direction
-          await this.executeClose(signal);
-          await this.executeOpen(signal);
+          // Close first, then re-open with new direction
+          await withRetry(
+            () => this.executeClose(signal),
+            `rebalance-close ${signal.asset}`,
+            2
+          );
+          await withRetry(
+            () => this.executeOpen(signal),
+            `rebalance-open ${signal.asset}`,
+            2
+          );
           break;
 
         default:
@@ -363,13 +478,31 @@ export class StrategyEngine {
     }
   }
 
+  /**
+   * Estimate round-trip trading cost for a given position size.
+   * Drift fee tiers: Taker 0.10%, Maker 0.02%
+   * Our slippage-protected limit orders are mostly maker fills (~70%)
+   */
+  private estimateTradingCost(notionalSize: Decimal): Decimal {
+    const makerRate = new Decimal("0.0002"); // 0.02%
+    const takerRate = new Decimal("0.0010"); // 0.10%
+    const blendedRate = makerRate.mul("0.7").add(takerRate.mul("0.3")); // ~0.044%
+    // Both legs (spot + perp) × entry cost
+    return notionalSize.mul(2).mul(blendedRate);
+  }
+
   private async executeOpen(signal: TradeSignal): Promise<void> {
+    // Track estimated trading costs
+    const cost = this.estimateTradingCost(signal.spotSize);
+    this.state.totalTradingCosts = this.state.totalTradingCosts.add(cost);
+
     // Use atomic entry via executor when available (slippage-protected)
     if (this.executor && signal.perpVenue === "drift") {
-      // Atomic cancel + delta-neutral entry in single tx
+      // Atomic cancel + delta-neutral entry in single tx (bi-directional)
       await this.executor.atomicCancelAndEnterDeltaNeutral(
         signal.asset,
-        signal.spotSize
+        signal.spotSize,
+        signal.perpSide
       );
     } else {
       // Fallback: separate spot and perp legs
@@ -392,8 +525,7 @@ export class StrategyEngine {
         if (signal.perpSide === "short") {
           await this.binance.shortPerp(signal.asset, signal.perpSize);
         } else {
-          // Binance long perp (for negative funding collection)
-          await this.binance.shortPerp(signal.asset, signal.perpSize.neg());
+          await this.binance.longPerp(signal.asset, signal.perpSize);
         }
       }
     }
@@ -405,6 +537,10 @@ export class StrategyEngine {
   }
 
   private async executeClose(signal: TradeSignal): Promise<void> {
+    // Track exit costs
+    const cost = this.estimateTradingCost(signal.spotSize);
+    this.state.totalTradingCosts = this.state.totalTradingCosts.add(cost);
+
     // Close perp leg first (faster on CEX)
     if (signal.perpVenue === "drift") {
       if (this.executor) {
@@ -436,41 +572,65 @@ export class StrategyEngine {
   }
 
   /**
-   * Track lending yield earned on spot deposits via Drift Data API.
-   * Spot assets deposited on Drift earn lending APY automatically.
+   * Track lending yield earned on spot deposits and borrow costs on short spot.
+   *
+   * Long spot on Drift earns lending APY automatically.
+   * Short spot (borrowed) incurs borrow costs that reduce net yield.
    */
   private async trackLendingYield(): Promise<void> {
     if (this.state.positions.length === 0) return;
 
     try {
       for (const asset of config.targetAssets) {
-        const spotPos = this.state.positions.find(
+        const cycleHours = config.rebalanceIntervalMs / 3600000;
+
+        // Long spot → earns lending yield
+        const longSpot = this.state.positions.find(
           (p) => p.asset === asset && p.venue === "drift" && p.side === "long"
         );
-        if (!spotPos) continue;
+        if (longSpot) {
+          const depositRates = await this.dataApi.getDepositRateHistory(asset, 1);
+          if (depositRates.length > 0) {
+            const annualRate = depositRates[0].rate;
+            const cycleRate = annualRate * (cycleHours / 8760);
+            const lendingIncome = longSpot.notionalValue.mul(cycleRate);
 
-        // Fetch current deposit rate from Data API
-        const depositRates = await this.dataApi.getDepositRateHistory(asset, 1);
-        if (depositRates.length === 0) continue;
+            if (lendingIncome.gt(0)) {
+              this.totalLendingCollected =
+                this.totalLendingCollected.add(lendingIncome);
+              logger.info(`${asset} lending yield: $${lendingIncome.toFixed(6)}`, {
+                annualRate: `${(annualRate * 100).toFixed(2)}%`,
+                notional: longSpot.notionalValue.toFixed(2),
+              });
+            }
+          }
+        }
 
-        const annualRate = depositRates[0].rate;
-        // Convert to per-cycle rate (8h cycle = 8/8760 of a year)
-        const cycleHours = config.rebalanceIntervalMs / 3600000;
-        const cycleRate = annualRate * (cycleHours / 8760);
-        const lendingIncome = spotPos.notionalValue.mul(cycleRate);
+        // Short spot → incurs borrow cost (negative yield)
+        const shortSpot = this.state.positions.find(
+          (p) => p.asset === asset && p.venue === "drift" && p.side === "short"
+        );
+        if (shortSpot) {
+          const borrowRates = await this.dataApi.getBorrowRateHistory(asset, 1);
+          if (borrowRates.length > 0) {
+            const annualBorrowRate = borrowRates[0].rate;
+            const cycleRate = annualBorrowRate * (cycleHours / 8760);
+            const borrowCost = shortSpot.notionalValue.mul(Math.abs(cycleRate));
 
-        if (lendingIncome.gt(0)) {
-          this.totalLendingCollected =
-            this.totalLendingCollected.add(lendingIncome);
-          logger.info(`${asset} lending yield: $${lendingIncome.toFixed(6)}`, {
-            annualRate: `${(annualRate * 100).toFixed(2)}%`,
-            notional: spotPos.notionalValue.toFixed(2),
-          });
+            if (borrowCost.gt(0)) {
+              this.state.totalTradingCosts =
+                this.state.totalTradingCosts.add(borrowCost);
+              logger.info(`${asset} borrow cost: -$${borrowCost.toFixed(6)}`, {
+                annualRate: `${(annualBorrowRate * 100).toFixed(2)}%`,
+                notional: shortSpot.notionalValue.toFixed(2),
+              });
+            }
+          }
         }
       }
     } catch (err) {
-      // Non-critical — lending tracking is supplementary
-      logger.warn("Could not track lending yield", { error: err });
+      // Non-critical — yield tracking is supplementary
+      logger.warn("Could not track lending/borrow yields", { error: err });
     }
   }
 
@@ -506,14 +666,47 @@ export class StrategyEngine {
       try {
         // Close Binance perps if in cross-venue mode
         if (this.binance && config.strategyMode === "cross-venue") {
-          await this.binance.closePerp(asset);
+          await withRetry(
+            () => this.binance!.closePerp(asset),
+            `emergency-close-binance ${asset}`,
+            3
+          );
         }
 
         // Close Drift positions — use atomic exit if executor available
+        // atomicDeltaNeutralExit handles both legs (perp + spot) in one tx
         if (this.executor) {
-          await this.executor.atomicDeltaNeutralExit(asset);
+          await withRetry(
+            () => this.executor!.atomicDeltaNeutralExit(asset),
+            `emergency-exit-drift ${asset}`,
+            3
+          );
         } else {
-          await this.drift.closePerp(asset);
+          // Manual close: perp first, then spot
+          await withRetry(
+            () => this.drift.closePerp(asset),
+            `emergency-close-perp ${asset}`,
+            3
+          );
+          // Close spot leg — determine direction from current positions
+          const spotPos = this.state.positions.find(
+            (p) => p.asset === asset && p.venue === "drift"
+          );
+          if (spotPos) {
+            if (spotPos.side === "long") {
+              await withRetry(
+                () => this.drift.sellSpot(asset, spotPos.notionalValue),
+                `emergency-sell-spot ${asset}`,
+                3
+              );
+            } else {
+              await withRetry(
+                () => this.drift.buySpot(asset, spotPos.notionalValue),
+                `emergency-buy-spot ${asset}`,
+                3
+              );
+            }
+          }
         }
       } catch (err) {
         logger.error(`Failed to close ${asset} positions`, { error: err });
@@ -532,6 +725,103 @@ export class StrategyEngine {
 
   getState(): StrategyState {
     return { ...this.state };
+  }
+
+  /**
+   * Get the predictor's history for state persistence.
+   */
+  getPredictorHistory(): Map<string, Decimal[]> {
+    return this.predictor.getHistory();
+  }
+
+  /**
+   * Restore predictor state from saved data.
+   */
+  restorePredictorHistory(saved: Map<string, Decimal[]>): void {
+    this.predictor.restoreHistory(saved);
+  }
+
+  /**
+   * Restore cumulative state fields from a previous run (crash recovery).
+   */
+  restoreState(partial: Partial<StrategyState>): void {
+    if (partial.totalFundingCollected)
+      this.state.totalFundingCollected = partial.totalFundingCollected;
+    if (partial.totalLendingCollected) {
+      this.state.totalLendingCollected = partial.totalLendingCollected;
+      this.totalLendingCollected = partial.totalLendingCollected;
+    }
+    if (partial.totalTradingCosts)
+      this.state.totalTradingCosts = partial.totalTradingCosts;
+    if (partial.cycleCount !== undefined)
+      this.state.cycleCount = partial.cycleCount;
+    if (partial.directionFlips !== undefined)
+      this.state.directionFlips = partial.directionFlips;
+    logger.info("Strategy state restored from saved data", {
+      cycle: this.state.cycleCount,
+      funding: this.state.totalFundingCollected.toFixed(4),
+    });
+  }
+
+  /**
+   * Auto-compound: reinvest collected funding/lending yield into idle capital.
+   * Called at the end of each cycle to grow position sizes over time.
+   */
+  autoCompound(): { compounded: Decimal; newIdle: Decimal } {
+    // Net yield available to reinvest
+    const netYield = this.state.totalFundingCollected
+      .add(this.state.totalLendingCollected)
+      .sub(this.state.totalTradingCosts);
+
+    // Only compound if net yield is positive and meaningful ($0.01+)
+    const minCompoundThreshold = new Decimal("0.01");
+    if (netYield.lte(minCompoundThreshold)) {
+      return { compounded: new Decimal(0), newIdle: this.state.idleCapital };
+    }
+
+    // The yield already manifests in PnL, but we explicitly track
+    // compounding to adjust available capital for position sizing.
+    // idleCapital includes unrealized PnL, so we just need to log it.
+    const totalAvailable = this.state.totalCapital.add(this.state.totalPnl);
+    const effectiveIdle = totalAvailable.sub(this.state.deployedCapital);
+
+    if (effectiveIdle.gt(this.state.idleCapital)) {
+      const compoundedAmount = effectiveIdle.sub(this.state.idleCapital);
+      this.state.idleCapital = effectiveIdle;
+      logger.info(`Auto-compound: +$${compoundedAmount.toFixed(4)} reinvested`, {
+        netYield: netYield.toFixed(4),
+        newIdle: this.state.idleCapital.toFixed(2),
+      });
+      return { compounded: compoundedAmount, newIdle: this.state.idleCapital };
+    }
+
+    return { compounded: new Decimal(0), newIdle: this.state.idleCapital };
+  }
+
+  /**
+   * Regime-aware position sizing multiplier.
+   * Bull regime → shorts collect more funding → increase short perp allocation
+   * Bear regime → longs collect more funding → increase long perp allocation
+   * Volatile → reduce allocation to limit drawdown risk
+   */
+  private getRegimeSizeMultiplier(
+    regime: MarketRegime,
+    perpSide: "short" | "long"
+  ): Decimal {
+    switch (regime) {
+      case "bull":
+        // Bull = positive funding = shorts profitable
+        return perpSide === "short" ? new Decimal("1.2") : new Decimal("0.8");
+      case "bear":
+        // Bear = negative funding = longs profitable
+        return perpSide === "long" ? new Decimal("1.2") : new Decimal("0.8");
+      case "volatile":
+        // Reduce exposure in volatile markets
+        return new Decimal("0.7");
+      case "neutral":
+      default:
+        return new Decimal("1.0");
+    }
   }
 
   detectRegime(fundingRates: FundingRate[]): MarketRegime {

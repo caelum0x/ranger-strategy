@@ -46,12 +46,16 @@ function makeState(overrides: Partial<StrategyState> = {}): StrategyState {
     positions: [],
     totalPnl: new Decimal("0"),
     totalFundingCollected: new Decimal("0"),
+    totalLendingCollected: new Decimal("0"),
+    totalTradingCosts: new Decimal("0"),
     currentDrawdown: new Decimal("0"),
     maxDrawdownHit: new Decimal("0"),
     healthRatio: new Decimal("5"),
     apyEstimate: new Decimal("0"),
     lastRebalance: 0,
     regime: "neutral",
+    cycleCount: 0,
+    directionFlips: 0,
     ...overrides,
   };
 }
@@ -72,8 +76,8 @@ describe("RiskManager", () => {
         totalCapital: new Decimal("1000"),
         totalPnl: new Decimal("10"),
         positions: [
-          makePosition({ side: "long", notionalValue: new Decimal("500") }),
-          makePosition({ side: "short", notionalValue: new Decimal("500") }),
+          makePosition({ asset: "SOL", side: "long", notionalValue: new Decimal("500") }),
+          makePosition({ asset: "SOL", side: "short", notionalValue: new Decimal("500") }),
         ],
       });
 
@@ -91,13 +95,20 @@ describe("RiskManager", () => {
       expect(result.violations[0]).toContain("Health ratio");
     });
 
-    it("fails with high drawdown", () => {
-      // initialCapital=1000, currentValue = totalCapital + totalPnl = 1000 + (-50) = 950
-      // drawdown = (1000 - 950) / 1000 * 100 = 5% > maxDrawdownPct=3%
+    it("fails with high drawdown from peak equity", () => {
+      // First, establish a peak equity of 1050 by checking risk with positive PnL
+      rm.checkRisk(makeState({
+        totalCapital: new Decimal("1000"),
+        totalPnl: new Decimal("50"), // peak equity = 1050
+      }));
+
+      // Now check with a drawdown from peak
+      // currentEquity = 1000 + (-20) = 980
+      // drawdown = (1050 - 980) / 1050 * 100 = 6.67% > 3%
       const state = makeState({
         totalCapital: new Decimal("1000"),
-        totalPnl: new Decimal("-50"),
-        healthRatio: new Decimal("5"), // keep health fine
+        totalPnl: new Decimal("-20"),
+        healthRatio: new Decimal("5"),
       });
 
       const result = rm.checkRisk(state);
@@ -105,41 +116,66 @@ describe("RiskManager", () => {
       expect(result.violations.some((v) => v.includes("Drawdown"))).toBe(true);
     });
 
-    it("fails with excessive leverage", () => {
-      // totalNotional = 3000, totalCapital = 1000 → leverage = 3x > maxLeverage=2x
+    it("uses peak equity (not initial capital) for drawdown", () => {
+      // Set peak equity to 1200
+      rm.checkRisk(makeState({
+        totalCapital: new Decimal("1000"),
+        totalPnl: new Decimal("200"), // peak = 1200
+      }));
+
+      // Equity drops to 1170 → drawdown = (1200 - 1170) / 1200 = 2.5% < 3% → passes
       const state = makeState({
         totalCapital: new Decimal("1000"),
-        totalPnl: new Decimal("0"),
+        totalPnl: new Decimal("170"),
         healthRatio: new Decimal("5"),
-        positions: [
-          makePosition({ side: "long", notionalValue: new Decimal("1500") }),
-          makePosition({ side: "short", notionalValue: new Decimal("1500") }),
-        ],
       });
-
       const result = rm.checkRisk(state);
-      expect(result.passed).toBe(false);
-      expect(result.violations.some((v) => v.includes("Leverage"))).toBe(true);
+      expect(result.passed).toBe(true);
     });
 
-    it("fails with delta imbalance", () => {
-      // Net delta: +200 long - 100 short = +100
-      // As fraction of... the threshold is absolute 0.05
-      // With notionalValue: long=200, short=100, net delta = 200 - 100 = 100
-      // 100 > 0.05 threshold → violation
+    it("fails with per-asset-pair delta imbalance", () => {
+      // SOL has mismatched legs: $200 long but only $100 short
+      // relative delta = (200 - 100) / (200 + 100) = 0.333 > 0.05
       const state = makeState({
         healthRatio: new Decimal("5"),
         totalCapital: new Decimal("1000"),
         totalPnl: new Decimal("0"),
         positions: [
-          makePosition({ side: "long", notionalValue: new Decimal("200") }),
-          makePosition({ side: "short", notionalValue: new Decimal("100") }),
+          makePosition({ asset: "SOL", side: "long", notionalValue: new Decimal("200") }),
+          makePosition({ asset: "SOL", side: "short", notionalValue: new Decimal("100") }),
         ],
       });
 
       const result = rm.checkRisk(state);
       expect(result.passed).toBe(false);
-      expect(result.violations.some((v) => v.includes("delta"))).toBe(true);
+      expect(result.violations.some((v) => v.includes("SOL") && v.includes("delta"))).toBe(true);
+    });
+
+    it("detects health ratio spike (sudden drop)", () => {
+      // First check with healthy ratio to establish baseline
+      rm.checkRisk(makeState({ healthRatio: new Decimal("4.0") }));
+
+      // Second check with sudden drop (>50% decline)
+      const state = makeState({ healthRatio: new Decimal("1.5") });
+      const result = rm.checkRisk(state);
+      expect(result.passed).toBe(false);
+      expect(result.violations.some((v) => v.includes("spike"))).toBe(true);
+    });
+
+    it("passes when per-asset delta is balanced", () => {
+      // Balanced delta-neutral pair: $100 long spot + $100 short perp
+      const state = makeState({
+        healthRatio: new Decimal("5"),
+        totalCapital: new Decimal("1000"),
+        totalPnl: new Decimal("0"),
+        positions: [
+          makePosition({ asset: "SOL", side: "long", notionalValue: new Decimal("100") }),
+          makePosition({ asset: "SOL", side: "short", notionalValue: new Decimal("100") }),
+        ],
+      });
+
+      const result = rm.checkRisk(state);
+      expect(result.passed).toBe(true);
     });
   });
 
@@ -156,10 +192,16 @@ describe("RiskManager", () => {
       expect(rm.shouldEmergencyUnwind(state)).toBe(false);
     });
 
-    it("returns true when drawdown exceeds max", () => {
+    it("returns true when drawdown exceeds max from peak", () => {
+      // Set peak equity first
+      rm.checkRisk(makeState({
+        totalCapital: new Decimal("1000"),
+        totalPnl: new Decimal("0"),
+      }));
+
       // drawdown = (1000 - 960) / 1000 * 100 = 4% > maxDrawdownPct=3%
       const state = makeState({
-        healthRatio: new Decimal("5"), // health is fine
+        healthRatio: new Decimal("5"),
         totalCapital: new Decimal("1000"),
         totalPnl: new Decimal("-40"),
       });
@@ -202,6 +244,20 @@ describe("RiskManager", () => {
       );
       // maxPerAsset = 900 / 3 = 300
       expect(size.eq(new Decimal("300"))).toBe(true);
+    });
+
+    it("respects leverage bound", () => {
+      // maxLeverage = 2.0, availableCapital = 10
+      // leverageCap = 2.0 * 10 = 20
+      // Without cap, size would be 10/3 * (0.50 * 1.0 / 0.01) = 166.67
+      // But leverage cap = 2.0 * 10 = 20
+      const size = rm.calculatePositionSize(
+        new Decimal("10"),
+        "ETH",
+        new Decimal("0.50"),
+        new Decimal("1.0")
+      );
+      expect(size.lte(new Decimal("20"))).toBe(true);
     });
   });
 });

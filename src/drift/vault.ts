@@ -576,21 +576,25 @@ export class DriftVaultManager {
     const depositors = await this.vaultClient.getAllVaultDepositors(vaultAddress);
 
     let applied = 0;
+    let skipped = 0;
     for (const pa of depositors) {
       try {
-        const ix = await this.vaultClient.getApplyProfitShareIx(
+        const ix = await (this.vaultClient as any).getApplyProfitShareIx(
           vaultAddress,
           pa.publicKey
         );
-        // Build + send each as a single tx
-        await this.vaultClient.createAndSendTxn([ix]);
+        await (this.vaultClient as any).createAndSendTxn([ix]);
         applied++;
-      } catch {
-        // Skip depositors with no profit to share
+      } catch (err) {
+        // Skip depositors with no profit to share or other non-critical failures
+        skipped++;
+        logger.info(`Profit share skipped for depositor ${pa.publicKey.toBase58()}`, {
+          error: err instanceof Error ? err.message : String(err),
+        });
       }
     }
 
-    logger.info(`Applied profit share to ${applied}/${depositors.length} depositors`);
+    logger.info(`Applied profit share to ${applied}/${depositors.length} depositors (${skipped} skipped)`);
   }
 
   /**

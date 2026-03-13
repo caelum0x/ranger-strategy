@@ -111,14 +111,38 @@ export class BinanceManager {
     );
   }
 
+  async longPerp(asset: string, usdcAmount: Decimal): Promise<void> {
+    const symbol = BINANCE_SYMBOLS[asset];
+    if (!symbol) throw new Error(`Unknown asset: ${asset}`);
+
+    const ticker = await this.exchange.fetchTicker(symbol);
+    const price = new Decimal(ticker.last || 0);
+    const amount = usdcAmount.div(price);
+
+    logger.info(`Longing ${amount.toFixed(6)} ${asset} perp on Binance`, {
+      usdcAmount: usdcAmount.toFixed(2),
+      price: price.toFixed(2),
+    });
+
+    await this.exchange.createOrder(
+      symbol,
+      "market",
+      "buy",
+      parseFloat(amount.toFixed(6)),
+      undefined,
+      { reduceOnly: false }
+    );
+  }
+
   async closePerp(asset: string): Promise<void> {
     const symbol = BINANCE_SYMBOLS[asset];
     if (!symbol) throw new Error(`Unknown asset: ${asset}`);
 
     const positions = await this.exchange.fetchPositions([symbol]);
+    // CCXT returns symbol as "SOL/USDT:USDT" — match against full symbol
     const pos = positions.find(
       (p) =>
-        p.symbol === symbol.replace(":USDT", "") &&
+        (p.symbol === symbol || p.symbol === symbol.replace(":USDT", "")) &&
         parseFloat(p.contracts?.toString() || "0") > 0
     );
 

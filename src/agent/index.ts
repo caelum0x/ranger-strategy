@@ -1,5 +1,6 @@
 import { CronJob } from "cron";
 import { PublicKey } from "@solana/web3.js";
+import Decimal from "decimal.js";
 import { DriftManager } from "../drift/client";
 import { DriftFundingAnalyzer } from "../drift/funding";
 import { DriftExecutor } from "../drift/executor";
@@ -9,6 +10,11 @@ import { RangerVaultManager } from "../ranger/client";
 import { StrategyEngine } from "../strategy/engine";
 import { config } from "../config";
 import { logger } from "../utils/logger";
+import { validateConfig } from "../utils/validate";
+import { YieldAnalytics } from "../utils/yield-analytics";
+import { MonitorServer } from "../monitor/server";
+import { StateStore } from "../utils/state-store";
+import { TelegramAlerter } from "../alerts/telegram";
 
 class StrategyAgent {
   private drift!: DriftManager;
@@ -19,12 +25,27 @@ class StrategyAgent {
   private executor!: DriftExecutor;
   private driftVault!: DriftVaultManager;
   private rebalanceJob!: CronJob;
+  private healthCheckInterval: ReturnType<typeof setInterval> | null = null;
+  private yieldAnalytics: YieldAnalytics = new YieldAnalytics();
+  private monitor: MonitorServer = new MonitorServer(
+    parseInt(process.env.MONITOR_PORT || "3000")
+  );
+  private stateStore: StateStore = new StateStore();
+  private telegram: TelegramAlerter = new TelegramAlerter();
   private running = false;
 
   async start(): Promise<void> {
     logger.info("Starting AI Strategy Agent...", {
       mode: config.strategyMode,
     });
+
+    // Validate config before proceeding
+    const configCheck = validateConfig();
+    if (!configCheck.valid) {
+      throw new Error(
+        `Configuration invalid: ${configCheck.errors.join("; ")}`
+      );
+    }
 
     // Initialize Drift client
     const keypairSource = process.env.ANCHOR_WALLET || config.solanaPrivateKey;
@@ -88,6 +109,21 @@ class StrategyAgent {
       this.binance,
       initialCapital
     );
+
+    // Restore state from previous run if available (crash recovery)
+    const savedState = this.stateStore.load();
+    if (savedState) {
+      this.engine.restoreState(savedState.state);
+      this.engine.restorePredictorHistory(savedState.predictorHistory);
+      logger.info("Resumed from saved state", {
+        savedAt: new Date(savedState.savedAt).toISOString(),
+        cycle: savedState.state.cycleCount,
+      });
+    }
+
+    // Start monitoring server
+    this.setupMonitorRoutes();
+    await this.monitor.start();
 
     // Wire up on-chain funding analyzer and atomic executor
     const driftClient = this.drift.getClient();
@@ -154,9 +190,9 @@ class StrategyAgent {
     await this.logMarketOverview();
 
     // Schedule rebalance cycles (every 8 hours aligned with funding)
-    const intervalMinutes = config.rebalanceIntervalMs / 60000;
+    const intervalHours = Math.max(1, Math.round(config.rebalanceIntervalMs / 3600000));
     this.rebalanceJob = new CronJob(
-      `0 */${Math.max(1, Math.floor(intervalMinutes))} * * *`,
+      `0 */${intervalHours} * * *`,
       () => this.runCycle(),
       null,
       false,
@@ -166,12 +202,34 @@ class StrategyAgent {
     this.running = true;
     this.rebalanceJob.start();
 
+    // Health monitoring: poll every 2 minutes between cycles to catch
+    // rapid health deterioration and trigger emergency unwind
+    this.healthCheckInterval = setInterval(async () => {
+      if (!this.running) return;
+      try {
+        const health = await this.drift.getHealthRatio();
+        if (health.lt(new Decimal("1.05"))) {
+          logger.error(
+            `CRITICAL: Health ratio ${health.toFixed(4)} — triggering emergency unwind`
+          );
+          this.telegram
+            .emergencyAlert(`Health ratio ${health.toFixed(4)} below critical threshold 1.05`)
+            .catch(() => {});
+          await this.engine.emergencyUnwind();
+        } else if (health.lt(new Decimal("1.20"))) {
+          logger.warn(`Health ratio warning: ${health.toFixed(4)}`);
+        }
+      } catch {
+        // Non-critical — health check failure shouldn't crash the agent
+      }
+    }, 120_000); // every 2 minutes
+
     // Run first cycle immediately
     await this.runCycle();
 
     logger.info("AI Strategy Agent started", {
       mode: config.strategyMode,
-      rebalanceInterval: `${intervalMinutes} minutes`,
+      rebalanceInterval: `${intervalHours} hours`,
       targetAssets: config.targetAssets,
       maxLeverage: config.maxLeverage.toString(),
       healthRatioFloor: config.healthRatioFloor.toString(),
@@ -179,6 +237,100 @@ class StrategyAgent {
       minFundingAPY: `${config.minFundingAPY.toString()}`,
     });
   }
+
+  private setupMonitorRoutes(): void {
+    this.monitor.route("/", () => ({
+      name: "Ranger Delta-Neutral Vault Agent",
+      version: "0.1.0",
+      uptime: Math.round((Date.now() - this.startTime) / 1000),
+      endpoints: ["/status", "/positions", "/yield", "/predictions", "/health"],
+    }));
+
+    this.monitor.route("/status", () => this.getStatus());
+
+    this.monitor.route("/positions", () => {
+      if (!this.engine) return { positions: [] };
+      const state = this.engine.getState();
+      return {
+        count: state.positions.length,
+        positions: state.positions.map((p) => ({
+          asset: p.asset,
+          side: p.side,
+          venue: p.venue,
+          size: p.size.toFixed(6),
+          entryPrice: p.entryPrice.toFixed(2),
+          currentPrice: p.currentPrice.toFixed(2),
+          notional: p.notionalValue.toFixed(2),
+          pnl: p.unrealizedPnl.toFixed(4),
+          leverage: p.leverage.toFixed(2),
+        })),
+      };
+    });
+
+    this.monitor.route("/yield", () => {
+      if (!this.engine) return { error: "Not initialized" };
+      const state = this.engine.getState();
+      const breakdown = this.yieldAnalytics.calculateBreakdown(state);
+      const formatted = this.yieldAnalytics.formatBreakdown(breakdown);
+      const trend = this.yieldAnalytics.getYieldTrend();
+      const attribution = this.yieldAnalytics.calculateAssetAttribution(
+        state.positions,
+        new Map<string, Decimal>()
+      );
+      return {
+        ...formatted,
+        trend,
+        assetAttribution: attribution.map((a) => ({
+          asset: a.asset,
+          direction: a.fundingDirection,
+          spotSide: a.spotSide,
+          notional: a.notionalValue.toFixed(2),
+          dailyYield: a.estimatedDailyYield.toFixed(4),
+          annualYield: a.estimatedAnnualYield.toFixed(4),
+        })),
+      };
+    });
+
+    this.monitor.route("/predictions", () => {
+      if (!this.engine) return { predictions: [] };
+      const state = this.engine.getState();
+      return {
+        regime: state.regime,
+        predictions: config.targetAssets.map((asset) => {
+          const histLen = this.engine
+            ? this.engine.getPredictorHistory().get(asset)?.length || 0
+            : 0;
+          return { asset, historyLength: histLen };
+        }),
+      };
+    });
+
+    this.monitor.route("/health", () => {
+      if (!this.engine) return { healthy: false, reason: "Not initialized" };
+      const state = this.engine.getState();
+      const healthy = state.healthRatio.gt(1.1);
+      const capitalUtilization = state.totalCapital.gt(0)
+        ? state.deployedCapital.div(state.totalCapital)
+        : new Decimal(0);
+      const healthScore = MonitorServer.calculateHealthScore({
+        healthRatio: state.healthRatio,
+        drawdownPct: state.currentDrawdown,
+        deltaImbalance: new Decimal(0),
+        capitalUtilization,
+      });
+      return {
+        healthy,
+        healthScore: healthScore.score,
+        grade: healthScore.grade,
+        healthRatio: state.healthRatio.toFixed(4),
+        drawdown: state.currentDrawdown.toFixed(2),
+        regime: state.regime,
+        cycle: state.cycleCount,
+      };
+    });
+  }
+
+  private startTime = Date.now();
 
   private async logMarketOverview(): Promise<void> {
     try {
@@ -243,6 +395,7 @@ class StrategyAgent {
       const state = this.engine.getState();
       const summary: Record<string, string> = {
         mode: config.strategyMode,
+        cycle: state.cycleCount.toString(),
         regime: state.regime,
         positions: state.positions.length.toString(),
         totalPnl: state.totalPnl.toFixed(4),
@@ -250,6 +403,10 @@ class StrategyAgent {
         deployedCapital: state.deployedCapital.toFixed(2),
         idleCapital: state.idleCapital.toFixed(2),
         fundingPnl: this.drift.getUnrealizedFundingPnl().toFixed(4),
+        fundingCollected: state.totalFundingCollected.toFixed(4),
+        lendingCollected: state.totalLendingCollected.toFixed(4),
+        tradingCosts: state.totalTradingCosts.toFixed(4),
+        directionFlips: state.directionFlips.toString(),
         freeCollateral: this.drift.getFreeCollateral().toFixed(2),
         apyEstimate: `${state.apyEstimate.toFixed(2)}%`,
       };
@@ -260,6 +417,14 @@ class StrategyAgent {
           const vaultAddr = new PublicKey(process.env.DRIFT_VAULT_PUBKEY);
           const equity = await this.driftVault.getVaultEquity(vaultAddr);
           summary.vaultEquity = `$${equity.toFixed(2)}`;
+
+          // Apply profit share to all depositors
+          try {
+            await this.driftVault.applyProfitShareToAll(vaultAddr);
+            logger.info("Profit share applied to depositors");
+          } catch {
+            // Non-critical — may fail if no profit to distribute
+          }
 
           // Check if outstanding withdrawals could trigger liquidation takeover
           const risk = await this.driftVault.checkWithdrawalRisk(vaultAddr);
@@ -272,13 +437,45 @@ class StrategyAgent {
                 ratio: `${risk.withdrawRatio.mul(100).toFixed(1)}%`,
               }
             );
+            // Act on withdrawal risk — reduce positions to ensure redemption
+            await this.engine.reducePositions();
           }
         } catch {
           /* non-critical */
         }
       }
 
+      // Yield analytics breakdown
+      const yieldBreakdown = this.yieldAnalytics.calculateBreakdown(state);
+      const formatted = this.yieldAnalytics.formatBreakdown(yieldBreakdown);
+      summary.yieldNetYield = formatted.netYield;
+      summary.yieldAPY = formatted.annualizedAPY;
+      summary.capitalUtilization = formatted.capitalUtilization;
+
+      const trend = this.yieldAnalytics.getYieldTrend();
+      summary.yieldTrend = trend.direction;
+
       logger.info("Agent cycle summary", summary);
+
+      // Send Telegram cycle summary (non-blocking)
+      this.telegram
+        .cycleSummary({
+          cycle: state.cycleCount,
+          regime: state.regime,
+          pnl: state.totalPnl.toFixed(4),
+          apy: `${state.apyEstimate.toFixed(2)}%`,
+          health: state.healthRatio.toFixed(4),
+          positions: state.positions.length,
+          funding: `$${state.totalFundingCollected.toFixed(4)}`,
+        })
+        .catch(() => {});
+
+      // Persist state to disk for crash recovery
+      this.stateStore.save(
+        state,
+        state.totalCapital.add(state.totalPnl), // approximate peak equity
+        this.engine.getPredictorHistory()
+      );
     } catch (err) {
       logger.error("Strategy cycle failed", { error: err });
     }
@@ -288,6 +485,11 @@ class StrategyAgent {
     logger.info("Stopping AI Strategy Agent...");
     this.running = false;
 
+    if (this.healthCheckInterval) {
+      clearInterval(this.healthCheckInterval);
+      this.healthCheckInterval = null;
+    }
+
     if (this.rebalanceJob) {
       this.rebalanceJob.stop();
     }
@@ -296,6 +498,8 @@ class StrategyAgent {
     if (this.engine) {
       await this.engine.emergencyUnwind();
     }
+
+    await this.monitor.stop();
 
     const shutdownPromises: Promise<void>[] = [this.drift.shutdown()];
     if (this.binance) {
@@ -316,6 +520,7 @@ class StrategyAgent {
     return {
       status: this.running ? "running" : "stopped",
       mode: config.strategyMode,
+      cycle: state.cycleCount,
       regime: state.regime,
       totalCapital: state.totalCapital.toFixed(2),
       deployedCapital: state.deployedCapital.toFixed(2),
@@ -325,6 +530,10 @@ class StrategyAgent {
       fundingPnl: this.drift.getUnrealizedFundingPnl().toFixed(4),
       freeCollateral: this.drift.getFreeCollateral().toFixed(2),
       apyEstimate: `${state.apyEstimate.toFixed(2)}%`,
+      yieldBreakdown: this.yieldAnalytics.formatBreakdown(
+        this.yieldAnalytics.calculateBreakdown(state)
+      ),
+      directionFlips: state.directionFlips,
       positions: state.positions.map((p) => ({
         asset: p.asset,
         side: p.side,

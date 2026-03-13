@@ -15,6 +15,9 @@
     "drift:status": "ts-node scripts/drift-status.ts",
     "drift:init-vault": "ts-node scripts/init-drift-vault.ts",
     "export-trades": "ts-node scripts/export-trades.ts",
+    "simulate": "ts-node scripts/simulate.ts",
+    "dashboard": "ts-node scripts/dashboard.ts",
+    "preflight": "ts-node scripts/preflight.ts",
     "lint": "eslint src/",
     "test": "jest"
   },

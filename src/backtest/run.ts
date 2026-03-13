@@ -168,7 +168,15 @@ export async function runBacktest(
 
   let prevEquity = equity;
   let prevDirection: "short" | "long" = "short";
-  const tradingCostRate = new Decimal("0.001"); // 0.1% round-trip for entry+exit
+  // Drift fee tiers (taker fee for market orders + maker rebate for limit orders)
+  // Tier 1 (default): taker 0.10%, maker 0.02%
+  // Our strategy uses limit orders (slippage-protected) → ~maker rate
+  // Round-trip cost = entry + exit = ~0.04% for limit orders, ~0.20% for market orders
+  // Use blended rate: assume 70% maker, 30% taker
+  const makerFeeRate = new Decimal("0.0002"); // 0.02%
+  const takerFeeRate = new Decimal("0.0010"); // 0.10%
+  const blendedFeeRate = makerFeeRate.mul("0.7").add(takerFeeRate.mul("0.3")); // ~0.044%
+  const tradingCostRate = blendedFeeRate.mul(2); // round-trip (entry + exit) ≈ 0.088%
 
   for (let ts = startTs; ts < endTs; ts += periodMs) {
     let periodFunding = new Decimal(0);
@@ -208,20 +216,30 @@ export async function runBacktest(
       activeAssets.push(asset);
 
       // Add lending yield on spot leg (only in drift-only mode)
+      // Long spot earns lending yield; short spot incurs borrow cost
       if (isDriftOnly) {
         const lendRates = lendingRates[asset];
         if (lendRates && lendRates.length > 0) {
-          // Find closest lending rate or use average
           const lendRate = lendRates.find(
             (r) => r.ts >= tsSeconds - 3600 && r.ts < tsSeconds + 3600
           );
           const annualLendRate = lendRate
             ? lendRate.rate
             : lendRates.reduce((s, r) => s + r.rate, 0) / lendRates.length;
-          // Hourly lending income on spot position
           const hourlyLendRate = annualLendRate / (24 * 365.25);
-          const lendingIncome = positionSize.mul(Math.abs(hourlyLendRate));
-          periodLending = periodLending.add(lendingIncome);
+
+          if (hourlyRate >= 0) {
+            // Positive funding → long spot → earns lending yield
+            const lendingIncome = positionSize.mul(Math.abs(hourlyLendRate));
+            periodLending = periodLending.add(lendingIncome);
+          } else {
+            // Negative funding → short spot (borrowed) → pays borrow cost
+            // Borrow rate is typically ~2-3x the deposit rate
+            const borrowMultiplier = 2.5; // borrow rate ≈ 2.5x deposit rate
+            const hourlyBorrowRate = Math.abs(hourlyLendRate) * borrowMultiplier;
+            const borrowCost = positionSize.mul(hourlyBorrowRate);
+            periodLending = periodLending.sub(borrowCost);
+          }
         }
       }
     }
@@ -340,9 +358,11 @@ export async function runBacktest(
     maxDrawdown,
     sharpeRatio,
     totalFundingCollected: totalFunding,
+    totalLendingCollected: totalLending,
     totalTrades,
     winRate:
       totalTrades > 0 ? new Decimal(wins).div(totalTrades) : new Decimal(0),
+    directionFlips,
     dailyReturns,
   };
 
@@ -390,8 +410,12 @@ async function main() {
   console.log(
     `Total Funding Collected: $${result.totalFundingCollected.toFixed(2)}`
   );
+  console.log(
+    `Total Lending Collected: $${result.totalLendingCollected.toFixed(2)}`
+  );
   console.log(`Win Rate: ${result.winRate.mul(100).toFixed(1)}%`);
   console.log(`Total Periods: ${result.totalTrades}`);
+  console.log(`Direction Flips: ${result.directionFlips}`);
 
   // Save results to JSON for submission
   const output = {
@@ -407,8 +431,10 @@ async function main() {
       maxDrawdown: `${result.maxDrawdown.toFixed(2)}%`,
       sharpeRatio: result.sharpeRatio.toFixed(2),
       totalFundingCollected: `$${result.totalFundingCollected.toFixed(2)}`,
+      totalLendingCollected: `$${result.totalLendingCollected.toFixed(2)}`,
       winRate: `${result.winRate.mul(100).toFixed(1)}%`,
       totalPeriods: result.totalTrades,
+      directionFlips: result.directionFlips,
     },
     equityCurve: result.dailyReturns.map((d) => ({
       date: d.date.toISOString().split("T")[0],

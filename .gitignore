@@ -9,7 +9,12 @@ coverage/
 *.key
 *.pem
 
+# Agent state (crash recovery)
+.ranger-state/
+
 # Generated output files
 backtest_results_*.json
 binance_trades_*.csv
 drift_funding_*.csv
+drift_trades_*.csv
+drift_lending_*.csv

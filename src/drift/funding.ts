@@ -128,11 +128,13 @@ export class DriftFundingAnalyzer {
     // Both are delta-neutral, both collect funding
     const absAnnualized = Math.abs(annualized);
     const isAttractive = absAnnualized > 0.05; // 5% min either direction
-    const attractiveDirection: "short" | "long" | null = !isAttractive
-      ? null
-      : annualized > 0
-        ? "short"  // positive funding → short perp collects
-        : "long";  // negative funding → long perp collects
+    // Determine which direction to take; skip if rate is exactly zero
+    const attractiveDirection: "short" | "long" | null =
+      !isAttractive || annualized === 0
+        ? null
+        : annualized > 0
+          ? "short"  // positive funding → short perp collects
+          : "long";  // negative funding → long perp collects
 
     // Momentum: compare current rate vs 24h average
     // If current is stronger than average, momentum is in that direction

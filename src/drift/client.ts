@@ -141,7 +141,7 @@ export class DriftManager {
    * Each subaccount has its own positions and orders.
    */
   async addSubAccount(subAccountId: number): Promise<void> {
-    const hasUser = this.client.hasUser(subAccountId);
+    const hasUser = await this.client.hasUser(subAccountId);
     if (!hasUser) {
       await this.client.addUser(subAccountId);
       logger.info(`Subscribed to subaccount ${subAccountId}`);
@@ -247,11 +247,17 @@ export class DriftManager {
     });
   }
 
-  async sellSpot(asset: string, baseAmount: Decimal): Promise<void> {
+  async sellSpot(asset: string, usdcAmount: Decimal): Promise<void> {
     const indices = MARKET_INDEX[asset];
     if (!indices) throw new Error(`Unknown asset: ${asset}`);
 
-    logger.info(`Selling ${baseAmount.toFixed(6)} ${asset} spot on Drift`);
+    const price = await this.getOraclePrice(asset);
+    const baseAmount = usdcAmount.div(price);
+
+    logger.info(`Selling ${baseAmount.toFixed(6)} ${asset} spot on Drift`, {
+      usdcAmount: usdcAmount.toFixed(2),
+      price: price.toFixed(2),
+    });
 
     await this.client.placeSpotOrder({
       orderType: OrderType.MARKET,
