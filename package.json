@@ -12,6 +12,9 @@
     "vault:deposit": "ts-node scripts/deposit-strategy.ts",
     "vault:withdraw": "ts-node scripts/withdraw-strategy.ts",
     "vault:status": "ts-node scripts/vault-status.ts",
+    "drift:status": "ts-node scripts/drift-status.ts",
+    "drift:init-vault": "ts-node scripts/init-drift-vault.ts",
+    "export-trades": "ts-node scripts/export-trades.ts",
     "lint": "eslint src/",
     "test": "jest"
   },

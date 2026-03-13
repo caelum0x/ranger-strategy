@@ -76,7 +76,7 @@ async function main() {
   };
 
   const createVaultIx = await client.createInitializeVaultIx(vaultParams, {
-    vault: vaultKp,
+    vault: vaultKp.publicKey,
     vaultAssetMint: USDC_MINT,
     admin: adminKp.publicKey,
     manager: managerKp.publicKey,

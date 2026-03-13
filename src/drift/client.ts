@@ -14,7 +14,8 @@ import {
   DRIFT_PROGRAM_ID,
   BN,
 } from "@drift-labs/sdk";
-import { Connection, Keypair, PublicKey } from "@solana/web3.js";
+import { PublicKey } from "@solana/web3.js";
+import type { Connection as SolConnection, Keypair as SolKeypair } from "@solana/web3.js";
 import Decimal from "decimal.js";
 import { config } from "../config";
 import { FundingRate, Position } from "../strategy/types";
@@ -42,11 +43,12 @@ export interface DriftManagerConfig {
 
 export class DriftManager {
   private client!: DriftClient;
-  private connection: Connection;
+  private connection: SolConnection;
   private wallet: Wallet;
   private delegateConfig?: DriftManagerConfig["delegateFor"];
 
   constructor(cfg: DriftManagerConfig) {
+    const { Connection, Keypair } = require("@solana/web3.js");
     this.connection = new Connection(config.solanaRpcUrl, "confirmed");
     this.delegateConfig = cfg.delegateFor;
 
@@ -61,13 +63,13 @@ export class DriftManager {
   async initialize(): Promise<void> {
     // Use polling subscription with BulkAccountLoader (recommended for bots)
     const accountLoader = new BulkAccountLoader(
-      this.connection,
+      this.connection as any,
       "confirmed",
       1000 // poll interval ms
     );
 
     const clientConfig: any = {
-      connection: this.connection,
+      connection: this.connection as any,
       wallet: this.wallet,
       env: config.driftEnv,
       accountSubscription: {
@@ -102,7 +104,7 @@ export class DriftManager {
     }
 
     logger.info("Drift client initialized and subscribed", {
-      programId: DRIFT_PROGRAM_ID.toBase58(),
+      programId: DRIFT_PROGRAM_ID,
       env: config.driftEnv,
       publicKey: this.wallet.publicKey.toBase58(),
       delegated: !!this.delegateConfig,
@@ -361,14 +363,15 @@ export class DriftManager {
     });
 
     logger.info(`Placing ${orderParams.length} orders atomically`);
-    await this.client.placeOrders(orderParams);
+    await this.client.placeOrders(orderParams as any);
   }
 
   // ── Funding Settlement ─────────────────────────────────────────────
 
   async settleFunding(): Promise<void> {
     logger.info("Settling funding payments on Drift");
-    await this.client.settleFundingPayment();
+    const userAccountPublicKey = await this.client.getUserAccountPublicKey();
+    await this.client.settleFundingPayment(userAccountPublicKey);
   }
 
   // ── Deposits & Withdrawals ─────────────────────────────────────────
@@ -487,7 +490,7 @@ export class DriftManager {
       QUOTE_PRECISION
     );
     const marginReq = convertToNumber(
-      user.getMarginRequirement(),
+      user.getMarginRequirement("Initial"),
       QUOTE_PRECISION
     );
     if (marginReq === 0) return new Decimal(999);

@@ -55,7 +55,7 @@ export class RangerVaultManager {
         description: "AI-powered USDC delta-neutral funding harvester",
       },
       {
-        vault: vaultKp,
+        vault: vaultKp.publicKey,
         vaultAssetMint: USDC_MINT,
         admin: this.adminKp.publicKey,
         manager: this.managerKp.publicKey,
@@ -97,9 +97,9 @@ export class RangerVaultManager {
 
     const vaultAccount = await this.client.fetchVaultAccount(this.vaultPubkey);
     const { totalValue, strategies } =
-      await this.client.getPositionAndTotalValuesForVault(vaultAccount);
+      await this.client.getPositionAndTotalValuesForVault(this.vaultPubkey);
     const sharePrice =
-      await this.client.getCurrentAssetPerLpForVault(vaultAccount);
+      await this.client.getCurrentAssetPerLpForVault(this.vaultPubkey);
 
     return {
       totalValue: new Decimal(totalValue.toString()).div(1e6),
@@ -119,12 +119,12 @@ export class RangerVaultManager {
     );
 
     const ix = await this.client.createDepositStrategyIx(
-      { amount: lamportAmount },
+      { depositAmount: lamportAmount },
       {
         vault: this.vaultPubkey,
         strategy: strategyPubkey,
         manager: this.managerKp.publicKey,
-      }
+      } as any
     );
 
     logger.info(`Deposited $${amount.toFixed(2)} to strategy`, {
@@ -143,12 +143,12 @@ export class RangerVaultManager {
     );
 
     const ix = await this.client.createWithdrawStrategyIx(
-      { amount: lamportAmount },
+      { withdrawAmount: lamportAmount },
       {
         vault: this.vaultPubkey,
         strategy: strategyPubkey,
         manager: this.managerKp.publicKey,
-      }
+      } as any
     );
 
     logger.info(`Withdrew $${amount.toFixed(2)} from strategy`, {
@@ -159,15 +159,16 @@ export class RangerVaultManager {
   async harvestFees(): Promise<void> {
     if (!this.vaultPubkey) throw new Error("Vault not initialized");
 
-    const vaultAccount = await this.client.fetchVaultAccount(this.vaultPubkey);
-
     const managerFees =
-      await this.client.getAccumulatedManagerFeesForVault(vaultAccount);
+      await this.client.getAccumulatedManagerFeesForVault(this.vaultPubkey);
     logger.info(`Manager fees accumulated: ${managerFees.toString()}`);
 
     const ix = await this.client.createHarvestFeeIx({
       vault: this.vaultPubkey,
-      manager: this.managerKp.publicKey,
+      harvester: this.managerKp.publicKey,
+      vaultManager: this.managerKp.publicKey,
+      vaultAdmin: this.adminKp.publicKey,
+      protocolAdmin: this.adminKp.publicKey,
     });
 
     logger.info("Fees harvested");

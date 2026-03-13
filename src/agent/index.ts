@@ -1,6 +1,9 @@
-import Decimal from "decimal.js";
 import { CronJob } from "cron";
+import { PublicKey } from "@solana/web3.js";
 import { DriftManager } from "../drift/client";
+import { DriftFundingAnalyzer } from "../drift/funding";
+import { DriftExecutor } from "../drift/executor";
+import { DriftVaultManager } from "../drift/vault";
 import { BinanceManager } from "../binance/client";
 import { RangerVaultManager } from "../ranger/client";
 import { StrategyEngine } from "../strategy/engine";
@@ -12,6 +15,9 @@ class StrategyAgent {
   private binance!: BinanceManager;
   private ranger!: RangerVaultManager;
   private engine!: StrategyEngine;
+  private fundingAnalyzer!: DriftFundingAnalyzer;
+  private executor!: DriftExecutor;
+  private driftVault!: DriftVaultManager;
   private rebalanceJob!: CronJob;
   private running = false;
 
@@ -66,6 +72,29 @@ class StrategyAgent {
     // Initialize strategy engine
     this.engine = new StrategyEngine(this.drift, this.binance, initialCapital);
 
+    // Wire up on-chain funding analyzer and atomic executor
+    const driftClient = this.drift.getClient();
+    if (driftClient) {
+      this.fundingAnalyzer = new DriftFundingAnalyzer(driftClient);
+      this.executor = new DriftExecutor(driftClient);
+      this.engine.setFundingAnalyzer(this.fundingAnalyzer);
+      this.engine.setExecutor(this.executor);
+      logger.info("On-chain funding analyzer and executor attached");
+
+      // Initialize Drift Vault Manager if vault address is configured
+      const driftVaultPubkey = process.env.DRIFT_VAULT_PUBKEY;
+      if (driftVaultPubkey) {
+        this.driftVault = new DriftVaultManager(driftClient, this.drift.getWallet());
+        await this.driftVault.initialize();
+        const vaultAddress = new PublicKey(driftVaultPubkey);
+        const equity = await this.driftVault.getVaultEquity(vaultAddress);
+        logger.info("Drift Vault connected", {
+          vault: driftVaultPubkey,
+          equity: `$${equity.toFixed(2)}`,
+        });
+      }
+    }
+
     // Log initial market data
     await this.logMarketOverview();
 
@@ -119,6 +148,22 @@ class StrategyAgent {
         });
       }
 
+      // On-chain funding analysis with premium and imbalance data
+      if (this.fundingAnalyzer) {
+        const analyses = this.fundingAnalyzer.analyzeAllAssets();
+        logger.info("=== On-Chain Funding Analysis ===");
+        for (const a of analyses) {
+          logger.info(`${a.asset} on-chain:`, {
+            annualized: `${a.annualizedRate.mul(100).toFixed(2)}%`,
+            premium: `${a.premium.mul(100).toFixed(4)}%`,
+            imbalance: `${a.longShortImbalance.mul(100).toFixed(2)}%`,
+            predicted: a.predictedDirection,
+            confidence: `${a.confidence.mul(100).toFixed(0)}%`,
+            attractive: a.isAttractive,
+          });
+        }
+      }
+
       // Fetch average funding rates from Data API
       const avgRates = await this.drift.getAverageFundingRates();
       logger.info("Drift average funding rates (Data API):", avgRates);
@@ -135,16 +180,37 @@ class StrategyAgent {
 
       // Log state for monitoring
       const state = this.engine.getState();
-      logger.info("Agent cycle summary", {
+      const summary: Record<string, string> = {
         regime: state.regime,
-        positions: state.positions.length,
+        positions: state.positions.length.toString(),
         totalPnl: state.totalPnl.toFixed(4),
         healthRatio: state.healthRatio.toFixed(4),
         deployedCapital: state.deployedCapital.toFixed(2),
         idleCapital: state.idleCapital.toFixed(2),
         fundingPnl: this.drift.getUnrealizedFundingPnl().toFixed(4),
         freeCollateral: this.drift.getFreeCollateral().toFixed(2),
-      });
+      };
+
+      // Include vault equity + withdrawal risk monitoring if available
+      if (this.driftVault && process.env.DRIFT_VAULT_PUBKEY) {
+        try {
+          const vaultAddr = new PublicKey(process.env.DRIFT_VAULT_PUBKEY);
+          const equity = await this.driftVault.getVaultEquity(vaultAddr);
+          summary.vaultEquity = `$${equity.toFixed(2)}`;
+
+          // Check if outstanding withdrawals could trigger liquidation takeover
+          const risk = await this.driftVault.checkWithdrawalRisk(vaultAddr);
+          if (risk.atRisk) {
+            logger.error("VAULT WITHDRAWAL RISK: reduce positions before redemption", {
+              withdrawRequested: `$${risk.totalWithdrawRequested.toFixed(2)}`,
+              equity: `$${risk.vaultEquity.toFixed(2)}`,
+              ratio: `${risk.withdrawRatio.mul(100).toFixed(1)}%`,
+            });
+          }
+        } catch { /* non-critical */ }
+      }
+
+      logger.info("Agent cycle summary", summary);
     } catch (err) {
       logger.error("Strategy cycle failed", { error: err });
     }
@@ -163,7 +229,14 @@ class StrategyAgent {
       await this.engine.emergencyUnwind();
     }
 
-    await Promise.all([this.drift.shutdown(), this.binance.shutdown()]);
+    const shutdownPromises: Promise<void>[] = [
+      this.drift.shutdown(),
+      this.binance.shutdown(),
+    ];
+    if (this.driftVault) {
+      shutdownPromises.push(this.driftVault.shutdown());
+    }
+    await Promise.all(shutdownPromises);
 
     logger.info("AI Strategy Agent stopped");
   }
@@ -182,9 +255,7 @@ class StrategyAgent {
       healthRatio: state.healthRatio.toFixed(4),
       fundingPnl: this.drift.getUnrealizedFundingPnl().toFixed(4),
       freeCollateral: this.drift.getFreeCollateral().toFixed(2),
-      leverage: this.drift.getLeverage
-        ? "see positions"
-        : "N/A",
+      leverage: "see positions",
       positions: state.positions.map((p) => ({
         asset: p.asset,
         side: p.side,

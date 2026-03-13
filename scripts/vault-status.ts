@@ -26,13 +26,13 @@ async function main() {
 
   // Get position values
   const { totalValue, strategies } =
-    await client.getPositionAndTotalValuesForVault(vault);
+    await client.getPositionAndTotalValuesForVault(vaultPubkey);
 
   // Get share price
-  const sharePrice = await client.getCurrentAssetPerLpForVault(vault);
+  const sharePrice = await client.getCurrentAssetPerLpForVault(vaultPubkey);
 
   // Get fees
-  const managerFees = await client.getAccumulatedManagerFeesForVault(vault);
+  const managerFees = await client.getAccumulatedManagerFeesForVault(vaultPubkey);
 
   console.log("=== VAULT STATUS ===");
   console.log(`Name: ${vault.name}`);
@@ -41,7 +41,7 @@ async function main() {
   console.log(`Asset Mint: ${vault.asset.mint.toBase58()}`);
   console.log("");
   console.log("--- Financials ---");
-  console.log(`Total Value: $${(totalValue.toNumber() / 1e6).toFixed(2)}`);
+  console.log(`Total Value: $${(totalValue / 1e6).toFixed(2)}`);
   console.log(`Share Price: ${sharePrice.toString()}`);
   console.log(`Manager Fees Accumulated: ${managerFees.toString()}`);
   console.log("");
@@ -69,7 +69,7 @@ async function main() {
   try {
     const apiUrl = process.env.RANGER_API_URL || "https://api.voltr.xyz";
     const response = await fetch(`${apiUrl}/vault/${vaultPubkey.toBase58()}`);
-    const apiData = await response.json();
+    const apiData = (await response.json()) as any;
     console.log("\n--- API Data ---");
     console.log(`APY: ${apiData.apy || "N/A"}`);
     console.log(`TVL: ${apiData.tvl || "N/A"}`);

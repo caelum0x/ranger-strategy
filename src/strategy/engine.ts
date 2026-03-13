@@ -1,5 +1,7 @@
 import Decimal from "decimal.js";
 import { DriftManager } from "../drift/client";
+import { DriftFundingAnalyzer, FundingAnalysis } from "../drift/funding";
+import { DriftExecutor } from "../drift/executor";
 import { BinanceManager } from "../binance/client";
 import { RiskManager } from "../risk/manager";
 import { config } from "../config";
@@ -16,6 +18,8 @@ export class StrategyEngine {
   private drift: DriftManager;
   private binance: BinanceManager;
   private riskManager: RiskManager;
+  private fundingAnalyzer: DriftFundingAnalyzer | null = null;
+  private executor: DriftExecutor | null = null;
   private state: StrategyState;
 
   constructor(
@@ -41,6 +45,20 @@ export class StrategyEngine {
       lastRebalance: 0,
       regime: "neutral",
     };
+  }
+
+  /**
+   * Attach the on-chain funding analyzer (requires initialized DriftClient).
+   */
+  setFundingAnalyzer(analyzer: DriftFundingAnalyzer): void {
+    this.fundingAnalyzer = analyzer;
+  }
+
+  /**
+   * Attach the advanced executor for atomic tx execution.
+   */
+  setExecutor(executor: DriftExecutor): void {
+    this.executor = executor;
   }
 
   async runCycle(): Promise<void> {
@@ -83,6 +101,15 @@ export class StrategyEngine {
     // 7. Settle funding on Drift
     await this.drift.settleFunding();
 
+    // 7.5. Settle PnL via executor if available
+    if (this.executor) {
+      try {
+        await this.executor.settlePnl([0, 1, 2]); // SOL, BTC, ETH
+      } catch {
+        // Non-critical — PnL settlement may have nothing to settle
+      }
+    }
+
     // 8. Update state again
     await this.refreshState();
 
@@ -100,20 +127,37 @@ export class StrategyEngine {
   ): TradeSignal[] {
     const signals: TradeSignal[] = [];
 
-    // Rank assets by Binance funding rate (where we short)
+    // Use on-chain funding analysis if available, otherwise fall back to API rates
+    const onChainAnalyses = this.fundingAnalyzer
+      ? this.fundingAnalyzer.analyzeAllAssets()
+      : [];
+
+    // Rank assets by combined Binance + Drift on-chain data
     const rankedAssets = config.targetAssets
       .map((asset) => {
         const binanceRate = binanceRates.find((r) => r.asset === asset);
         const driftRate = driftRates.find((r) => r.asset === asset);
+        const onChain = onChainAnalyses.find((a) => a.asset === asset);
+
+        // On-chain analysis provides better signals (premium, imbalance, confidence)
+        const confidence = onChain
+          ? onChain.confidence
+          : new Decimal("0.5");
+
+        // Net yield: funding income from Binance short
+        const netYield = binanceRate?.annualizedRate || new Decimal(0);
+
         return {
           asset,
           binanceFunding: binanceRate?.annualizedRate || new Decimal(0),
           driftFunding: driftRate?.annualizedRate || new Decimal(0),
-          // Net yield = funding income from short - opportunity cost
-          netYield: (binanceRate?.annualizedRate || new Decimal(0)),
+          onChainAnalysis: onChain,
+          netYield,
+          confidence,
+          isAttractive: onChain ? onChain.isAttractive : netYield.gt(0.05),
         };
       })
-      .filter((a) => a.netYield.gt(new Decimal("0.05"))) // Only assets with >5% annualized funding
+      .filter((a) => a.isAttractive && a.netYield.gt(new Decimal("0.05")))
       .sort((a, b) => b.netYield.minus(a.netYield).toNumber());
 
     logger.info("Asset ranking by predicted funding yield", {
@@ -121,6 +165,8 @@ export class StrategyEngine {
         asset: a.asset,
         binanceFunding: a.binanceFunding.toFixed(4),
         netYield: a.netYield.toFixed(4),
+        confidence: a.confidence.toFixed(2),
+        onChainAttractive: a.onChainAnalysis?.isAttractive ?? "N/A",
       })),
     });
 
@@ -150,15 +196,19 @@ export class StrategyEngine {
       );
 
       if (!existingPos && this.state.idleCapital.gt(new Decimal(5))) {
-        // New position
+        // New position — use on-chain confidence for sizing
         const positionSize = this.riskManager.calculatePositionSize(
           this.state.idleCapital,
           ranked.asset,
           ranked.binanceFunding,
-          new Decimal("0.8") // confidence
+          ranked.confidence
         );
 
         if (positionSize.gte(new Decimal(5))) {
+          const premium = ranked.onChainAnalysis
+            ? ` | premium: ${ranked.onChainAnalysis.premium.mul(100).toFixed(3)}%`
+            : "";
+
           signals.push({
             asset: ranked.asset,
             action: "open",
@@ -166,8 +216,8 @@ export class StrategyEngine {
             perpVenue: "binance",
             spotSize: positionSize,
             perpSize: positionSize,
-            confidence: new Decimal("0.8"),
-            reason: `Positive funding: ${ranked.binanceFunding.toFixed(4)} annualized`,
+            confidence: ranked.confidence,
+            reason: `Positive funding: ${ranked.binanceFunding.toFixed(4)} annualized${premium}`,
             predictedFundingRate: ranked.binanceFunding,
           });
         }
@@ -255,8 +305,15 @@ export class StrategyEngine {
 
     for (const asset of config.targetAssets) {
       try {
+        // Close Binance perp first (CEX is faster)
         await this.binance.closePerp(asset);
-        await this.drift.closePerp(asset);
+
+        // Use atomic exit on Drift if executor available (cancel+close in one tx)
+        if (this.executor) {
+          await this.executor.atomicDeltaNeutralExit(asset);
+        } else {
+          await this.drift.closePerp(asset);
+        }
       } catch (err) {
         logger.error(`Failed to close ${asset} positions`, { error: err });
       }

@@ -195,7 +195,7 @@ export class BinanceManager {
 
   async getBalance(): Promise<Decimal> {
     const balance = await this.exchange.fetchBalance();
-    const usdt = balance.total?.["USDT"] || 0;
+    const usdt = balance["USDT"]?.total || 0;
     return new Decimal(usdt);
   }
 
