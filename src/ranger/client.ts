@@ -1,4 +1,4 @@
-import { VoltrClient, sendAndConfirmTransaction } from "@voltr/vault-sdk";
+import { VoltrClient, VaultConfigField, sendAndConfirmTransaction } from "@voltr/vault-sdk";
 import {
   Connection,
   Keypair,
@@ -208,6 +208,83 @@ export class RangerVaultManager {
     );
 
     logger.info("Fees harvested", { txSignature: sig });
+  }
+
+  // ── Vault config updates ─────────────────────────────────────────────────
+
+  async updateMaxCap(maxCap: BN): Promise<string> {
+    if (!this.vaultPubkey) throw new Error("Vault not initialized");
+    const data = maxCap.toArrayLike(Buffer, "le", 8);
+    const ix = await this.client.createUpdateVaultConfigIx(
+      VaultConfigField.MaxCap,
+      data,
+      { vault: this.vaultPubkey, admin: this.adminKp.publicKey }
+    );
+    const sig = await sendAndConfirmTransaction([ix], this.connection, [this.adminKp]);
+    logger.info("MaxCap updated", { maxCap: maxCap.toString(), txSignature: sig });
+    return sig;
+  }
+
+  async updateWithdrawalWaitingPeriod(seconds: BN): Promise<string> {
+    if (!this.vaultPubkey) throw new Error("Vault not initialized");
+    const data = seconds.toArrayLike(Buffer, "le", 8);
+    const ix = await this.client.createUpdateVaultConfigIx(
+      VaultConfigField.WithdrawalWaitingPeriod,
+      data,
+      { vault: this.vaultPubkey, admin: this.adminKp.publicKey }
+    );
+    const sig = await sendAndConfirmTransaction([ix], this.connection, [this.adminKp]);
+    logger.info("WithdrawalWaitingPeriod updated", { seconds: seconds.toString(), txSignature: sig });
+    return sig;
+  }
+
+  async updateLockedProfitDegradationDuration(seconds: BN): Promise<string> {
+    if (!this.vaultPubkey) throw new Error("Vault not initialized");
+    const data = seconds.toArrayLike(Buffer, "le", 8);
+    const ix = await this.client.createUpdateVaultConfigIx(
+      VaultConfigField.LockedProfitDegradationDuration,
+      data,
+      { vault: this.vaultPubkey, admin: this.adminKp.publicKey }
+    );
+    const sig = await sendAndConfirmTransaction([ix], this.connection, [this.adminKp]);
+    logger.info("LockedProfitDegradationDuration updated", { seconds: seconds.toString(), txSignature: sig });
+    return sig;
+  }
+
+  /** Update a fee field (basis points, u16). Use for performance, redemption, and issuance fees. */
+  async updateFee(field: VaultConfigField, basisPoints: number): Promise<string> {
+    if (!this.vaultPubkey) throw new Error("Vault not initialized");
+    const feeData = Buffer.alloc(2);
+    feeData.writeUInt16LE(basisPoints, 0);
+
+    const accounts: any = { vault: this.vaultPubkey, admin: this.adminKp.publicKey };
+
+    // Management fee updates require the LP mint
+    if (
+      field === VaultConfigField.ManagerManagementFee ||
+      field === VaultConfigField.AdminManagementFee
+    ) {
+      accounts.vaultLpMint = this.client.findVaultLpMint(this.vaultPubkey);
+    }
+
+    const ix = await this.client.createUpdateVaultConfigIx(field, feeData, accounts);
+    const sig = await sendAndConfirmTransaction([ix], this.connection, [this.adminKp]);
+    logger.info(`Fee updated`, { field: VaultConfigField[field], basisPoints, txSignature: sig });
+    return sig;
+  }
+
+  /** Transfer manager authority to a new keypair. Irreversible without new manager's cooperation. */
+  async updateManager(newManagerPubkey: PublicKey): Promise<string> {
+    if (!this.vaultPubkey) throw new Error("Vault not initialized");
+    const managerData = newManagerPubkey.toBuffer();
+    const ix = await this.client.createUpdateVaultConfigIx(
+      VaultConfigField.Manager,
+      managerData,
+      { vault: this.vaultPubkey, admin: this.adminKp.publicKey }
+    );
+    const sig = await sendAndConfirmTransaction([ix], this.connection, [this.adminKp]);
+    logger.info("Manager updated", { newManager: newManagerPubkey.toBase58(), txSignature: sig });
+    return sig;
   }
 
   getVaultPubkey(): PublicKey | null {
