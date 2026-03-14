@@ -476,6 +476,39 @@ class StrategyAgent {
         apyEstimate: `${state.apyEstimate.toFixed(2)}%`,
       };
 
+      // ── Ranger Earn liquidity management ──────────────────────────────────
+      // Check pending withdrawal requests and ensure idle USDC is sufficient.
+      // If users have requested withdrawals that exceed idle balance, pull USDC
+      // back from the Drift strategy so they can execute their redemptions.
+      try {
+        const withdrawalRisk = await this.ranger.getPendingWithdrawalRisk();
+        summary.rangerPendingWithdrawals = `$${withdrawalRisk.totalPendingUsdc.toFixed(2)}`;
+        summary.rangerIdleUsdc = `$${withdrawalRisk.idleUsdc.toFixed(2)}`;
+
+        if (withdrawalRisk.atRisk) {
+          logger.warn("Ranger Earn withdrawal shortfall — pulling USDC from Drift strategy", {
+            pending: `$${withdrawalRisk.totalPendingUsdc.toFixed(2)}`,
+            idle: `$${withdrawalRisk.idleUsdc.toFixed(2)}`,
+            shortfall: `$${withdrawalRisk.shortfallUsdc.toFixed(2)}`,
+          });
+          this.telegram
+            .emergencyAlert(
+              `Ranger Earn withdrawal shortfall: need $${withdrawalRisk.shortfallUsdc.toFixed(2)} more idle USDC`
+            )
+            .catch(() => {});
+          // Pull 10% extra buffer above shortfall to avoid repeated triggers
+          const pullAmount = withdrawalRisk.shortfallUsdc.mul(1.1);
+          const strategyPubkey = config.vaultPubkey
+            ? this.ranger.getVaultPubkey()
+            : null;
+          if (strategyPubkey) {
+            await this.ranger.withdrawFromStrategy(strategyPubkey, pullAmount);
+          }
+        }
+      } catch (err: any) {
+        logger.warn("Ranger Earn withdrawal risk check failed", { error: err.message });
+      }
+
       // Harvest Ranger Earn manager fees once every 24 cycles (~daily at 1h intervals)
       if (state.cycleCount > 0 && state.cycleCount % 24 === 0) {
         try {
