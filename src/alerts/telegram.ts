@@ -66,17 +66,25 @@ export class TelegramAlerter {
     health: string;
     positions: number;
     funding: string;
+    reasoning?: string;
   }): Promise<void> {
-    await this.alert(
-      "info",
-      [
-        `Cycle #${data.cycle} complete`,
-        `Regime: ${data.regime}`,
-        `PnL: ${data.pnl} | APY: ${data.apy}`,
-        `Health: ${data.health} | Positions: ${data.positions}`,
-        `Funding collected: ${data.funding}`,
-      ].join("\n")
-    );
+    const lines = [
+      `Cycle #${data.cycle} complete`,
+      `Regime: ${data.regime}`,
+      `PnL: ${data.pnl} | APY: ${data.apy}`,
+      `Health: ${data.health} | Positions: ${data.positions}`,
+      `Funding collected: ${data.funding}`,
+    ];
+
+    // Append LLM reasoning (truncated to avoid Telegram message limits)
+    if (data.reasoning) {
+      const truncated = data.reasoning.length > 500
+        ? data.reasoning.slice(0, 497) + "..."
+        : data.reasoning;
+      lines.push("", "AI Analysis:", truncated);
+    }
+
+    await this.alert("info", lines.join("\n"));
   }
 
   /** Send emergency unwind alert */

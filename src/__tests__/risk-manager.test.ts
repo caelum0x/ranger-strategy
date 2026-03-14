@@ -260,4 +260,74 @@ describe("RiskManager", () => {
       expect(size.lte(new Decimal("20"))).toBe(true);
     });
   });
+
+  // ── getOverconcentratedPositions ──────────────────────────────────
+
+  describe("getOverconcentratedPositions", () => {
+    it("returns empty for balanced positions", () => {
+      const positions = [
+        makePosition({ asset: "SOL", notionalValue: new Decimal("100") }),
+        makePosition({ asset: "BTC", notionalValue: new Decimal("100") }),
+        makePosition({ asset: "ETH", notionalValue: new Decimal("100") }),
+      ];
+      const result = rm.getOverconcentratedPositions(positions);
+      expect(result).toHaveLength(0);
+    });
+
+    it("flags asset exceeding 40% threshold", () => {
+      const positions = [
+        makePosition({ asset: "SOL", notionalValue: new Decimal("500") }),
+        makePosition({ asset: "BTC", notionalValue: new Decimal("100") }),
+        makePosition({ asset: "ETH", notionalValue: new Decimal("100") }),
+      ];
+      const result = rm.getOverconcentratedPositions(positions);
+      expect(result).toHaveLength(1);
+      expect(result[0].asset).toBe("SOL");
+      expect(result[0].concentration.toNumber()).toBeGreaterThan(0.4);
+    });
+
+    it("respects custom threshold", () => {
+      const positions = [
+        makePosition({ asset: "SOL", notionalValue: new Decimal("300") }),
+        makePosition({ asset: "BTC", notionalValue: new Decimal("300") }),
+        makePosition({ asset: "ETH", notionalValue: new Decimal("100") }),
+      ];
+      // At 30% threshold, both SOL and BTC should be flagged (each ~43%)
+      const result = rm.getOverconcentratedPositions(positions, new Decimal("0.3"));
+      expect(result).toHaveLength(2);
+    });
+  });
+
+  // ── getWorstPosition ─────────────────────────────────────────────
+
+  describe("getWorstPosition", () => {
+    it("returns null for empty positions", () => {
+      expect(rm.getWorstPosition([])).toBeNull();
+    });
+
+    it("returns position with worst PnL", () => {
+      const positions = [
+        makePosition({ asset: "SOL", venue: "drift", side: "short", unrealizedPnl: new Decimal("-5") }),
+        makePosition({ asset: "BTC", venue: "drift", side: "short", unrealizedPnl: new Decimal("2") }),
+        makePosition({ asset: "ETH", venue: "drift", side: "long", unrealizedPnl: new Decimal("-1") }),
+      ];
+      const worst = rm.getWorstPosition(positions);
+      expect(worst).not.toBeNull();
+      expect(worst!.asset).toBe("SOL");
+    });
+
+    it("groups by asset for pair PnL", () => {
+      // SOL pair: long +3, short -8 = net -5
+      // BTC pair: long -2, short +1 = net -1
+      const positions = [
+        makePosition({ asset: "SOL", venue: "drift", side: "long", unrealizedPnl: new Decimal("3") }),
+        makePosition({ asset: "SOL", venue: "drift", side: "short", unrealizedPnl: new Decimal("-8") }),
+        makePosition({ asset: "BTC", venue: "drift", side: "long", unrealizedPnl: new Decimal("-2") }),
+        makePosition({ asset: "BTC", venue: "drift", side: "short", unrealizedPnl: new Decimal("1") }),
+      ];
+      const worst = rm.getWorstPosition(positions);
+      expect(worst).not.toBeNull();
+      expect(worst!.asset).toBe("SOL");
+    });
+  });
 });

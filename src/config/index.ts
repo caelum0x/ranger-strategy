@@ -61,6 +61,13 @@ export const config = {
     trustfulAdaptor: "3pnpK9nrs1R65eMV1wqCXkDkhSgN18xb1G5pgYPwoZjJ",
   },
 
+  // AI / LLM
+  openRouterApiKey: process.env.OPENROUTER_API_KEY || "",
+  llmModel: process.env.LLM_MODEL || "anthropic/claude-sonnet-4",
+
+  /** Relax delta-neutrality checks for devnet (spot oracles are stale) */
+  relaxDeltaChecks: process.env.RELAX_DELTA_CHECKS === "true",
+
   // Token mints
   mints: {
     USDC: "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",

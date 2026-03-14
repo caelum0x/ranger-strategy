@@ -39,7 +39,7 @@ const MARKET_INDEX: Record<string, { perp: number; spot: number }> = {
 const DEFAULT_SLIPPAGE_BPS = 50; // 0.5%
 
 export class DriftExecutor {
-  private client: DriftClient;
+  protected client: DriftClient;
   private defaultPriorityFee: number;
 
   constructor(client: DriftClient, priorityFeeMicroLamports: number = 50_000) {
@@ -237,7 +237,23 @@ export class DriftExecutor {
       );
     }
 
-    const baseAmount = new Decimal(usdcAmount.toNumber() / price);
+    let baseAmount = new Decimal(usdcAmount.toNumber() / price);
+
+    // Check spot market minimum step size and round up if needed
+    try {
+      const spotMarket = this.client.getSpotMarketAccount(spotIdx);
+      if (spotMarket) {
+        const stepSize = convertToNumber(spotMarket.orderStepSize, new BN(1e9));
+        if (baseAmount.toNumber() < stepSize && stepSize > 0) {
+          logger.warn(
+            `${asset} spot order ${baseAmount.toFixed(6)} below step size ${stepSize} — rounding up`
+          );
+          baseAmount = new Decimal(stepSize);
+        }
+      }
+    } catch {
+      // Non-critical — proceed with original amount
+    }
 
     // Slippage-protected limit prices (50bps)
     const slippageBps = DEFAULT_SLIPPAGE_BPS;
@@ -477,6 +493,53 @@ export class DriftExecutor {
 
     logger.info(`Atomic delta-neutral exit: ${asset} | ${ixs.length - 1} close IXs`);
     return this.executeBatchedIxs(ixs);
+  }
+
+  // ── Order Fill Monitoring ───────────────────────────────────────
+
+  /**
+   * Get all open (unfilled) orders for the current user.
+   */
+  getOpenOrders(): Array<{
+    orderId: number;
+    asset: string;
+    direction: string;
+    marketType: string;
+    baseAmount: number;
+    price: number;
+    status: string;
+  }> {
+    const user = this.client.getUser();
+    const orders = user.getOpenOrders();
+    const perpNames = Object.entries(PERP_INDEX);
+    const spotNames = Object.entries(SPOT_INDEX);
+
+    return orders.map((o: any) => {
+      const isPerp = o.marketType?.perp !== undefined;
+      const nameMap = isPerp ? perpNames : spotNames;
+      const asset = nameMap.find(([, idx]) => idx === o.marketIndex)?.[0] || `IDX-${o.marketIndex}`;
+
+      return {
+        orderId: o.orderId,
+        asset,
+        direction: o.direction?.long !== undefined ? "long" : "short",
+        marketType: isPerp ? "perp" : "spot",
+        baseAmount: convertToNumber(o.baseAssetAmount, new BN(1e9)),
+        price: convertToNumber(o.price, PRICE_PRECISION),
+        status: o.status ? Object.keys(o.status)[0] : "unknown",
+      };
+    });
+  }
+
+  /**
+   * Check if any orders have filled since last check.
+   * Returns filled order count.
+   */
+  getFilledOrderCount(): number {
+    const user = this.client.getUser();
+    const orders = user.getOpenOrders();
+    // Open orders are unfilled — fewer open orders = more fills
+    return orders.length;
   }
 
   // ── Slippage-Protected Market Orders ──────────────────────────

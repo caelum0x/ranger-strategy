@@ -264,7 +264,38 @@ async function main() {
     console.error("Lending rate export failed:", err);
   }
 
-  // ── 5. Wallet Info ───────────────────────────────────────────────
+  // ── 5. AI Decision Log ──────────────────────────────────────────
+  console.log("\n--- AI Decision Log ---");
+  try {
+    const stateFile = "./ranger-state.json";
+    if (fs.existsSync(stateFile)) {
+      const raw = JSON.parse(fs.readFileSync(stateFile, "utf-8"));
+      const logData = {
+        lastSaved: raw.savedAt ? new Date(raw.savedAt).toISOString() : "unknown",
+        cycleCount: raw.state?.cycleCount || 0,
+        regime: raw.state?.regime || "unknown",
+        totalFundingCollected: raw.state?.totalFundingCollected || "0",
+        totalTradingCosts: raw.state?.totalTradingCosts || "0",
+        directionFlips: raw.state?.directionFlips || 0,
+        aiAdvisorEnabled: !!config.openRouterApiKey,
+        llmModel: config.llmModel || "N/A",
+      };
+
+      const filename = `ai_decisions_${startDate.toISOString().split("T")[0]}_${endDate.toISOString().split("T")[0]}.json`;
+      fs.writeFileSync(filename, JSON.stringify(logData, null, 2));
+      console.log(`  AI decision log → ${filename}`);
+      console.log(`    Cycles run: ${logData.cycleCount}`);
+      console.log(`    Regime: ${logData.regime}`);
+      console.log(`    AI advisor: ${logData.aiAdvisorEnabled ? "enabled" : "disabled"}`);
+      console.log(`    Model: ${logData.llmModel}`);
+    } else {
+      console.log("  No state file found — agent hasn't run yet");
+    }
+  } catch (err) {
+    console.error("AI decision log export failed:", err);
+  }
+
+  // ── 6. Wallet Info ───────────────────────────────────────────────
   console.log("\n--- On-Chain Verification ---");
   const keypairSource = process.env.ANCHOR_WALLET || config.solanaPrivateKey;
   if (keypairSource) {
@@ -296,7 +327,8 @@ async function main() {
   console.log("  2. Drift funding rate CSVs");
   console.log("  3. Drift on-chain trade CSVs");
   console.log("  4. Drift lending rate CSVs");
-  console.log("  5. Wallet/vault addresses for on-chain verification");
+  console.log("  5. AI decision log (regime, model, cycle count)");
+  console.log("  6. Wallet/vault addresses for on-chain verification");
 }
 
 main().catch(console.error);

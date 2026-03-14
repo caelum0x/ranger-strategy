@@ -15,6 +15,9 @@ import { DriftManager } from "../src/drift/client";
 import { DriftFundingAnalyzer } from "../src/drift/funding";
 import { DriftDataAPI } from "../src/drift/data-api";
 import { DriftVaultManager } from "../src/drift/vault";
+import { TradeLogger } from "../src/utils/trade-logger";
+import { StateStore } from "../src/utils/state-store";
+import { VaultPerformanceTracker } from "../src/vault/performance";
 import { PublicKey } from "@solana/web3.js";
 import { config } from "../src/config";
 import Decimal from "decimal.js";
@@ -210,6 +213,81 @@ async function main() {
   for (const asset of config.targetAssets) {
     const price = await drift.getOraclePrice(asset);
     console.log(`  ${asset}: $${price.toFixed(2)}`);
+  }
+
+  // ── Saved Agent State ───────────────────────────────────────
+  divider("Agent State (from disk)");
+  const stateStore = new StateStore();
+  const savedState = stateStore.load();
+  if (savedState) {
+    const s = savedState.state;
+    const ageMin = Math.round((Date.now() - savedState.savedAt) / 60000);
+    console.log(`  Last saved:        ${new Date(savedState.savedAt).toISOString()} (${ageMin}m ago)`);
+    console.log(`  Cycle:             #${s.cycleCount || 0}`);
+    console.log(`  Regime:            ${s.regime || "unknown"}`);
+    console.log(`  Funding collected: $${s.totalFundingCollected?.toFixed(4) || "0"}`);
+    console.log(`  Lending collected: $${s.totalLendingCollected?.toFixed(4) || "0"}`);
+    console.log(`  Trading costs:     $${s.totalTradingCosts?.toFixed(4) || "0"}`);
+    console.log(`  APY estimate:      ${s.apyEstimate?.toFixed(2) || "0"}%`);
+    console.log(`  Direction flips:   ${s.directionFlips || 0}`);
+    if (savedState.startTime) {
+      const runHours = ((savedState.savedAt - savedState.startTime) / 3600000).toFixed(1);
+      console.log(`  Runtime:           ${runHours}h`);
+    }
+  } else {
+    console.log("  No saved state — agent hasn't run yet");
+  }
+
+  // ── Trade Event Log ─────────────────────────────────────────
+  divider("Trade Event Log (recent)");
+  const tradeLogger = new TradeLogger();
+  const summary = tradeLogger.getSummary();
+  if (summary.totalEvents > 0) {
+    console.log(`  Total events:      ${summary.totalEvents}`);
+    console.log(`  Signals generated: ${summary.totalSignals}`);
+    console.log(`  Trades executed:   ${summary.totalExecutions}`);
+    console.log(`  Trade failures:    ${summary.totalFailures}`);
+    console.log(`  Direction flips:   ${summary.totalFlips}`);
+    console.log(`  Regime changes:    ${summary.regimeChanges}`);
+    console.log(`  First event:       ${summary.firstEvent}`);
+    console.log(`  Last event:        ${summary.lastEvent}`);
+
+    // Show last 5 events
+    const recent = tradeLogger.readRecent(5);
+    if (recent.length > 0) {
+      console.log("");
+      console.log("  Last 5 events:");
+      for (const event of recent) {
+        const time = event.timestamp.split("T")[1].split(".")[0];
+        const asset = (event.data.asset as string) || "";
+        console.log(`    [${time}] ${event.type.padEnd(18)} ${asset.padEnd(4)} cycle#${event.cycle}`);
+      }
+    }
+  } else {
+    console.log("  No trade events recorded yet");
+  }
+
+  // ── Vault Performance ─────────────────────────────────────────
+  divider("Vault Performance");
+  const vaultPerf = new VaultPerformanceTracker();
+  const report = vaultPerf.generateReport();
+  const navHistory = vaultPerf.getNAVHistory();
+  if (navHistory.length > 0) {
+    const formatted = vaultPerf.formatReport(report);
+    console.log(`  NAV snapshots:     ${navHistory.length}`);
+    console.log(`  Current NAV:       ${formatted.currentNAV}`);
+    console.log(`  Share price:       ${formatted.sharePrice}`);
+    console.log(`  Total return:      ${formatted.totalReturn}`);
+    console.log(`  Annualized:        ${formatted.annualizedReturn}`);
+    console.log(`  Max drawdown:      ${formatted.maxDrawdown}`);
+    console.log(`  Sharpe estimate:   ${formatted.sharpeEstimate}`);
+    console.log(`  Depositors:        ${formatted.depositorCount}`);
+    console.log(`  Withdraw pressure: ${formatted.withdrawalPressure}`);
+    console.log(`  Available liq:     ${formatted.availableLiquidity}`);
+    console.log(`  Capital util:      ${formatted.capitalUtilization}`);
+    console.log(`  Fees earned:       ${formatted.totalFeesEarned}`);
+  } else {
+    console.log("  No NAV history — vault hasn't recorded snapshots yet");
   }
 
   console.log("\n" + "=".repeat(60));

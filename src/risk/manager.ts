@@ -71,24 +71,41 @@ export class RiskManager {
       );
     }
 
-    // Check per-asset-pair delta neutrality
-    const pairDeltas = this.calculatePerAssetDelta(state.positions);
-    for (const [asset, delta] of Object.entries(pairDeltas)) {
-      const deltaThreshold = new Decimal("0.05"); // 5% per-pair tolerance
-      if (delta.abs().gt(deltaThreshold)) {
+    // Check per-asset-pair delta neutrality (skip on devnet with stale spot oracles)
+    if (!config.relaxDeltaChecks) {
+      const pairDeltas = this.calculatePerAssetDelta(state.positions);
+      for (const [asset, delta] of Object.entries(pairDeltas)) {
+        const deltaThreshold = new Decimal("0.05"); // 5% per-pair tolerance
+        if (delta.abs().gt(deltaThreshold)) {
+          violations.push(
+            `${asset} pair delta ${delta.toFixed(4)} exceeds ±${deltaThreshold.toFixed(2)}`
+          );
+        }
+      }
+
+      // Check net portfolio delta
+      const netDelta = this.calculateNetDelta(state.positions);
+      const portfolioDeltaThreshold = new Decimal("0.05");
+      if (netDelta.abs().gt(portfolioDeltaThreshold)) {
         violations.push(
-          `${asset} pair delta ${delta.toFixed(4)} exceeds ±${deltaThreshold.toFixed(2)}`
+          `Net portfolio delta ${netDelta.toFixed(4)} exceeds threshold ±${portfolioDeltaThreshold.toFixed(2)}`
         );
       }
+    } else {
+      logger.info("Delta checks relaxed (devnet mode — spot oracles stale)");
     }
 
-    // Check net portfolio delta
-    const netDelta = this.calculateNetDelta(state.positions);
-    const portfolioDeltaThreshold = new Decimal("0.05");
-    if (netDelta.abs().gt(portfolioDeltaThreshold)) {
-      violations.push(
-        `Net portfolio delta ${netDelta.toFixed(4)} exceeds threshold ±${portfolioDeltaThreshold.toFixed(2)}`
+    // Check per-position concentration (>50% of notional in one asset)
+    if (state.positions.length > 2) {
+      const overconcentrated = this.getOverconcentratedPositions(
+        state.positions,
+        new Decimal("0.5")
       );
+      for (const oc of overconcentrated) {
+        violations.push(
+          `${oc.asset} concentration ${oc.concentration.mul(100).toFixed(1)}% exceeds 50% threshold`
+        );
+      }
     }
 
     if (violations.length > 0) {
@@ -206,6 +223,69 @@ export class RiskManager {
     }
 
     return relativeDeltas;
+  }
+
+  /**
+   * Find the worst-performing position by PnL-to-notional ratio.
+   * Used by the strategy engine to decide which position to trim
+   * when margin is overconcentrated.
+   */
+  getWorstPosition(positions: Position[]): Position | null {
+    if (positions.length === 0) return null;
+
+    // Group by asset (delta-neutral pairs), pick worst by unrealizedPnl
+    const assetPnl = new Map<string, { pnl: Decimal; positions: Position[] }>();
+    for (const p of positions) {
+      const existing = assetPnl.get(p.asset) || { pnl: new Decimal(0), positions: [] };
+      existing.pnl = existing.pnl.add(p.unrealizedPnl);
+      existing.positions.push(p);
+      assetPnl.set(p.asset, existing);
+    }
+
+    let worstAsset: string | null = null;
+    let worstPnl = new Decimal(Infinity);
+    for (const [asset, data] of assetPnl) {
+      if (data.pnl.lt(worstPnl)) {
+        worstPnl = data.pnl;
+        worstAsset = asset;
+      }
+    }
+
+    if (!worstAsset) return null;
+    // Return the perp position for the worst asset (main risk leg)
+    const worstPositions = assetPnl.get(worstAsset)!.positions;
+    return worstPositions.find(p => p.venue === "drift" && (p.side === "short" || p.side === "long")) || worstPositions[0];
+  }
+
+  /**
+   * Check per-position margin concentration.
+   * Returns assets that use more than the given threshold of total notional.
+   */
+  getOverconcentratedPositions(
+    positions: Position[],
+    threshold: Decimal = new Decimal("0.4")
+  ): { asset: string; concentration: Decimal }[] {
+    const totalNotional = positions.reduce(
+      (sum, p) => sum.add(p.notionalValue),
+      new Decimal(0)
+    );
+    if (totalNotional.isZero()) return [];
+
+    // Group notional by asset
+    const assetNotional = new Map<string, Decimal>();
+    for (const p of positions) {
+      const current = assetNotional.get(p.asset) || new Decimal(0);
+      assetNotional.set(p.asset, current.add(p.notionalValue));
+    }
+
+    const overconcentrated: { asset: string; concentration: Decimal }[] = [];
+    for (const [asset, notional] of assetNotional) {
+      const concentration = notional.div(totalNotional);
+      if (concentration.gt(threshold)) {
+        overconcentrated.push({ asset, concentration });
+      }
+    }
+    return overconcentrated;
   }
 
   private calculateNetDelta(positions: Position[]): Decimal {

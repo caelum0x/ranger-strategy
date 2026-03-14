@@ -15,8 +15,11 @@ import {
 } from "./types";
 import { logger } from "../utils/logger";
 import { withRetry } from "../utils/retry";
+import { TradeLogger } from "../utils/trade-logger";
+import { VaultPerformanceTracker } from "../vault/performance";
 import { FundingPredictor } from "./predictor";
 import { OracleGuard } from "../risk/oracle-guard";
+import { StrategyAdvisor, LLMStrategyAdvice } from "../ai/strategy-advisor";
 
 export class StrategyEngine {
   private drift: DriftManager;
@@ -28,6 +31,12 @@ export class StrategyEngine {
   private state: StrategyState;
   private predictor: FundingPredictor = new FundingPredictor();
   private oracleGuard: OracleGuard = new OracleGuard();
+  private advisor: StrategyAdvisor | null = null;
+  private lastLLMAdvice: LLMStrategyAdvice | null = null;
+  private tradeLogger: TradeLogger = new TradeLogger();
+  private vaultPerf: VaultPerformanceTracker = new VaultPerformanceTracker();
+  /** Pending vault withdrawals — reserve this amount as idle liquidity */
+  private pendingWithdrawals: Decimal = new Decimal(0);
   private latestPredictions: import("./predictor").FundingPrediction[] = [];
   private lastFundingSnapshot: Decimal = new Decimal(0);
   private startTime: number = Date.now();
@@ -87,6 +96,20 @@ export class StrategyEngine {
     this.executor = executor;
   }
 
+  /**
+   * Attach the LLM strategy advisor for AI-powered decision-making.
+   */
+  setAdvisor(advisor: StrategyAdvisor): void {
+    this.advisor = advisor;
+  }
+
+  /**
+   * Get natural language reasoning from the last LLM analysis.
+   */
+  getLastReasoning(): string | null {
+    return this.advisor?.getLastReasoning() || null;
+  }
+
   async runCycle(): Promise<void> {
     logger.info("=== Strategy cycle starting ===");
 
@@ -117,19 +140,71 @@ export class StrategyEngine {
         ? await this.binance.getFundingRates()
         : [];
 
-    // 4.5. Detect market regime and update state
+    // 4.5. Detect market regime — LLM-first, fallback to heuristic
     const allRates = [...driftRates, ...binanceRates];
-    this.state.regime = this.detectRegime(allRates);
+
+    // 4.6. LLM Strategy Advisor (replaces EMA predictor when available)
+    if (this.advisor) {
+      try {
+        const onChainAnalyses = this.fundingAnalyzer
+          ? this.fundingAnalyzer.analyzeAllAssets()
+          : [];
+
+        this.lastLLMAdvice = await this.advisor.analyze({
+          fundingRates: driftRates,
+          positions: this.state.positions,
+          state: this.state,
+          onChainAnalyses,
+          targetAssets: config.targetAssets,
+        });
+
+        // Use LLM regime classification
+        const prevRegime = this.state.regime;
+        this.state.regime = this.lastLLMAdvice.regime;
+        logger.info(`LLM regime: ${this.state.regime} — ${this.lastLLMAdvice.regimeReasoning}`);
+
+        if (prevRegime !== this.state.regime) {
+          this.tradeLogger.logRegimeChange(prevRegime, this.state.regime, this.lastLLMAdvice.regimeReasoning);
+        }
+        this.tradeLogger.logLLMAdvice(
+          this.state.regime,
+          this.lastLLMAdvice.decisions.map((d) => ({
+            asset: d.asset,
+            action: d.action,
+            perpSide: d.perpSide,
+            allocation: d.allocationFraction,
+          }))
+        );
+
+        // Convert LLM predictions to FundingPrediction interface
+        this.latestPredictions = this.advisor.toFundingPredictions(this.lastLLMAdvice);
+
+        // Log LLM reasoning
+        const reasoning = this.advisor.getLastReasoning();
+        if (reasoning) {
+          logger.info("LLM trade reasoning:\n" + reasoning);
+        }
+      } catch (err: any) {
+        logger.warn(`LLM advisor failed, falling back to EMA predictor: ${err.message}`);
+        this.state.regime = this.detectRegime(allRates);
+        this.predictor.update(driftRates);
+        if (binanceRates.length > 0) this.predictor.update(binanceRates);
+        this.latestPredictions = this.predictor.predictAll(config.targetAssets);
+      }
+    } else {
+      // No LLM advisor — use heuristic regime detection + EMA predictor
+      this.state.regime = this.detectRegime(allRates);
+      this.predictor.update(driftRates);
+      if (binanceRates.length > 0) this.predictor.update(binanceRates);
+      this.latestPredictions = this.predictor.predictAll(config.targetAssets);
+    }
+
     logger.info(`Market regime: ${this.state.regime}`);
 
-    // 4.6. Feed data to AI predictor for future rate forecasting
-    this.predictor.update(driftRates);
-    if (binanceRates.length > 0) this.predictor.update(binanceRates);
-
-    this.latestPredictions = this.predictor.predictAll(config.targetAssets);
     const predictions = this.latestPredictions;
     if (predictions.length > 0) {
-      logger.info("AI funding predictions", {
+      logger.info("Funding predictions", {
+        source: this.advisor ? "LLM" : "EMA",
         predictions: predictions.map((p) => ({
           asset: p.asset,
           predicted: `${p.predictedRate.mul(100).toFixed(2)}%`,
@@ -152,8 +227,28 @@ export class StrategyEngine {
       });
     }
 
-    // 5. Generate trade signals
-    const signals = this.generateSignals(driftRates, binanceRates);
+    // 4.8. Pre-fetch borrow rates for cost-aware signal generation
+    const borrowRates = new Map<string, number>();
+    for (const asset of config.targetAssets) {
+      try {
+        const rates = await this.dataApi.getBorrowRateHistory(asset, 1);
+        if (rates.length > 0) borrowRates.set(asset, rates[0].rate);
+      } catch {
+        // Non-critical — will skip borrow cost check for this asset
+      }
+    }
+
+    // 4.9. Per-position management: profit-taking and stop-loss
+    const positionSignals = this.manageExistingPositions(driftRates);
+
+    // 5. Generate trade signals (new entries + rebalances)
+    this.tradeLogger.setCycle(this.state.cycleCount);
+    const signals = [...positionSignals, ...this.generateSignals(driftRates, binanceRates, borrowRates)];
+
+    // Log all generated signals
+    for (const signal of signals) {
+      this.tradeLogger.logSignal(signal);
+    }
 
     // 6. Settlement-aware timing: skip trade execution if we're close
     //      to funding settlement (within 5 min) to avoid paying in the
@@ -166,10 +261,23 @@ export class StrategyEngine {
       logger.info(
         "Near funding settlement — deferring trade execution to next cycle"
       );
+      for (const signal of signals) {
+        this.tradeLogger.logSkipped(signal.asset, "Near funding settlement");
+      }
     } else {
       // 6. Execute signals (only when not near settlement)
       for (const signal of signals) {
         await this.executeSignal(signal);
+      }
+    }
+
+    // 6.5. Log open orders (for debugging fill status)
+    if (this.executor) {
+      const openOrders = this.executor.getOpenOrders();
+      if (openOrders.length > 0) {
+        logger.info(`Open orders pending fill: ${openOrders.length}`, {
+          orders: openOrders.map((o) => `${o.direction} ${o.asset} ${o.marketType} #${o.orderId}`),
+        });
       }
     }
 
@@ -207,7 +315,8 @@ export class StrategyEngine {
 
     const elapsedMs = Date.now() - this.startTime;
     const elapsedDays = elapsedMs / (86400 * 1000);
-    if (elapsedDays > 0 && this.state.totalCapital.gt(0)) {
+    // Only estimate APY after at least 1 hour of running to avoid wild numbers
+    if (elapsedDays > (1 / 24) && this.state.totalCapital.gt(0)) {
       const totalYield = this.state.totalFundingCollected
         .add(this.totalLendingCollected)
         .sub(this.state.totalTradingCosts);
@@ -216,10 +325,27 @@ export class StrategyEngine {
         .div(elapsedDays)
         .mul(365.25)
         .mul(100);
+    } else {
+      // Too early to estimate — show 0 instead of wild extrapolations
+      this.state.apyEstimate = new Decimal(0);
     }
 
     // 10. Auto-compound: reinvest yield into idle capital
     this.autoCompound();
+
+    // Log cycle completion to trade log
+    this.tradeLogger.logCycleComplete({
+      cycle: this.state.cycleCount,
+      regime: this.state.regime,
+      positions: this.state.positions.length,
+      totalPnl: this.state.totalPnl.toFixed(4),
+      healthRatio: this.state.healthRatio.toFixed(4),
+      fundingCollected: this.state.totalFundingCollected.toFixed(4),
+      lendingCollected: this.totalLendingCollected.toFixed(4),
+      tradingCosts: this.state.totalTradingCosts.toFixed(4),
+      apyEstimate: `${this.state.apyEstimate.toFixed(2)}%`,
+      directionFlips: this.state.directionFlips,
+    });
 
     logger.info("=== Strategy cycle complete ===", {
       mode: config.strategyMode,
@@ -236,9 +362,143 @@ export class StrategyEngine {
     });
   }
 
+  /**
+   * Manage existing positions: profit-taking and stop-loss.
+   *
+   * For each open position, check:
+   * 1. Stop-loss: if PnL is worse than -2% of notional, close (capital preservation)
+   * 2. Profit-taking: if PnL > expected funding income for next 24h, trim risk
+   * 3. Zombie cleanup: close positions with negligible notional (<$1)
+   */
+  private manageExistingPositions(driftRates: FundingRate[]): TradeSignal[] {
+    const signals: TradeSignal[] = [];
+    const isDriftOnly = config.strategyMode === "drift-only";
+
+    for (const pos of this.state.positions) {
+      const pnlPct = pos.notionalValue.gt(0)
+        ? pos.unrealizedPnl.div(pos.notionalValue).mul(100)
+        : new Decimal(0);
+
+      // 1. Stop-loss: close if PnL worse than -2% of notional
+      // With $20 capital and 2x leverage, -2% notional = -$0.40 loss — significant
+      if (pnlPct.lt(-2)) {
+        logger.warn(
+          `${pos.asset} stop-loss triggered: PnL ${pnlPct.toFixed(2)}% (${pos.unrealizedPnl.toFixed(4)} USDC)`
+        );
+        signals.push({
+          asset: pos.asset,
+          action: "close",
+          spotVenue: "drift",
+          perpVenue: isDriftOnly ? "drift" : "binance",
+          spotSide: pos.side,
+          perpSide: pos.side === "long" ? "short" : "long",
+          spotSize: pos.notionalValue,
+          perpSize: pos.notionalValue,
+          confidence: new Decimal(1),
+          reason: `Stop-loss: PnL ${pnlPct.toFixed(2)}% exceeds -2% threshold`,
+          predictedFundingRate: new Decimal(0),
+        });
+        this.tradeLogger.logClose(pos.asset, `Stop-loss at ${pnlPct.toFixed(2)}%`);
+        continue;
+      }
+
+      // 2. Profit-taking: if PnL > expected 24h funding income, lock in profits
+      // Expected income = notional * |funding rate| * (24/8760)
+      const rate = driftRates.find((r) => r.asset === pos.asset);
+      if (rate && pos.unrealizedPnl.gt(0)) {
+        const expected24hIncome = pos.notionalValue
+          .mul(rate.annualizedRate.abs())
+          .mul(24)
+          .div(8760);
+
+        // If unrealized PnL is >3x expected 24h income, take profits
+        if (expected24hIncome.gt(0) && pos.unrealizedPnl.gt(expected24hIncome.mul(3))) {
+          logger.info(
+            `${pos.asset} profit-take: PnL $${pos.unrealizedPnl.toFixed(4)} > 3x expected 24h ($${expected24hIncome.toFixed(4)})`
+          );
+          signals.push({
+            asset: pos.asset,
+            action: "close",
+            spotVenue: "drift",
+            perpVenue: isDriftOnly ? "drift" : "binance",
+            spotSide: pos.side,
+            perpSide: pos.side === "long" ? "short" : "long",
+            spotSize: pos.notionalValue,
+            perpSize: pos.notionalValue,
+            confidence: new Decimal("0.9"),
+            reason: `Profit-take: PnL $${pos.unrealizedPnl.toFixed(4)} exceeds 3x expected 24h funding`,
+            predictedFundingRate: rate.annualizedRate,
+          });
+          this.tradeLogger.logClose(pos.asset, `Profit-take at $${pos.unrealizedPnl.toFixed(4)}`);
+          continue;
+        }
+      }
+
+      // 3. Zombie cleanup: close positions with negligible notional
+      if (pos.notionalValue.lt(1)) {
+        logger.info(`${pos.asset} zombie position closed: notional $${pos.notionalValue.toFixed(4)}`);
+        signals.push({
+          asset: pos.asset,
+          action: "close",
+          spotVenue: "drift",
+          perpVenue: isDriftOnly ? "drift" : "binance",
+          spotSide: pos.side,
+          perpSide: pos.side === "long" ? "short" : "long",
+          spotSize: pos.notionalValue,
+          perpSize: pos.notionalValue,
+          confidence: new Decimal(1),
+          reason: "Zombie cleanup: notional below $1",
+          predictedFundingRate: new Decimal(0),
+        });
+        continue;
+      }
+    }
+
+    // 4. Concentration check: if any single asset uses >40% of margin, trim it
+    if (this.state.positions.length > 2) {
+      const overconcentrated = this.riskManager.getOverconcentratedPositions(
+        this.state.positions,
+        new Decimal("0.4")
+      );
+      for (const oc of overconcentrated) {
+        // Don't double-close if already signaled above
+        if (signals.some(s => s.asset === oc.asset)) continue;
+
+        const worst = this.riskManager.getWorstPosition(
+          this.state.positions.filter(p => p.asset === oc.asset)
+        );
+        if (worst) {
+          logger.warn(
+            `${oc.asset} overconcentrated at ${oc.concentration.mul(100).toFixed(1)}% — trimming`
+          );
+          signals.push({
+            asset: oc.asset,
+            action: "decrease",
+            spotVenue: "drift",
+            perpVenue: config.strategyMode === "drift-only" ? "drift" : "binance",
+            spotSide: worst.side,
+            perpSide: worst.side === "long" ? "short" : "long",
+            spotSize: worst.notionalValue.mul("0.3"), // trim 30%
+            perpSize: worst.notionalValue.mul("0.3"),
+            confidence: new Decimal("0.8"),
+            reason: `Concentration trim: ${oc.asset} at ${oc.concentration.mul(100).toFixed(1)}% of notional`,
+            predictedFundingRate: new Decimal(0),
+          });
+          this.tradeLogger.logClose(
+            oc.asset,
+            `Concentration trim: ${oc.concentration.mul(100).toFixed(1)}%`
+          );
+        }
+      }
+    }
+
+    return signals;
+  }
+
   generateSignals(
     driftRates: FundingRate[],
-    binanceRates: FundingRate[]
+    binanceRates: FundingRate[],
+    borrowRates: Map<string, number> = new Map()
   ): TradeSignal[] {
     const signals: TradeSignal[] = [];
     const isDriftOnly = config.strategyMode === "drift-only";
@@ -249,7 +509,7 @@ export class StrategyEngine {
       : [];
 
     // Rank assets by funding yield — bi-directional (positive OR negative)
-    // For negative funding (short spot), we check that funding income > borrow cost
+    // For negative funding (short spot), check that funding income > borrow cost
     const rankedAssets = config.targetAssets
       .map((asset) => {
         const binanceRate = binanceRates.find((r) => r.asset === asset);
@@ -287,10 +547,25 @@ export class StrategyEngine {
         // Momentum bonus: rising funding in our direction is extra attractive
         const momentumBonus = onChain?.momentumScore || new Decimal(0);
 
+        // Borrow cost check: when funding is negative (short spot), borrow cost
+        // eats into funding income. Skip if net yield is below threshold.
+        const borrowRate = borrowRates.get(asset) || 0;
+        let netYield = absYield;
+        if (perpSide === "long" && borrowRate > 0) {
+          // Short spot incurs borrow cost
+          netYield = absYield.sub(new Decimal(borrowRate));
+          if (netYield.lt(config.minFundingAPY)) {
+            logger.info(
+              `${asset}: funding ${absYield.mul(100).toFixed(2)}% minus borrow ${(borrowRate * 100).toFixed(2)}% = net ${netYield.mul(100).toFixed(2)}% — below threshold`
+            );
+          }
+        }
+
         return {
           asset,
           primaryRate,
           absYield,
+          netYield,
           perpSide,
           spotSide,
           onChainAnalysis: onChain,
@@ -302,8 +577,14 @@ export class StrategyEngine {
           binanceFunding: binanceRate?.annualizedRate || new Decimal(0),
         };
       })
-      .filter((a) => a.isAttractive && a.absYield.gt(config.minFundingAPY))
-      .sort((a, b) => b.absYield.minus(a.absYield).toNumber());
+      // Filter by net yield (after borrow costs) instead of just gross yield
+      .filter((a) => a.isAttractive && a.netYield.gt(config.minFundingAPY))
+      .sort((a, b) => {
+        // Sort by momentum-adjusted yield: absYield * (1 + momentum bonus)
+        const aScore = a.absYield.mul(new Decimal(1).add(a.momentumBonus.mul("0.3")));
+        const bScore = b.absYield.mul(new Decimal(1).add(b.momentumBonus.mul("0.3")));
+        return bScore.minus(aScore).toNumber();
+      });
 
     logger.info("Asset ranking (bi-directional funding)", {
       mode: config.strategyMode,
@@ -374,25 +655,72 @@ export class StrategyEngine {
     }
 
     // Open positions for attractive assets
+    // As vault manager: reserve liquidity for pending withdrawals
+    const { deployable: deployableCapital } = this.vaultPerf.getDeployableCapital(
+      this.state.totalCapital,
+      this.state.idleCapital,
+      this.pendingWithdrawals
+    );
+
     for (const ranked of rankedAssets) {
       const existingPos = this.state.positions.find(
         (p) => p.asset === ranked.asset && p.venue === "drift"
       );
 
-      if (!existingPos && this.state.idleCapital.gt(new Decimal(5))) {
+      if (!existingPos && deployableCapital.gt(new Decimal(5))) {
+        // Check LLM trade decision if available
+        const llmDecision = this.lastLLMAdvice?.decisions.find(
+          (d) => d.asset === ranked.asset
+        );
+
+        // If LLM says skip or close, respect that
+        if (llmDecision && (llmDecision.action === "skip" || llmDecision.action === "close")) {
+          logger.info(`LLM says ${llmDecision.action} ${ranked.asset}: ${llmDecision.reasoning}`);
+          continue;
+        }
+
         // Regime-aware sizing: increase allocation in favorable regimes
         const regimeMultiplier = this.getRegimeSizeMultiplier(
           this.state.regime,
           ranked.perpSide
         );
 
-        const baseSize = this.riskManager.calculatePositionSize(
-          this.state.idleCapital,
-          ranked.asset,
-          ranked.absYield,
-          ranked.confidence
-        );
-        const positionSize = baseSize.mul(regimeMultiplier);
+        let positionSize: Decimal;
+        if (llmDecision && llmDecision.allocationFraction > 0) {
+          // LLM-driven position sizing (respects withdrawal-reserved liquidity)
+          positionSize = deployableCapital
+            .mul(llmDecision.allocationFraction)
+            .mul(regimeMultiplier);
+          // Override perp side if LLM disagrees
+          if (llmDecision.perpSide !== ranked.perpSide) {
+            logger.info(
+              `LLM overrides ${ranked.asset} direction: ${ranked.perpSide} → ${llmDecision.perpSide}`
+            );
+            ranked.perpSide = llmDecision.perpSide;
+            ranked.spotSide = llmDecision.perpSide === "short" ? "long" : "short";
+          }
+        } else {
+          // Fallback: risk-manager-driven sizing (respects withdrawal-reserved liquidity)
+          const baseSize = this.riskManager.calculatePositionSize(
+            deployableCapital,
+            ranked.asset,
+            ranked.absYield,
+            ranked.confidence
+          );
+          positionSize = baseSize.mul(regimeMultiplier);
+        }
+
+        // Momentum-scaled sizing: rising momentum → up to 30% larger,
+        // falling momentum → up to 20% smaller, flat → no change
+        if (ranked.momentum === "rising") {
+          const bonus = Decimal.min(ranked.momentumBonus.mul("0.3"), new Decimal("0.3"));
+          const momentumScale = new Decimal(1).add(bonus);
+          positionSize = positionSize.mul(momentumScale);
+        } else if (ranked.momentum === "falling") {
+          const penalty = Decimal.min(ranked.momentumBonus.abs().mul("0.2"), new Decimal("0.2"));
+          const momentumScale = new Decimal(1).sub(penalty);
+          positionSize = positionSize.mul(momentumScale);
+        }
 
         if (positionSize.gte(new Decimal(5))) {
           const premium = ranked.onChainAnalysis
@@ -443,6 +771,12 @@ export class StrategyEngine {
             `open ${signal.asset}`,
             2
           );
+          this.tradeLogger.logExecution(signal.asset, "open", {
+            perpSide: signal.perpSide,
+            spotSide: signal.spotSide,
+            size: signal.spotSize.toFixed(4),
+            reason: signal.reason,
+          });
           break;
 
         case "close":
@@ -451,6 +785,7 @@ export class StrategyEngine {
             `close ${signal.asset}`,
             2
           );
+          this.tradeLogger.logClose(signal.asset, signal.reason);
           break;
 
         case "rebalance":
@@ -465,12 +800,20 @@ export class StrategyEngine {
             `rebalance-open ${signal.asset}`,
             2
           );
+          this.tradeLogger.logDirectionFlip(
+            signal.asset,
+            signal.spotSide === "long" ? "short" : "long",
+            signal.perpSide,
+            signal.predictedFundingRate.toFixed(4)
+          );
+          this.state.directionFlips++;
           break;
 
         default:
           logger.warn(`Unknown signal action: ${signal.action}`);
       }
-    } catch (err) {
+    } catch (err: any) {
+      this.tradeLogger.logFailure(signal.asset, signal.action, err.message || String(err));
       logger.error(`Failed to execute signal for ${signal.asset}`, {
         error: err,
         signal,
@@ -661,6 +1004,9 @@ export class StrategyEngine {
 
   async emergencyUnwind(): Promise<void> {
     logger.error("EMERGENCY: Unwinding all positions");
+    this.tradeLogger.logEmergencyUnwind(
+      `Health: ${this.state.healthRatio.toFixed(4)}, Drawdown: ${this.state.currentDrawdown.toFixed(2)}%`
+    );
 
     for (const asset of config.targetAssets) {
       try {
@@ -739,6 +1085,28 @@ export class StrategyEngine {
    */
   restorePredictorHistory(saved: Map<string, Decimal[]>): void {
     this.predictor.restoreHistory(saved);
+  }
+
+  /**
+   * Update pending vault withdrawal amount.
+   * The engine will reserve this as idle liquidity, not deploying it.
+   */
+  setPendingWithdrawals(amount: Decimal): void {
+    this.pendingWithdrawals = amount;
+  }
+
+  /**
+   * Get the agent start time (for APY calculation).
+   */
+  getStartTime(): number {
+    return this.startTime;
+  }
+
+  /**
+   * Restore start time from saved state (crash recovery).
+   */
+  setStartTime(ts: number): void {
+    this.startTime = ts;
   }
 
   /**

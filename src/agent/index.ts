@@ -15,6 +15,10 @@ import { YieldAnalytics } from "../utils/yield-analytics";
 import { MonitorServer } from "../monitor/server";
 import { StateStore } from "../utils/state-store";
 import { TelegramAlerter } from "../alerts/telegram";
+import { StrategyAdvisor } from "../ai/strategy-advisor";
+import { OpenRouterClient } from "../ai/openrouter";
+import { TradeLogger } from "../utils/trade-logger";
+import { VaultPerformanceTracker } from "../vault/performance";
 
 class StrategyAgent {
   private drift!: DriftManager;
@@ -31,6 +35,8 @@ class StrategyAgent {
     parseInt(process.env.MONITOR_PORT || "3000")
   );
   private stateStore: StateStore = new StateStore();
+  private tradeLogger: TradeLogger = new TradeLogger();
+  private vaultPerf: VaultPerformanceTracker = new VaultPerformanceTracker();
   private telegram: TelegramAlerter = new TelegramAlerter();
   private running = false;
 
@@ -115,6 +121,9 @@ class StrategyAgent {
     if (savedState) {
       this.engine.restoreState(savedState.state);
       this.engine.restorePredictorHistory(savedState.predictorHistory);
+      if (savedState.startTime) {
+        this.engine.setStartTime(savedState.startTime);
+      }
       logger.info("Resumed from saved state", {
         savedAt: new Date(savedState.savedAt).toISOString(),
         cycle: savedState.state.cycleCount,
@@ -133,6 +142,25 @@ class StrategyAgent {
       this.engine.setFundingAnalyzer(this.fundingAnalyzer);
       this.engine.setExecutor(this.executor);
       logger.info("On-chain funding analyzer and executor attached");
+
+      // Wire LLM strategy advisor if API key is available
+      if (config.openRouterApiKey) {
+        try {
+          const llmClient = new OpenRouterClient(
+            config.openRouterApiKey,
+            config.llmModel
+          );
+          const advisor = new StrategyAdvisor(llmClient);
+          this.engine.setAdvisor(advisor);
+          logger.info("LLM Strategy Advisor attached", {
+            model: config.llmModel,
+          });
+        } catch (err: any) {
+          logger.warn("LLM advisor not available — using EMA predictor", {
+            error: err.message,
+          });
+        }
+      }
 
       // Initialize Drift Vault Manager if vault address is configured.
       // When a vault is configured, create a second DriftManager that trades
@@ -243,7 +271,7 @@ class StrategyAgent {
       name: "Ranger Delta-Neutral Vault Agent",
       version: "0.1.0",
       uptime: Math.round((Date.now() - this.startTime) / 1000),
-      endpoints: ["/status", "/positions", "/yield", "/predictions", "/health"],
+      endpoints: ["/status", "/positions", "/yield", "/predictions", "/reasoning", "/trades", "/vault", "/health"],
     }));
 
     this.monitor.route("/status", () => this.getStatus());
@@ -294,15 +322,35 @@ class StrategyAgent {
     this.monitor.route("/predictions", () => {
       if (!this.engine) return { predictions: [] };
       const state = this.engine.getState();
+      const reasoning = this.engine.getLastReasoning();
       return {
         regime: state.regime,
+        source: reasoning ? "LLM" : "EMA",
         predictions: config.targetAssets.map((asset) => {
           const histLen = this.engine
             ? this.engine.getPredictorHistory().get(asset)?.length || 0
             : 0;
           return { asset, historyLength: histLen };
         }),
+        reasoning: reasoning || null,
       };
+    });
+
+    this.monitor.route("/reasoning", () => {
+      if (!this.engine) return { reasoning: null };
+      return {
+        reasoning: this.engine.getLastReasoning() || "No LLM analysis available yet",
+      };
+    });
+
+    this.monitor.route("/trades", () => ({
+      summary: this.tradeLogger.getSummary(),
+      recentEvents: this.tradeLogger.readRecent(20),
+    }));
+
+    this.monitor.route("/vault", () => {
+      const report = this.vaultPerf.generateReport();
+      return this.vaultPerf.formatReport(report);
     });
 
     this.monitor.route("/health", () => {
@@ -428,6 +476,10 @@ class StrategyAgent {
 
           // Check if outstanding withdrawals could trigger liquidation takeover
           const risk = await this.driftVault.checkWithdrawalRisk(vaultAddr);
+
+          // Pass pending withdrawals to engine for liquidity-aware position sizing
+          this.engine.setPendingWithdrawals(risk.totalWithdrawRequested);
+
           if (risk.atRisk) {
             logger.error(
               "VAULT WITHDRAWAL RISK: reduce positions before redemption",
@@ -455,9 +507,37 @@ class StrategyAgent {
       const trend = this.yieldAnalytics.getYieldTrend();
       summary.yieldTrend = trend.direction;
 
+      // Record NAV snapshot for vault performance tracking
+      let vaultPendingWithdrawals = new Decimal(0);
+      let vaultTotalShares = new Decimal(0);
+      let vaultDepositorCount = 0;
+      let vaultManagerFees = new Decimal(0);
+
+      if (this.driftVault && process.env.DRIFT_VAULT_PUBKEY) {
+        try {
+          const vaultAddr = new PublicKey(process.env.DRIFT_VAULT_PUBKEY);
+          const vaultInfo = await this.driftVault.getVault(vaultAddr);
+          vaultPendingWithdrawals = new Decimal(vaultInfo.totalWithdrawRequested.toString()).div(1e6);
+          vaultTotalShares = new Decimal(vaultInfo.totalShares.toString());
+          vaultManagerFees = new Decimal(vaultInfo.managerTotalFee.toString()).div(1e6);
+          const depositors = await this.driftVault.getDepositors(vaultAddr);
+          vaultDepositorCount = depositors.length;
+        } catch {
+          // Non-critical — vault info may not be available
+        }
+      }
+
+      this.vaultPerf.recordSnapshot(state, {
+        pendingWithdrawals: vaultPendingWithdrawals,
+        totalShares: vaultTotalShares,
+        depositorCount: vaultDepositorCount,
+        managerFees: vaultManagerFees,
+      });
+
       logger.info("Agent cycle summary", summary);
 
-      // Send Telegram cycle summary (non-blocking)
+      // Send Telegram cycle summary with LLM reasoning (non-blocking)
+      const llmReasoning = this.engine.getLastReasoning();
       this.telegram
         .cycleSummary({
           cycle: state.cycleCount,
@@ -467,6 +547,7 @@ class StrategyAgent {
           health: state.healthRatio.toFixed(4),
           positions: state.positions.length,
           funding: `$${state.totalFundingCollected.toFixed(4)}`,
+          reasoning: llmReasoning || undefined,
         })
         .catch(() => {});
 
@@ -474,15 +555,21 @@ class StrategyAgent {
       this.stateStore.save(
         state,
         state.totalCapital.add(state.totalPnl), // approximate peak equity
-        this.engine.getPredictorHistory()
+        this.engine.getPredictorHistory(),
+        this.engine.getStartTime()
       );
     } catch (err) {
       logger.error("Strategy cycle failed", { error: err });
     }
   }
 
+  /**
+   * Graceful shutdown — saves state and stops the cron, but keeps positions open.
+   * Positions persist on-chain and will be managed on next restart.
+   * Use emergencyStop() to unwind all positions before shutting down.
+   */
   async stop(): Promise<void> {
-    logger.info("Stopping AI Strategy Agent...");
+    logger.info("Stopping AI Strategy Agent (graceful — positions kept open)...");
     this.running = false;
 
     if (this.healthCheckInterval) {
@@ -494,9 +581,20 @@ class StrategyAgent {
       this.rebalanceJob.stop();
     }
 
-    // Emergency unwind before stopping
+    // Save final state to disk so next restart can resume
     if (this.engine) {
-      await this.engine.emergencyUnwind();
+      const state = this.engine.getState();
+      this.stateStore.save(
+        state,
+        state.totalCapital.add(state.totalPnl),
+        this.engine.getPredictorHistory(),
+        this.engine.getStartTime()
+      );
+      logger.info("Final state saved to disk", {
+        cycle: state.cycleCount,
+        positions: state.positions.length,
+        funding: state.totalFundingCollected.toFixed(4),
+      });
     }
 
     await this.monitor.stop();
@@ -511,6 +609,18 @@ class StrategyAgent {
     await Promise.all(shutdownPromises);
 
     logger.info("AI Strategy Agent stopped");
+  }
+
+  /**
+   * Emergency shutdown — unwinds all positions before stopping.
+   * Use this when you need to close everything (e.g., before mainnet migration).
+   */
+  async emergencyStop(): Promise<void> {
+    logger.info("EMERGENCY STOP — unwinding all positions before shutdown");
+    if (this.engine) {
+      await this.engine.emergencyUnwind();
+    }
+    await this.stop();
   }
 
   getStatus(): object {

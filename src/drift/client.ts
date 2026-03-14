@@ -164,13 +164,21 @@ export class DriftManager {
         const lastRate = perpMarket.amm.lastFundingRate;
         const rateNum = convertToNumber(lastRate, FUNDING_RATE_PRECISION);
 
+        // Normalize by oracle price to get percentage rate
+        // Raw rate is in absolute terms ($ per unit per hour)
+        const oraclePrice = convertToNumber(
+          perpMarket.amm.historicalOracleData.lastOraclePriceTwap,
+          PRICE_PRECISION
+        );
+        const normalizedRate = oraclePrice !== 0 ? rateNum / oraclePrice : rateNum;
+
         // Hourly rate → annualized: rate * 24 * 365.25
-        const annualized = rateNum * 24 * 365.25;
+        const annualized = normalizedRate * 24 * 365.25;
 
         rates.push({
           asset,
           venue: "drift",
-          rate: new Decimal(rateNum),
+          rate: new Decimal(normalizedRate),
           annualizedRate: new Decimal(annualized),
           timestamp: Date.now(),
           nextSettlement:

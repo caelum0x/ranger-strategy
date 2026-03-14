@@ -13,6 +13,8 @@ import { logger } from "./logger";
 interface SerializedState {
   version: 1;
   savedAt: number;
+  /** When the agent first started (for APY calculation across restarts) */
+  startTime?: number;
   state: {
     totalCapital: string;
     deployedCapital: string;
@@ -42,7 +44,8 @@ export class StateStore {
   save(
     state: StrategyState,
     peakEquity: Decimal,
-    predictorHistory?: Map<string, Decimal[]>
+    predictorHistory?: Map<string, Decimal[]>,
+    startTime?: number
   ): void {
     try {
       if (!fs.existsSync(STATE_DIR)) {
@@ -52,6 +55,7 @@ export class StateStore {
       const serialized: SerializedState = {
         version: 1,
         savedAt: Date.now(),
+        startTime,
         state: {
           totalCapital: state.totalCapital.toString(),
           deployedCapital: state.deployedCapital.toString(),
@@ -99,6 +103,7 @@ export class StateStore {
     peakEquity: Decimal;
     predictorHistory: Map<string, Decimal[]>;
     savedAt: number;
+    startTime?: number;
   } | null {
     try {
       if (!fs.existsSync(STATE_FILE)) return null;
@@ -157,6 +162,7 @@ export class StateStore {
         peakEquity: new Decimal(data.peakEquity),
         predictorHistory,
         savedAt: data.savedAt,
+        startTime: data.startTime,
       };
     } catch (err) {
       logger.warn("Failed to load saved state", { error: err });
