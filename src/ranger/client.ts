@@ -1,5 +1,11 @@
 import { VoltrClient } from "@voltr/vault-sdk";
-import { Connection, Keypair, PublicKey } from "@solana/web3.js";
+import {
+  Connection,
+  Keypair,
+  PublicKey,
+  Transaction,
+  sendAndConfirmTransaction,
+} from "@solana/web3.js";
 import { BN } from "@coral-xyz/anchor";
 import Decimal from "decimal.js";
 import { config } from "../config";
@@ -63,11 +69,17 @@ export class RangerVaultManager {
       }
     );
 
-    // Transaction would be sent here
+    const tx = new Transaction().add(ix);
+    const sig = await sendAndConfirmTransaction(this.connection, tx, [
+      this.adminKp,
+      vaultKp,
+    ]);
+
     this.vaultPubkey = vaultKp.publicKey;
 
     logger.info("Vault created", {
       vaultPubkey: vaultKp.publicKey.toBase58(),
+      txSignature: sig,
     });
 
     return vaultKp.publicKey;
@@ -85,7 +97,12 @@ export class RangerVaultManager {
       adaptorProgram: driftAdaptorProgram,
     });
 
-    logger.info("Drift adaptor added to vault");
+    const tx = new Transaction().add(ix);
+    const sig = await sendAndConfirmTransaction(this.connection, tx, [
+      this.adminKp,
+    ]);
+
+    logger.info("Drift adaptor added to vault", { txSignature: sig });
   }
 
   async getVaultState(): Promise<{
@@ -127,8 +144,14 @@ export class RangerVaultManager {
       } as any
     );
 
+    const tx = new Transaction().add(ix);
+    const sig = await sendAndConfirmTransaction(this.connection, tx, [
+      this.managerKp,
+    ]);
+
     logger.info(`Deposited $${amount.toFixed(2)} to strategy`, {
       strategy: strategyPubkey.toBase58(),
+      txSignature: sig,
     });
   }
 
@@ -151,8 +174,14 @@ export class RangerVaultManager {
       } as any
     );
 
+    const tx = new Transaction().add(ix);
+    const sig = await sendAndConfirmTransaction(this.connection, tx, [
+      this.managerKp,
+    ]);
+
     logger.info(`Withdrew $${amount.toFixed(2)} from strategy`, {
       strategy: strategyPubkey.toBase58(),
+      txSignature: sig,
     });
   }
 
@@ -171,7 +200,12 @@ export class RangerVaultManager {
       protocolAdmin: this.adminKp.publicKey,
     });
 
-    logger.info("Fees harvested");
+    const tx = new Transaction().add(ix);
+    const sig = await sendAndConfirmTransaction(this.connection, tx, [
+      this.managerKp,
+    ]);
+
+    logger.info("Fees harvested", { txSignature: sig });
   }
 
   getVaultPubkey(): PublicKey | null {

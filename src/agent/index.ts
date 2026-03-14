@@ -58,19 +58,21 @@ class StrategyAgent {
 
     this.drift = new DriftManager({ keypair: keypairSource });
 
-    // Ranger vault manager (admin + manager use same key for hackathon)
-    const keypairBytes =
-      typeof keypairSource === "string"
+    const loadKeypairBytes = (pathOrKey: string | Uint8Array): Uint8Array =>
+      typeof pathOrKey === "string"
         ? new Uint8Array(
-            JSON.parse(
-              require("fs").readFileSync(keypairSource, "utf-8")
-            )
+            JSON.parse(require("fs").readFileSync(pathOrKey, "utf-8"))
           )
-        : keypairSource;
+        : pathOrKey;
+
+    const adminKeypairSource =
+      process.env.ADMIN_KEYPAIR_PATH || process.env.ANCHOR_WALLET || config.solanaPrivateKey;
+    const managerKeypairSource =
+      process.env.MANAGER_KEYPAIR_PATH || adminKeypairSource;
 
     this.ranger = new RangerVaultManager(
-      keypairBytes as Uint8Array,
-      keypairBytes as Uint8Array
+      loadKeypairBytes(adminKeypairSource),
+      loadKeypairBytes(managerKeypairSource)
     );
 
     // Initialize clients — Binance only needed in cross-venue mode
