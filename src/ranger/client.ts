@@ -1,13 +1,33 @@
-import { VoltrClient, VaultConfigField, sendAndConfirmTransaction } from "@voltr/vault-sdk";
+import { VoltrClient, VaultConfigField } from "@voltr/vault-sdk";
 import {
   Connection,
   Keypair,
   PublicKey,
+  Transaction,
+  sendAndConfirmTransaction,
+  SYSVAR_RENT_PUBKEY,
 } from "@solana/web3.js";
+import {
+  getUserAccountPublicKeySync,
+  getUserStatsAccountPublicKey,
+  getDriftStateAccountPublicKey,
+} from "@drift-labs/sdk";
 import { BN } from "@coral-xyz/anchor";
 import Decimal from "decimal.js";
 import { config } from "../config";
 import { logger } from "../utils/logger";
+
+async function sendIx(
+  connection: Connection,
+  ix: any,
+  signers: Keypair[]
+): Promise<string> {
+  const tx = new Transaction().add(ix);
+  const { blockhash } = await connection.getLatestBlockhash();
+  tx.recentBlockhash = blockhash;
+  tx.feePayer = signers[0].publicKey;
+  return sendAndConfirmTransaction(connection, tx, signers, { commitment: "confirmed" });
+}
 
 export class RangerVaultManager {
   private client!: VoltrClient;
@@ -59,7 +79,7 @@ export class RangerVaultManager {
         description: "AI-powered USDC delta-neutral funding harvester",
       },
       {
-        vault: vaultKp,
+        vault: vaultKp.publicKey,
         vaultAssetMint: USDC_MINT,
         admin: this.adminKp.publicKey,
         manager: this.managerKp.publicKey,
@@ -67,11 +87,7 @@ export class RangerVaultManager {
       }
     );
 
-    const sig = await sendAndConfirmTransaction(
-      [ix],
-      this.connection,
-      [this.adminKp, vaultKp]
-    );
+    const sig = await sendIx(this.connection, ix, [this.adminKp, vaultKp]);
 
     this.vaultPubkey = vaultKp.publicKey;
 
@@ -95,12 +111,7 @@ export class RangerVaultManager {
       adaptorProgram: driftAdaptorProgram,
     });
 
-    const sig = await sendAndConfirmTransaction(
-      [ix],
-      this.connection,
-      [this.adminKp]
-    );
-
+    const sig = await sendIx(this.connection, ix, [this.adminKp]);
     logger.info("Drift adaptor added to vault", { txSignature: sig });
   }
 
@@ -143,12 +154,7 @@ export class RangerVaultManager {
       } as any
     );
 
-    const sig = await sendAndConfirmTransaction(
-      [ix],
-      this.connection,
-      [this.managerKp]
-    );
-
+    const sig = await sendIx(this.connection, ix, [this.managerKp]);
     logger.info(`Deposited $${amount.toFixed(2)} to strategy`, {
       strategy: strategyPubkey.toBase58(),
       txSignature: sig,
@@ -174,12 +180,7 @@ export class RangerVaultManager {
       } as any
     );
 
-    const sig = await sendAndConfirmTransaction(
-      [ix],
-      this.connection,
-      [this.managerKp]
-    );
-
+    const sig = await sendIx(this.connection, ix, [this.managerKp]);
     logger.info(`Withdrew $${amount.toFixed(2)} from strategy`, {
       strategy: strategyPubkey.toBase58(),
       txSignature: sig,
@@ -201,12 +202,7 @@ export class RangerVaultManager {
       protocolAdmin: this.adminKp.publicKey,
     });
 
-    const sig = await sendAndConfirmTransaction(
-      [ix],
-      this.connection,
-      [this.managerKp]
-    );
-
+    const sig = await sendIx(this.connection, ix, [this.managerKp]);
     logger.info("Fees harvested", { txSignature: sig });
   }
 
@@ -220,7 +216,7 @@ export class RangerVaultManager {
       data,
       { vault: this.vaultPubkey, admin: this.adminKp.publicKey }
     );
-    const sig = await sendAndConfirmTransaction([ix], this.connection, [this.adminKp]);
+    const sig = await sendIx(this.connection, ix, [this.adminKp]);
     logger.info("MaxCap updated", { maxCap: maxCap.toString(), txSignature: sig });
     return sig;
   }
@@ -233,7 +229,7 @@ export class RangerVaultManager {
       data,
       { vault: this.vaultPubkey, admin: this.adminKp.publicKey }
     );
-    const sig = await sendAndConfirmTransaction([ix], this.connection, [this.adminKp]);
+    const sig = await sendIx(this.connection, ix, [this.adminKp]);
     logger.info("WithdrawalWaitingPeriod updated", { seconds: seconds.toString(), txSignature: sig });
     return sig;
   }
@@ -246,7 +242,7 @@ export class RangerVaultManager {
       data,
       { vault: this.vaultPubkey, admin: this.adminKp.publicKey }
     );
-    const sig = await sendAndConfirmTransaction([ix], this.connection, [this.adminKp]);
+    const sig = await sendIx(this.connection, ix, [this.adminKp]);
     logger.info("LockedProfitDegradationDuration updated", { seconds: seconds.toString(), txSignature: sig });
     return sig;
   }
@@ -268,8 +264,8 @@ export class RangerVaultManager {
     }
 
     const ix = await this.client.createUpdateVaultConfigIx(field, feeData, accounts);
-    const sig = await sendAndConfirmTransaction([ix], this.connection, [this.adminKp]);
-    logger.info(`Fee updated`, { field: VaultConfigField[field], basisPoints, txSignature: sig });
+    const sig = await sendIx(this.connection, ix, [this.adminKp]);
+    logger.info(`Fee updated`, { field, basisPoints, txSignature: sig });
     return sig;
   }
 
@@ -282,9 +278,88 @@ export class RangerVaultManager {
       managerData,
       { vault: this.vaultPubkey, admin: this.adminKp.publicKey }
     );
-    const sig = await sendAndConfirmTransaction([ix], this.connection, [this.adminKp]);
+    const sig = await sendIx(this.connection, ix, [this.adminKp]);
     logger.info("Manager updated", { newManager: newManagerPubkey.toBase58(), txSignature: sig });
     return sig;
+  }
+
+  // ── Strategy initialization ───────────────────────────────────────────────
+
+  /**
+   * Initialize a Drift strategy on the vault. One-time call per vault.
+   *
+   * Creates the Drift user account that the vault will trade through.
+   * Must be called after `addDriftAdaptor()`.
+   * The manager keypair is set as the delegatee (can place trades on behalf of the vault).
+   *
+   * @returns { strategyPubkey, driftUser, txSignature }
+   */
+  async initializeDriftStrategy(): Promise<{
+    strategyPubkey: PublicKey;
+    driftUser: PublicKey;
+    txSignature: string;
+  }> {
+    if (!this.vaultPubkey) throw new Error("Vault not initialized");
+
+    const DRIFT_PROGRAM_ID = new PublicKey(
+      "dRiftyHA39MWEi3m9aunc5MzRF1JYuBsbn6VPcn33UH"
+    );
+    const driftAdaptorProgram = new PublicKey(config.programs.driftAdaptor);
+
+    // Discriminator for the adaptor's initialize instruction (from voltrxyz/drift-scripts)
+    const INIT_DISCRIMINATOR = Buffer.from([200, 103, 130, 67, 230, 84, 7, 225]);
+
+    // Strategy PDA — seed: ["drift_user", vault] with drift adaptor program
+    const [strategy] = PublicKey.findProgramAddressSync(
+      [Buffer.from("drift_user"), this.vaultPubkey.toBuffer()],
+      driftAdaptorProgram
+    );
+
+    // Vault-strategy authority — the on-chain signer for the vault's Drift account
+    const vaultStrategyAuth = this.client.findVaultStrategyAuth(
+      this.vaultPubkey,
+      strategy
+    );
+
+    // Drift PDAs
+    const driftUser = getUserAccountPublicKeySync(
+      DRIFT_PROGRAM_ID,
+      vaultStrategyAuth,
+      0 // sub-account 0
+    );
+    const driftUserStats = getUserStatsAccountPublicKey(
+      DRIFT_PROGRAM_ID,
+      vaultStrategyAuth
+    );
+    const driftState = await getDriftStateAccountPublicKey(DRIFT_PROGRAM_ID);
+
+    const ix = await this.client.createInitializeStrategyIx(
+      { instructionDiscriminator: INIT_DISCRIMINATOR } as any,
+      {
+        payer: this.adminKp.publicKey,
+        manager: this.managerKp.publicKey,
+        vault: this.vaultPubkey,
+        strategy,
+        adaptorProgram: driftAdaptorProgram,
+        remainingAccounts: [
+          { pubkey: DRIFT_PROGRAM_ID,           isSigner: false, isWritable: false },
+          { pubkey: driftUserStats,             isSigner: false, isWritable: true  },
+          { pubkey: driftUser,                  isSigner: false, isWritable: true  },
+          { pubkey: driftState,                 isSigner: false, isWritable: true  },
+          { pubkey: this.managerKp.publicKey,   isSigner: false, isWritable: false }, // delegatee
+          { pubkey: SYSVAR_RENT_PUBKEY,         isSigner: false, isWritable: false },
+        ],
+      }
+    );
+
+    const sig = await sendIx(this.connection, ix, [this.adminKp]);
+    logger.info("Drift strategy initialized", {
+      strategyPubkey: strategy.toBase58(),
+      driftUser: driftUser.toBase58(),
+      txSignature: sig,
+    });
+
+    return { strategyPubkey: strategy, driftUser, txSignature: sig };
   }
 
   getVaultPubkey(): PublicKey | null {

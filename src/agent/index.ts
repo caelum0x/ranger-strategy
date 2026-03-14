@@ -350,9 +350,24 @@ class StrategyAgent {
       recentEvents: this.tradeLogger.readRecent(20),
     }));
 
-    this.monitor.route("/vault", () => {
+    this.monitor.route("/vault", async () => {
       const report = this.vaultPerf.generateReport();
-      return this.vaultPerf.formatReport(report);
+      const perfReport = this.vaultPerf.formatReport(report);
+
+      // Append live Ranger Earn vault state if available
+      let rangerState: Record<string, string> | null = null;
+      try {
+        const vs = await this.ranger.getVaultState();
+        rangerState = {
+          totalValueUsdc: vs.totalValue.toFixed(2),
+          sharePrice: vs.sharePrice.toFixed(6),
+          strategies: vs.strategies.length.toString(),
+        };
+      } catch {
+        // Non-critical — vault may not be configured
+      }
+
+      return { ...perfReport, rangerVault: rangerState };
     });
 
     this.monitor.route("/health", () => {
@@ -460,6 +475,16 @@ class StrategyAgent {
         freeCollateral: this.drift.getFreeCollateral().toFixed(2),
         apyEstimate: `${state.apyEstimate.toFixed(2)}%`,
       };
+
+      // Harvest Ranger Earn manager fees once every 24 cycles (~daily at 1h intervals)
+      if (state.cycleCount > 0 && state.cycleCount % 24 === 0) {
+        try {
+          await this.ranger.harvestFees();
+          logger.info("Ranger Earn fees harvested");
+        } catch (err: any) {
+          logger.warn("Fee harvest skipped", { error: err.message });
+        }
+      }
 
       // Include vault equity + withdrawal risk monitoring if available
       if (this.driftVault && process.env.DRIFT_VAULT_PUBKEY) {
