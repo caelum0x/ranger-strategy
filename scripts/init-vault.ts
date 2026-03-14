@@ -1,11 +1,9 @@
-import { VoltrClient, VaultConfig, VaultParams } from "@voltr/vault-sdk";
+import { VoltrClient, VaultConfig, VaultParams, sendAndConfirmTransaction } from "@voltr/vault-sdk";
 import { BN } from "@coral-xyz/anchor";
 import {
   Connection,
   Keypair,
   PublicKey,
-  sendAndConfirmTransaction,
-  Transaction,
 } from "@solana/web3.js";
 import fs from "fs";
 import dotenv from "dotenv";
@@ -76,18 +74,18 @@ async function main() {
   };
 
   const createVaultIx = await client.createInitializeVaultIx(vaultParams, {
-    vault: vaultKp.publicKey,
+    vault: vaultKp,
     vaultAssetMint: USDC_MINT,
     admin: adminKp.publicKey,
     manager: managerKp.publicKey,
     payer: adminKp.publicKey,
   });
 
-  const tx = new Transaction().add(createVaultIx);
-  const sig = await sendAndConfirmTransaction(connection, tx, [
-    adminKp,
-    vaultKp,
-  ]);
+  const sig = await sendAndConfirmTransaction(
+    [createVaultIx],
+    connection,
+    [adminKp, vaultKp]
+  );
 
   console.log("Vault created!");
   console.log("  Vault pubkey:", vaultKp.publicKey.toBase58());
@@ -109,10 +107,11 @@ async function main() {
     }
   );
 
-  const metaTx = new Transaction().add(metadataIx);
-  const metaSig = await sendAndConfirmTransaction(connection, metaTx, [
-    adminKp,
-  ]);
+  const metaSig = await sendAndConfirmTransaction(
+    [metadataIx],
+    connection,
+    [adminKp]
+  );
 
   console.log("LP metadata created:", metaSig);
 
@@ -126,10 +125,11 @@ async function main() {
     adaptorProgram: DRIFT_ADAPTOR_PROGRAM_ID,
   });
 
-  const adaptorTx = new Transaction().add(addAdaptorIx);
-  const adaptorSig = await sendAndConfirmTransaction(connection, adaptorTx, [
-    adminKp,
-  ]);
+  const adaptorSig = await sendAndConfirmTransaction(
+    [addAdaptorIx],
+    connection,
+    [adminKp]
+  );
 
   console.log("Drift adaptor added:", adaptorSig);
 

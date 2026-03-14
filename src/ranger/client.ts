@@ -1,10 +1,8 @@
-import { VoltrClient } from "@voltr/vault-sdk";
+import { VoltrClient, sendAndConfirmTransaction } from "@voltr/vault-sdk";
 import {
   Connection,
   Keypair,
   PublicKey,
-  Transaction,
-  sendAndConfirmTransaction,
 } from "@solana/web3.js";
 import { BN } from "@coral-xyz/anchor";
 import Decimal from "decimal.js";
@@ -61,7 +59,7 @@ export class RangerVaultManager {
         description: "AI-powered USDC delta-neutral funding harvester",
       },
       {
-        vault: vaultKp.publicKey,
+        vault: vaultKp,
         vaultAssetMint: USDC_MINT,
         admin: this.adminKp.publicKey,
         manager: this.managerKp.publicKey,
@@ -69,11 +67,11 @@ export class RangerVaultManager {
       }
     );
 
-    const tx = new Transaction().add(ix);
-    const sig = await sendAndConfirmTransaction(this.connection, tx, [
-      this.adminKp,
-      vaultKp,
-    ]);
+    const sig = await sendAndConfirmTransaction(
+      [ix],
+      this.connection,
+      [this.adminKp, vaultKp]
+    );
 
     this.vaultPubkey = vaultKp.publicKey;
 
@@ -97,10 +95,11 @@ export class RangerVaultManager {
       adaptorProgram: driftAdaptorProgram,
     });
 
-    const tx = new Transaction().add(ix);
-    const sig = await sendAndConfirmTransaction(this.connection, tx, [
-      this.adminKp,
-    ]);
+    const sig = await sendAndConfirmTransaction(
+      [ix],
+      this.connection,
+      [this.adminKp]
+    );
 
     logger.info("Drift adaptor added to vault", { txSignature: sig });
   }
@@ -144,10 +143,11 @@ export class RangerVaultManager {
       } as any
     );
 
-    const tx = new Transaction().add(ix);
-    const sig = await sendAndConfirmTransaction(this.connection, tx, [
-      this.managerKp,
-    ]);
+    const sig = await sendAndConfirmTransaction(
+      [ix],
+      this.connection,
+      [this.managerKp]
+    );
 
     logger.info(`Deposited $${amount.toFixed(2)} to strategy`, {
       strategy: strategyPubkey.toBase58(),
@@ -174,10 +174,11 @@ export class RangerVaultManager {
       } as any
     );
 
-    const tx = new Transaction().add(ix);
-    const sig = await sendAndConfirmTransaction(this.connection, tx, [
-      this.managerKp,
-    ]);
+    const sig = await sendAndConfirmTransaction(
+      [ix],
+      this.connection,
+      [this.managerKp]
+    );
 
     logger.info(`Withdrew $${amount.toFixed(2)} from strategy`, {
       strategy: strategyPubkey.toBase58(),
@@ -200,10 +201,11 @@ export class RangerVaultManager {
       protocolAdmin: this.adminKp.publicKey,
     });
 
-    const tx = new Transaction().add(ix);
-    const sig = await sendAndConfirmTransaction(this.connection, tx, [
-      this.managerKp,
-    ]);
+    const sig = await sendAndConfirmTransaction(
+      [ix],
+      this.connection,
+      [this.managerKp]
+    );
 
     logger.info("Fees harvested", { txSignature: sig });
   }
