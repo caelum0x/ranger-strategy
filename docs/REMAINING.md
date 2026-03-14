@@ -85,4 +85,30 @@
   ├─────┼───────────────────────────────────┼────────────────────────────────────────────────────────────────┤                               
   │ 11  │ Settlement timing mismatch        │ Add settlement-aware rebalancing                               │                               
   └─────┴───────────────────────────────────┴────────────────────────────────────────────────────────────────┘                               
-                                                                                         
+                                                                                                                                                                                         
+  Strategy Edge — What Wins Prizes                                                                                                           
+                                                                                                                                             
+  ┌─────┬───────────────────────────────────────────┬───────────┬───────────────┬────────────┐                                               
+  │  #  │                 Strategy                  │ APY Boost │ Already Have? │ Build Time │                                               
+  ├─────┼───────────────────────────────────────────┼───────────┼───────────────┼────────────┤                                               
+  │ 1   │ LST Yield Stacking (JitoSOL + short perp) │ +6-7%     │ No            │ 6-8h       │                                               
+  ├─────┼───────────────────────────────────────────┼───────────┼───────────────┼────────────┤
+  │ 2   │ Multi-Asset Rotation                      │ +3-8%     │ Yes ✅        │ Done       │                                               
+  ├─────┼───────────────────────────────────────────┼───────────┼───────────────┼────────────┤                                               
+  │ 3   │ Dynamic Leverage (spread-based)           │ +4-6%     │ Partial       │ 4-6h       │                                               
+  ├─────┼───────────────────────────────────────────┼───────────┼───────────────┼────────────┤                                               
+  │ 4   │ Funding Rate Prediction                   │ +2-4%     │ Yes ✅        │ Done       │                                               
+  ├─────┼───────────────────────────────────────────┼───────────┼───────────────┼────────────┤         
+  │ 5   │ Idle Capital Lending                      │ +1-1.5%   │ No            │ 3-5h       │                                               
+  └─────┴───────────────────────────────────────────┴───────────┴───────────────┴────────────┘
+
+  You already have #2 and #4. The big missing piece is #1 — LST yield stacking. This is exactly what Gauntlet's institutional vaults do: buy
+  JitoSOL (~7% staking APY) instead of raw SOL, use it as Drift cross-collateral, and short SOL-PERP. You earn staking yield + funding rate +
+   lending yield simultaneously. Judges will love this.
+
+  Priority Order
+
+  1. Get devnet running — prove the pipeline works end-to-end
+  2. LST yield stacking — the single biggest differentiator vs other submissions
+  3. Dynamic leverage scaling — scale leverage 1x→2x based on funding-borrow spread
+  4. Idle capital lending — never leave USDC sitting idle

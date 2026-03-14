@@ -616,4 +616,123 @@ export class DriftExecutor {
 
     return typeof txSig === "string" ? txSig : "";
   }
+
+  // ── LST Yield Stacking ────────────────────────────────────────
+
+  /**
+   * Enter a delta-neutral position using an LST (e.g., JitoSOL) instead
+   * of raw spot. Triple yield: staking APY + funding rate + lending.
+   *
+   * Flow: USDC → Jupiter swap → LST (as cross-collateral) + short perp
+   */
+  async atomicLSTEntry(
+    lstSpotIndex: number,
+    perpAsset: string,
+    usdcAmount: Decimal,
+    slippageBps: number = 100 // wider slippage for Jupiter swaps
+  ): Promise<string> {
+    const perpIdx = PERP_INDEX[perpAsset];
+    if (perpIdx === undefined) throw new Error(`Unknown perp: ${perpAsset}`);
+
+    const oracleData = this.client.getOracleDataForPerpMarket(perpIdx);
+    const oraclePrice = oracleData.price;
+    const price = convertToNumber(oraclePrice, PRICE_PRECISION);
+    if (price <= 0) {
+      throw new Error(`Invalid oracle price for ${perpAsset}: ${price}`);
+    }
+
+    const baseAmount = new Decimal(usdcAmount.toNumber() / price);
+
+    // Step 1: Swap USDC → LST via Jupiter (through Drift)
+    const swapIx = await (this.client as any).getJupiterSwapIxV6({
+      inMarketIndex: SPOT_INDEX["USDC"], // USDC spot index = 0
+      outMarketIndex: lstSpotIndex,
+      amount: new BN(usdcAmount.mul(1e6).toFixed(0)),
+      slippageBps,
+    });
+
+    // Step 2: Short perp against the LST collateral
+    const perpLimitPrice = oraclePrice
+      .mul(new BN(10000 - DEFAULT_SLIPPAGE_BPS))
+      .div(new BN(10000));
+
+    const perpIx = await this.client.getPlacePerpOrderIx(
+      getOrderParams({
+        orderType: OrderType.LIMIT,
+        marketIndex: perpIdx,
+        direction: PositionDirection.SHORT,
+        baseAssetAmount: this.client.convertToPerpPrecision(
+          parseFloat(baseAmount.toFixed(9))
+        ),
+        price: perpLimitPrice,
+      })
+    );
+
+    logger.info(
+      `LST entry: USDC → LST(idx=${lstSpotIndex}) + SHORT ${perpAsset} perp | ` +
+        `$${usdcAmount.toFixed(2)} | ${baseAmount.toFixed(6)} base | ` +
+        `oracle=$${price.toFixed(2)}`
+    );
+
+    return this.executeBatchedIxs([swapIx, perpIx]);
+  }
+
+  /**
+   * Exit an LST-based delta-neutral position.
+   * Close perp + swap LST back to USDC via Jupiter.
+   */
+  async atomicLSTExit(
+    lstSpotIndex: number,
+    perpAsset: string
+  ): Promise<string> {
+    const perpIdx = PERP_INDEX[perpAsset];
+    if (perpIdx === undefined) throw new Error(`Unknown perp: ${perpAsset}`);
+
+    const user = this.client.getUser();
+    const ixs: TransactionInstruction[] = [];
+
+    // Cancel all orders
+    const cancelIx = await this.client.getCancelOrdersIx(null, null, null);
+    ixs.push(cancelIx);
+
+    // Close perp position
+    const perpPos = user.getPerpPosition(perpIdx);
+    if (perpPos && !perpPos.baseAssetAmount.isZero()) {
+      const direction = perpPos.baseAssetAmount.isNeg()
+        ? PositionDirection.LONG
+        : PositionDirection.SHORT;
+
+      const closePerpIx = await this.client.getPlacePerpOrderIx(
+        getMarketOrderParams({
+          marketIndex: perpIdx,
+          marketType: MarketType.PERP,
+          direction,
+          baseAssetAmount: perpPos.baseAssetAmount.abs(),
+          reduceOnly: true,
+        })
+      );
+      ixs.push(closePerpIx);
+    }
+
+    // Swap LST back to USDC via Jupiter
+    const lstAmount = user.getTokenAmount(lstSpotIndex);
+    const lstAmountNum = convertToNumber(lstAmount, new BN(1e9));
+    if (lstAmountNum > 0.0001) {
+      const swapIx = await (this.client as any).getJupiterSwapIxV6({
+        inMarketIndex: lstSpotIndex,
+        outMarketIndex: SPOT_INDEX["USDC"],
+        amount: new BN(new Decimal(lstAmountNum).mul(1e9).toFixed(0)),
+        slippageBps: 100,
+      });
+      ixs.push(swapIx);
+    }
+
+    if (ixs.length <= 1) {
+      logger.info(`No LST positions to close for ${perpAsset}`);
+      return "";
+    }
+
+    logger.info(`LST exit: close ${perpAsset} perp + swap LST(idx=${lstSpotIndex}) → USDC`);
+    return this.executeBatchedIxs(ixs);
+  }
 }
