@@ -46,6 +46,7 @@ export class DriftManager {
   private connection: SolConnection;
   private wallet: Wallet;
   private delegateConfig?: DriftManagerConfig["delegateFor"];
+  private _hasUser = false;
 
   constructor(cfg: DriftManagerConfig) {
     const { Connection, Keypair } = require("@solana/web3.js");
@@ -96,10 +97,10 @@ export class DriftManager {
     await this.client.subscribe();
 
     // Check if user account exists
-    const hasUser = await this.client.hasUser();
-    if (!hasUser && !this.delegateConfig) {
+    this._hasUser = await this.client.hasUser();
+    if (!this._hasUser && !this.delegateConfig) {
       logger.warn(
-        "No Drift user account found. Call initializeUser() before trading."
+        "No Drift user account found — agent will run in read-only mode until funded."
       );
     }
 
@@ -313,6 +314,7 @@ export class DriftManager {
   }
 
   async closePerp(asset: string): Promise<void> {
+    if (!this._hasUser) return;
     const indices = MARKET_INDEX[asset];
     if (!indices) throw new Error(`Unknown asset: ${asset}`);
 
@@ -383,6 +385,7 @@ export class DriftManager {
   // ── Funding Settlement ─────────────────────────────────────────────
 
   async settleFunding(): Promise<void> {
+    if (!this._hasUser) return;
     logger.info("Settling funding payments on Drift");
     const userAccountPublicKey = await this.client.getUserAccountPublicKey();
     await this.client.settleFundingPayment(userAccountPublicKey);
@@ -429,8 +432,9 @@ export class DriftManager {
   // ── Position & Account Queries ─────────────────────────────────────
 
   async getPositions(): Promise<Position[]> {
-    const user = this.client.getUser();
+    if (!this._hasUser) return [];
     const positions: Position[] = [];
+    const user = this.client.getUser();
 
     for (const asset of config.targetAssets) {
       const indices = MARKET_INDEX[asset];
@@ -498,42 +502,59 @@ export class DriftManager {
   }
 
   private getHealthRatioSync(): Decimal {
-    const user = this.client.getUser();
-    const collateral = convertToNumber(
-      user.getTotalCollateral(),
-      QUOTE_PRECISION
-    );
-    const marginReq = convertToNumber(
-      user.getMarginRequirement("Initial"),
-      QUOTE_PRECISION
-    );
-    if (marginReq === 0) return new Decimal(999);
-    return new Decimal(collateral).div(marginReq);
+    if (!this._hasUser) return new Decimal(999);
+    try {
+      const user = this.client.getUser();
+      const collateral = convertToNumber(user.getTotalCollateral(), QUOTE_PRECISION);
+      const marginReq = convertToNumber(user.getMarginRequirement("Initial"), QUOTE_PRECISION);
+      if (marginReq === 0) return new Decimal(999);
+      return new Decimal(collateral).div(marginReq);
+    } catch {
+      return new Decimal(999);
+    }
   }
 
   private getLeverage(): Decimal {
-    const user = this.client.getUser();
-    const leverage = convertToNumber(user.getLeverage(), new BN(10000));
-    return new Decimal(leverage);
+    if (!this._hasUser) return new Decimal(0);
+    try {
+      const user = this.client.getUser();
+      return new Decimal(convertToNumber(user.getLeverage(), new BN(10000)));
+    } catch {
+      return new Decimal(0);
+    }
   }
 
   getFreeCollateral(): Decimal {
-    const user = this.client.getUser();
-    return new Decimal(
-      convertToNumber(user.getFreeCollateral(), QUOTE_PRECISION)
-    );
+    if (!this._hasUser) return new Decimal(0);
+    try {
+      const user = this.client.getUser();
+      return new Decimal(convertToNumber(user.getFreeCollateral(), QUOTE_PRECISION));
+    } catch {
+      return new Decimal(0);
+    }
   }
 
   getUnrealizedFundingPnl(): Decimal {
-    const user = this.client.getUser();
-    return new Decimal(
-      convertToNumber(user.getUnrealizedFundingPNL(), QUOTE_PRECISION)
-    );
+    if (!this._hasUser) return new Decimal(0);
+    try {
+      const user = this.client.getUser();
+      return new Decimal(convertToNumber(user.getUnrealizedFundingPNL(), QUOTE_PRECISION));
+    } catch {
+      return new Decimal(0);
+    }
+  }
+
+  hasUserAccount(): boolean {
+    return this._hasUser;
   }
 
   getOpenOrders(): any[] {
-    const user = this.client.getUser();
-    return user.getOpenOrders();
+    if (!this._hasUser) return [];
+    try {
+      return this.client.getUser().getOpenOrders();
+    } catch {
+      return [];
+    }
   }
 
   // ── Market Data ────────────────────────────────────────────────────

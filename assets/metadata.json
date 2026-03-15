@@ -1,0 +1,14 @@
+{
+  "name": "AI DN Vault LP",
+  "symbol": "aiDN",
+  "description": "LP token for the AI Delta-Neutral Vault on Ranger Earn. Earns yield via delta-neutral funding rate harvesting across SOL, BTC, and ETH on Drift Protocol. LST yield stacking: JitoSOL collateral adds ~7% staking APY on top of funding + lending yield.",
+  "image": "https://raw.githubusercontent.com/cmertmarangoz/ranger-strategy/main/assets/logo.png",
+  "external_url": "https://vaults.ranger.finance",
+  "attributes": [
+    { "trait_type": "Strategy", "value": "Delta-Neutral Funding Harvest" },
+    { "trait_type": "Base Asset", "value": "USDC" },
+    { "trait_type": "Protocol", "value": "Drift Protocol" },
+    { "trait_type": "LST Collateral", "value": "JitoSOL" },
+    { "trait_type": "Min APY Target", "value": "10%" }
+  ]
+}

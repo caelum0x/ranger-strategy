@@ -19,6 +19,7 @@ import { StrategyAdvisor } from "../ai/strategy-advisor";
 import { OpenRouterClient } from "../ai/openrouter";
 import { TradeLogger } from "../utils/trade-logger";
 import { VaultPerformanceTracker } from "../vault/performance";
+import { withRetry } from "../utils/retry";
 
 class StrategyAgent {
   private drift!: DriftManager;
@@ -76,21 +77,18 @@ class StrategyAgent {
     );
 
     // Initialize clients — Binance only needed in cross-venue mode
-    const initPromises: Promise<void>[] = [
-      this.drift.initialize(),
-      this.ranger.initialize(),
-    ];
+    // Initialize clients with retry — RPC endpoints may be temporarily unavailable
+    await withRetry(() => this.drift.initialize(), "Drift init", 5, 2000);
+    await this.ranger.initialize();
 
     if (config.strategyMode === "cross-venue") {
       this.binance = new BinanceManager();
-      initPromises.push(this.binance.initialize());
+      await withRetry(() => this.binance!.initialize(), "Binance init", 3, 1000);
     } else {
       logger.info(
         "Drift-only mode: all capital stays on-chain (no Binance required)"
       );
     }
-
-    await Promise.all(initPromises);
 
     // Set leverage on Binance if active
     if (this.binance) {
@@ -618,8 +616,11 @@ class StrategyAgent {
         this.engine.getPredictorHistory(),
         this.engine.getStartTime()
       );
-    } catch (err) {
-      logger.error("Strategy cycle failed", { error: err });
+    } catch (err: any) {
+      logger.error("Strategy cycle failed", {
+        error: err instanceof Error ? err.message : String(err),
+        stack: err instanceof Error ? err.stack : undefined,
+      });
     }
   }
 
@@ -736,7 +737,10 @@ async function main() {
   logger.info("Agent running. Press Ctrl+C to stop.");
 }
 
-main().catch((err) => {
-  logger.error("Agent fatal error", { error: err });
+main().catch((err: any) => {
+  logger.error("Agent fatal error", {
+    error: err instanceof Error ? err.message : String(err),
+    stack: err instanceof Error ? err.stack : undefined,
+  });
   process.exit(1);
 });

@@ -73,6 +73,46 @@ async function fetchJson<T>(path: string): Promise<T> {
   return resp.json() as Promise<T>;
 }
 
+/** Unwrap {success, records} envelope and parse string numbers to floats */
+async function fetchFundingRates(path: string): Promise<FundingRateEntry[]> {
+  const url = `${BASE_URL}${path}`;
+  const resp = await fetch(url);
+  if (!resp.ok) {
+    throw new Error(`Drift Data API error: ${resp.status} ${resp.statusText} for ${path}`);
+  }
+  const body: any = await resp.json();
+  const records: any[] = body.records ?? body ?? [];
+  return records.map((r: any) => ({
+    ts: typeof r.ts === "string" ? parseInt(r.ts) : r.ts,
+    fundingRate: parseFloat(r.fundingRate ?? "0"),
+    fundingRateLong: parseFloat(r.fundingRateLong ?? r.fundingRate ?? "0"),
+    fundingRateShort: parseFloat(r.fundingRateShort ?? r.fundingRate ?? "0"),
+    oraclePriceTwap: parseFloat(r.oraclePriceTwap ?? "1"),
+    markPriceTwap: parseFloat(r.markPriceTwap ?? "1"),
+    periodRevenue: parseFloat(r.periodRevenue ?? "0"),
+    baseAssetAmountWithAmm: parseFloat(r.baseAssetAmountWithAmm ?? "0"),
+    cumulativeFundingRateLong: parseFloat(r.cumulativeFundingRateLong ?? "0"),
+    cumulativeFundingRateShort: parseFloat(r.cumulativeFundingRateShort ?? "0"),
+  }));
+}
+
+/** Unwrap {success, rates} envelope where rates is [[ts, rate], ...] */
+async function fetchBorrowRates(path: string): Promise<BorrowRateEntry[]> {
+  const url = `${BASE_URL}${path}`;
+  const resp = await fetch(url);
+  if (!resp.ok) {
+    throw new Error(`Drift Data API error: ${resp.status} ${resp.statusText} for ${path}`);
+  }
+  const body: any = await resp.json();
+  const rates: any[] = body.rates ?? body ?? [];
+  return rates.map((r: any) => {
+    if (Array.isArray(r)) {
+      return { ts: r[0], rate: parseFloat(r[1]), balance: 0 };
+    }
+    return { ts: r.ts, rate: parseFloat(r.rate ?? "0"), balance: parseFloat(r.balance ?? "0") };
+  });
+}
+
 export class DriftDataAPI {
   // ── Funding Rates ────────────────────────────────────────────────
 
@@ -84,7 +124,7 @@ export class DriftDataAPI {
     symbol: string,
     limit: number = 100
   ): Promise<FundingRateEntry[]> {
-    return fetchJson(`/market/${symbol}/fundingRates?limit=${limit}`);
+    return fetchFundingRates(`/market/${symbol}/fundingRates?limit=${limit}`);
   }
 
   /**
@@ -96,7 +136,7 @@ export class DriftDataAPI {
     month: number,
     day: number
   ): Promise<FundingRateEntry[]> {
-    return fetchJson(
+    return fetchFundingRates(
       `/market/${symbol}/fundingRates/${year}/${month}/${day}`
     );
   }
@@ -166,7 +206,7 @@ export class DriftDataAPI {
     symbol: string,
     limit: number = 100
   ): Promise<BorrowRateEntry[]> {
-    return fetchJson(
+    return fetchBorrowRates(
       `/stats/${symbol}/rateHistory/borrow?limit=${limit}`
     );
   }
@@ -178,7 +218,7 @@ export class DriftDataAPI {
     symbol: string,
     limit: number = 100
   ): Promise<BorrowRateEntry[]> {
-    return fetchJson(
+    return fetchBorrowRates(
       `/stats/${symbol}/rateHistory/deposit?limit=${limit}`
     );
   }

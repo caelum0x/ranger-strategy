@@ -42,7 +42,7 @@ export const config = {
   healthRatioFloor: new Decimal(process.env.HEALTH_RATIO_FLOOR || "1.10"),
   maxDrawdownPct: new Decimal(process.env.MAX_DRAWDOWN_PCT || "3.0"),
   /** Minimum annualized funding rate to open a position (below this, skip) */
-  minFundingAPY: new Decimal(process.env.MIN_FUNDING_APY || "0.05"),
+  minFundingAPY: new Decimal(process.env.MIN_FUNDING_APY || "0.10"),
   rebalanceIntervalMs: parseInt(
     process.env.REBALANCE_INTERVAL_MS || "28800000"
   ), // 8 hours

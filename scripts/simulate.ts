@@ -173,18 +173,60 @@ async function simulate() {
   }
   console.log();
 
-  // ── Step 6: Execution ───────────────────────────────────────────
+  // ── Step 6: Execution (LST yield stacking for SOL) ─────────────
   log("EXEC", "=== Executing Trades (atomic txs) ===");
+
+  // JitoSOL staking APY (mirrors lst.ts registry — ~7.2%)
+  const JITOSOL_APY = 0.072;
+
   for (const pos of positions) {
-    log("EXEC", `Atomic cancel+enter: ${pos.asset}`, {
-      tx: `[simulated] cancel_all → ${pos.spotSide}_spot → ${pos.perpSide}_perp`,
-      size: `$${pos.size.toFixed(2)}`,
-      "oracle price": `$${MOCK_PRICES[pos.asset].toFixed(2)}`,
-      "base amount": `${pos.size.div(MOCK_PRICES[pos.asset]).toFixed(6)} ${pos.asset}`,
-      "slippage cap": "0.5% (50 bps)",
-    });
+    const usesLST = pos.perpSide === "short" && pos.asset === "SOL";
+    if (usesLST) {
+      log("EXEC", `LST atomic entry: ${pos.asset} (JitoSOL collateral)`, {
+        tx: "[simulated] cancel_all → swap_USDC→JitoSOL(Jupiter) → short_SOL-PERP",
+        collateral: "JitoSOL (spot idx 6, ~7.2% staking APY)",
+        size: `$${pos.size.toFixed(2)}`,
+        "oracle price": `$${MOCK_PRICES[pos.asset].toFixed(2)}`,
+        "base amount": `${pos.size.div(MOCK_PRICES[pos.asset]).toFixed(6)} ${pos.asset}`,
+        "slippage cap": "1.0% (100 bps for Jupiter swap)",
+        "yield layers": "funding rate + staking APY + lending yield",
+      });
+    } else {
+      log("EXEC", `Atomic cancel+enter: ${pos.asset}`, {
+        tx: `[simulated] cancel_all → ${pos.spotSide}_spot → ${pos.perpSide}_perp`,
+        size: `$${pos.size.toFixed(2)}`,
+        "oracle price": `$${MOCK_PRICES[pos.asset].toFixed(2)}`,
+        "base amount": `${pos.size.div(MOCK_PRICES[pos.asset]).toFixed(6)} ${pos.asset}`,
+        "slippage cap": "0.5% (50 bps)",
+      });
+    }
   }
   console.log();
+
+  // ── Step 6b: LST Yield Boost Breakdown ─────────────────────────
+  const lstPositions = positions.filter(
+    (p) => p.perpSide === "short" && p.asset === "SOL"
+  );
+  if (lstPositions.length > 0) {
+    log("LST", "=== LST Yield Stacking (JitoSOL) ===");
+    for (const pos of lstPositions) {
+      const annualStaking = pos.size.mul(JITOSOL_APY);
+      const dailyStaking = annualStaking.div(365.25);
+      const fundingAPY = MOCK_FUNDING[pos.asset].rate * 24 * 365.25;
+      const lendingAPY = MOCK_LENDING_RATES[pos.asset];
+      const totalAPY = Math.abs(fundingAPY) + JITOSOL_APY + lendingAPY;
+      log("LST", `${pos.asset} triple-yield breakdown`, {
+        "① funding rate APY": `${(Math.abs(fundingAPY) * 100).toFixed(2)}%`,
+        "② JitoSOL staking APY": `${(JITOSOL_APY * 100).toFixed(1)}%`,
+        "③ lending yield APY": `${(lendingAPY * 100).toFixed(1)}%`,
+        "total APY": `${(totalAPY * 100).toFixed(2)}%`,
+        "daily staking yield": `$${dailyStaking.toFixed(4)}`,
+        "annual staking yield": `$${annualStaking.toFixed(2)}`,
+        "collateral weight": "0.80 (minimal margin drag vs 0.90 raw SOL)",
+      });
+    }
+    console.log();
+  }
 
   // ── Step 7: Funding Settlement ──────────────────────────────────
   log("SETTLE", "=== Funding Settlement ===");

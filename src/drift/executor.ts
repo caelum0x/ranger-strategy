@@ -382,7 +382,12 @@ export class DriftExecutor {
    * Settle PnL for the current user across perp markets.
    */
   async settlePnl(marketIndices: number[]): Promise<void> {
-    const user = this.client.getUser();
+    let user: any;
+    try {
+      user = this.client.getUser();
+    } catch {
+      return; // No user account — nothing to settle
+    }
 
     const ixs = await this.client.getSettlePNLsIxs(
       [
@@ -509,26 +514,30 @@ export class DriftExecutor {
     price: number;
     status: string;
   }> {
-    const user = this.client.getUser();
-    const orders = user.getOpenOrders();
-    const perpNames = Object.entries(PERP_INDEX);
-    const spotNames = Object.entries(SPOT_INDEX);
+    try {
+      const user = this.client.getUser();
+      const orders = user.getOpenOrders();
+      const perpNames = Object.entries(PERP_INDEX);
+      const spotNames = Object.entries(SPOT_INDEX);
 
-    return orders.map((o: any) => {
-      const isPerp = o.marketType?.perp !== undefined;
-      const nameMap = isPerp ? perpNames : spotNames;
-      const asset = nameMap.find(([, idx]) => idx === o.marketIndex)?.[0] || `IDX-${o.marketIndex}`;
+      return orders.map((o: any) => {
+        const isPerp = o.marketType?.perp !== undefined;
+        const nameMap = isPerp ? perpNames : spotNames;
+        const asset = nameMap.find(([, idx]) => idx === o.marketIndex)?.[0] || `IDX-${o.marketIndex}`;
 
-      return {
-        orderId: o.orderId,
-        asset,
-        direction: o.direction?.long !== undefined ? "long" : "short",
-        marketType: isPerp ? "perp" : "spot",
-        baseAmount: convertToNumber(o.baseAssetAmount, new BN(1e9)),
-        price: convertToNumber(o.price, PRICE_PRECISION),
-        status: o.status ? Object.keys(o.status)[0] : "unknown",
-      };
-    });
+        return {
+          orderId: o.orderId,
+          asset,
+          direction: o.direction?.long !== undefined ? "long" : "short",
+          marketType: isPerp ? "perp" : "spot",
+          baseAmount: convertToNumber(o.baseAssetAmount, new BN(1e9)),
+          price: convertToNumber(o.price, PRICE_PRECISION),
+          status: o.status ? Object.keys(o.status)[0] : "unknown",
+        };
+      });
+    } catch {
+      return [];
+    }
   }
 
   /**
@@ -536,10 +545,12 @@ export class DriftExecutor {
    * Returns filled order count.
    */
   getFilledOrderCount(): number {
-    const user = this.client.getUser();
-    const orders = user.getOpenOrders();
-    // Open orders are unfilled — fewer open orders = more fills
-    return orders.length;
+    try {
+      const user = this.client.getUser();
+      return user.getOpenOrders().length;
+    } catch {
+      return 0;
+    }
   }
 
   // ── Slippage-Protected Market Orders ──────────────────────────

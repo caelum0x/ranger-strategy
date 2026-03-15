@@ -238,7 +238,7 @@ async function main() {
 
   console.log(`  Strategy mode:     ${process.env.STRATEGY_MODE || "drift-only"}`);
   console.log(`  Target assets:     ${process.env.TARGET_ASSETS || "SOL,BTC,ETH"}`);
-  console.log(`  Min funding APY:   ${process.env.MIN_FUNDING_APY || "0.05"}`);
+  console.log(`  Min funding APY:   ${process.env.MIN_FUNDING_APY || "0.10"}`);
   console.log(`  Max leverage:      ${process.env.MAX_LEVERAGE || "2"}x`);
   console.log(`  Health floor:      ${process.env.HEALTH_RATIO_FLOOR || "1.10"}`);
   console.log(`  Max drawdown:      ${process.env.MAX_DRAWDOWN_PCT || "3"}%`);
