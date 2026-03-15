@@ -20,6 +20,7 @@ import { VaultPerformanceTracker } from "../vault/performance";
 import { FundingPredictor } from "./predictor";
 import { OracleGuard } from "../risk/oracle-guard";
 import { StrategyAdvisor, LLMStrategyAdvice } from "../ai/strategy-advisor";
+import { selectBestLST, calculateLSTYieldBoost, supportsLST } from "./lst";
 
 export class StrategyEngine {
   private drift: DriftManager;
@@ -43,6 +44,8 @@ export class StrategyEngine {
   private totalLendingCollected: Decimal = new Decimal(0);
   /** Track last direction flip time per asset to prevent rapid flipping */
   private lastFlipTime: Map<string, number> = new Map();
+  /** Tracks which assets currently have LST-based positions (JitoSOL/mSOL/bSOL as collateral) */
+  private lstPositions: Set<string> = new Set();
   /** Minimum time between direction flips per asset (24 hours) */
   private readonly MIN_FLIP_INTERVAL_MS = 24 * 3600 * 1000;
 
@@ -841,12 +844,37 @@ export class StrategyEngine {
 
     // Use atomic entry via executor when available (slippage-protected)
     if (this.executor && signal.perpVenue === "drift") {
-      // Atomic cancel + delta-neutral entry in single tx (bi-directional)
-      await this.executor.atomicCancelAndEnterDeltaNeutral(
-        signal.asset,
-        signal.spotSize,
-        signal.perpSide
-      );
+      // LST yield stacking: for SOL short-perp entries in drift-only mode,
+      // swap USDC → JitoSOL (or best LST) as collateral instead of raw SOL.
+      // This adds ~7% staking APY on top of funding rate + lending yield.
+      const lst = signal.perpSide === "short" && supportsLST(signal.asset)
+        ? selectBestLST(signal.asset)
+        : null;
+
+      if (lst) {
+        await this.executor.atomicLSTEntry(
+          lst.spotIndex,
+          signal.asset,
+          signal.spotSize
+        );
+        this.lstPositions.add(signal.asset);
+
+        // Log the LST yield boost for transparency / monitoring
+        const boost = calculateLSTYieldBoost(lst, signal.spotSize);
+        logger.info(`LST yield boost for ${signal.asset}`, {
+          lst: lst.name,
+          stakingAPY: `${lst.stakingAPY.mul(100).toFixed(1)}%`,
+          estimatedDailyYield: `$${boost.dailyYield.toFixed(4)}`,
+          estimatedAnnualYield: `$${boost.annualYield.toFixed(2)}`,
+        });
+      } else {
+        // Standard atomic cancel + delta-neutral entry (bi-directional)
+        await this.executor.atomicCancelAndEnterDeltaNeutral(
+          signal.asset,
+          signal.spotSize,
+          signal.perpSide
+        );
+      }
     } else {
       // Fallback: separate spot and perp legs
       // Spot leg on Drift
@@ -887,7 +915,19 @@ export class StrategyEngine {
     // Close perp leg first (faster on CEX)
     if (signal.perpVenue === "drift") {
       if (this.executor) {
-        await this.executor.atomicDeltaNeutralExit(signal.asset);
+        // If this position was entered via LST stacking, close via LST exit
+        // (close perp + swap LST back to USDC in one atomic tx)
+        if (this.lstPositions.has(signal.asset)) {
+          const lst = selectBestLST(signal.asset);
+          if (lst) {
+            await this.executor.atomicLSTExit(lst.spotIndex, signal.asset);
+            this.lstPositions.delete(signal.asset);
+          } else {
+            await this.executor.atomicDeltaNeutralExit(signal.asset);
+          }
+        } else {
+          await this.executor.atomicDeltaNeutralExit(signal.asset);
+        }
       } else {
         await this.drift.closePerp(signal.asset);
         // Close spot
@@ -1020,13 +1060,31 @@ export class StrategyEngine {
         }
 
         // Close Drift positions — use atomic exit if executor available
-        // atomicDeltaNeutralExit handles both legs (perp + spot) in one tx
+        // For LST positions, swap LST back to USDC; otherwise standard exit
         if (this.executor) {
-          await withRetry(
-            () => this.executor!.atomicDeltaNeutralExit(asset),
-            `emergency-exit-drift ${asset}`,
-            3
-          );
+          if (this.lstPositions.has(asset)) {
+            const lst = selectBestLST(asset);
+            if (lst) {
+              await withRetry(
+                () => this.executor!.atomicLSTExit(lst.spotIndex, asset),
+                `emergency-exit-lst ${asset}`,
+                3
+              );
+              this.lstPositions.delete(asset);
+            } else {
+              await withRetry(
+                () => this.executor!.atomicDeltaNeutralExit(asset),
+                `emergency-exit-drift ${asset}`,
+                3
+              );
+            }
+          } else {
+            await withRetry(
+              () => this.executor!.atomicDeltaNeutralExit(asset),
+              `emergency-exit-drift ${asset}`,
+              3
+            );
+          }
         } else {
           // Manual close: perp first, then spot
           await withRetry(

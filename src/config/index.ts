@@ -7,6 +7,11 @@ export const config = {
   // Solana
   solanaRpcUrl:
     process.env.SOLANA_RPC_URL || "https://api.mainnet-beta.solana.com",
+  /** Helius RPC URL — required for getPriorityFeeEstimate in sendAndConfirmOptimisedTx */
+  heliusRpcUrl:
+    process.env.HELIUS_RPC_URL ||
+    process.env.SOLANA_RPC_URL ||
+    "https://api.mainnet-beta.solana.com",
   /** Path to keypair JSON file (preferred, matches ANCHOR_WALLET convention) */
   keypairPath: process.env.ANCHOR_WALLET || process.env.KEYPAIR_PATH || "",
   /** Base58-encoded private key (fallback if no keypair file) */

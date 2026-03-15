@@ -61,6 +61,15 @@ async function main() {
     critical: false,
   });
 
+  checks.push({
+    name: "Helius RPC URL",
+    pass: !!process.env.HELIUS_RPC_URL && process.env.HELIUS_RPC_URL.includes("helius"),
+    detail: process.env.HELIUS_RPC_URL
+      ? process.env.HELIUS_RPC_URL.replace(/api-key=[^&]+/, "api-key=***")
+      : "Not set — required for priority fee estimation",
+    critical: true,
+  });
+
   // 2. Keypair
   const keypairPath = process.env.ANCHOR_WALLET || "";
   let keypair: Keypair | null = null;
