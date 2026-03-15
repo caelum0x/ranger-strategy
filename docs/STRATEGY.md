@@ -49,10 +49,25 @@ When funding flips negative → reverse all legs:
 
 | Source | Expected APY |
 |--------|-------------|
-| Drift perp funding (bi-directional) | 8-15% |
-| Drift spot lending yield | 2-5% |
-| AI alpha (timing + rotation + momentum) | 2-5% |
-| **Total** | **12-25%** |
+| Drift perp funding (bi-directional) | 8–15% |
+| Drift spot lending yield | 2–5% |
+| JitoSOL/mSOL staking yield (LST stacking) | ~7% |
+| AI alpha (timing + rotation + momentum) | 2–5% |
+| **Total** | **17–27%** |
+
+## LST Yield Stacking
+
+For SOL-directional entries where the perp side is short (funding positive), the strategy swaps USDC → JitoSOL (or best available LST) as spot collateral atomically via `DriftExecutor.atomicLSTEntry`. This adds ~7% staking APY with no additional risk:
+
+```
+Standard approach:
+  Long SOL spot  +  Short SOL-PERP  →  perp funding + Drift lending yield
+
+LST stack approach:
+  Long JitoSOL  +  Short SOL-PERP  →  perp funding + Drift lending yield + JitoSOL staking (~7%)
+```
+
+JitoSOL holds full SOL price exposure (delta-neutral hedge remains intact) while simultaneously earning MEV-boosted liquid staking rewards (~7.5% APY). The perp short offsets the SOL price risk — the strategy receives staking yield essentially for free.
 
 ## AI Agent Capabilities
 
@@ -168,7 +183,7 @@ Cobo MPC wallet infrastructure (hackathon sponsor) enables institutional-grade k
 
 | Requirement | Status |
 |-------------|--------|
-| Minimum APY: 10% | Target 12-25% (bi-directional funding + lending) |
+| Minimum APY: 10% | Target 17-27% (funding + lending + LST staking) |
 | 3-month lock, rolling | Configurable redeem period on Drift vault |
 | No ponzi stables | USDC only, no circular dependencies |
 | No junior tranches | No insurance pool designs |
