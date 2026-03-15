@@ -110,6 +110,34 @@ npm run indexer:webhook:create
 
 The indexer listens on `POST /webhook`, exposes `GET /health`, and writes snapshots plus rebalance recommendations to `.ranger-state/indexer-state.json`.
 
+## Real Devnet Workflow
+
+The executable initialize/deposit/withdraw path in this repo is the real Drift vault flow, not the custom adaptor scaffold.
+
+Use `.env.devnet`, then run:
+
+```bash
+npm run devnet:vault-workflow
+```
+
+What it does:
+
+- initializes a real Drift vault on devnet if you do not pass `--vault`
+- ensures the wallet has a Drift user account and enough devnet USDC collateral
+- manager-deposits into the vault
+- submits a manager withdrawal request
+- completes the withdrawal immediately when `--redeem-period 0` is used
+
+Examples:
+
+```bash
+npm run devnet:vault-workflow
+npm run devnet:vault-workflow -- --deposit 15 --withdraw 5
+npm run devnet:vault-workflow -- --vault <PUBKEY> --skip-init --redeem-period 0
+```
+
+This is the recommended real test path for end-to-end vault operations. In parallel, the repo now also includes a real Drift-targeted custom adaptor path under `driftbear-adaptor/` and matching client-side remaining-account helpers in `src/ranger/`.
+
 ## Scripts Reference
 
 | Script | Command | Description |
@@ -123,8 +151,10 @@ The indexer listens on `POST /webhook`, exposes `GET /health`, and writes snapsh
 | `vault:status` | `ts-node scripts/vault-status.ts` | Display current vault status and balances |
 | `drift:status` | `ts-node scripts/drift-status.ts` | Display Drift positions and health |
 | `drift:init-vault` | `ts-node scripts/init-drift-vault.ts` | Initialize the Drift vault for delegate trading |
+| `liquidator` | `ts-node scripts/liquidator.ts` | Run the standalone Drift liquidation bot |
 | `indexer` | `ts-node src/indexer/server.ts` | Start the Helius webhook listener and local indexer |
 | `indexer:webhook:create` | `ts-node scripts/create-helius-webhook.ts` | Register a Helius webhook for the configured vault |
+| `indexer:backfill` | `ts-node scripts/indexer-backfill.ts` | Manually index the configured vault immediately |
 | `export-trades` | `ts-node scripts/export-trades.ts` | Export trade history for submission |
 
 ## Strategy Parameters
@@ -136,8 +166,48 @@ The indexer listens on `POST /webhook`, exposes `GET /health`, and writes snapsh
 | `HEALTH_RATIO_FLOOR` | `1.10` | Minimum health ratio |
 | `MAX_DRAWDOWN_PCT` | `3.0` | Circuit-breaker drawdown threshold (%) |
 | `REBALANCE_INTERVAL_MS` | `28800000` | Rebalance interval in ms |
+| `JUPITER_SWAP_SLIPPAGE_BPS` | `100` | Max slippage for Jupiter derisk swaps in bps |
 | `TARGET_ASSETS` | `SOL,BTC,ETH` | Assets to trade |
 | `STRATEGY_MODE` | `drift-only` | `drift-only` or `cross-venue` |
+
+## Liquidator
+
+This repo now includes a separate liquidation runner for Drift. It is intentionally isolated from the vault agent.
+
+```bash
+npm run liquidator -- --once
+```
+
+Recommended env for first run:
+
+```bash
+LIQUIDATION_DRY_RUN=true
+LIQUIDATION_SCAN_INTERVAL_MS=5000
+LIQUIDATION_MAX_USERS_PER_TICK=5
+LIQUIDATION_TAKEOVER_PCT=0.25
+LIQUIDATION_AUTO_DERISK=true
+LIQUIDATION_SUBACCOUNTS=0,1
+LIQUIDATION_DEFAULT_SUBACCOUNT_ID=0
+LIQUIDATION_PERP_SUBACCOUNT_MAP=0:0,1:1,2:1
+LIQUIDATION_SPOT_SUBACCOUNT_MAP=1:0,2:1,3:1
+LIQUIDATION_PRIORITY_FEE_MULTIPLIER=1.2
+LIQUIDATION_MAX_PRIORITY_FEE_MICROLAMPORTS=250000
+LIQUIDATION_FALLBACK_PRIORITY_FEE_MICROLAMPORTS=50000
+```
+
+Current scope:
+
+- scans `UserMap` for liquidatable or already-being-liquidated users
+- prioritizes candidates by liquidation distance
+- supports market-to-subaccount routing for perp and spot takeovers
+- attempts basic `liquidatePerp` and `liquidateSpot`
+- attempts `liquidatePerpPnlForDeposit` when a user has positive perp PnL
+- resolves simple bankruptcy cases
+- throttles repeated failures for a short backoff window
+- applies Helius-backed dynamic priority fees to liquidation transactions
+- derisks inherited exposures with a fuller subaccount sequence: cancel orders, close perps, settle pnl, unwind borrows, swap residual spot inventory to USDC
+
+It still does not implement the full `keeper-bots-v2` strategy surface such as maker fill paths and the deeper DLOB-driven derisk flow.
 
 ## Project Structure
 

@@ -1,0 +1,33 @@
+---
+title: Fund Allocation Guide
+description: Allocate funds between the vault's idle account and strategies
+---
+
+This guide explains how vault managers allocate funds between the vault's idle account and initialized strategies.
+
+## Overview
+
+As a vault manager, you have the authority to:
+
+- Deploy idle funds from the vault into active strategies
+- Withdraw funds from strategies back to the vault
+- Monitor current allocations and performance
+
+## Key Concepts
+
+### Idle vs. Deployed Funds
+
+- **Idle Funds**: Assets sitting in the vault's idle token account, not earning yield
+- **Deployed Funds**: Assets actively working in strategies (lending, trading, LP)
+- **Total Assets**: Sum of idle and deployed funds
+
+### Fund Flow
+
+```
+User Deposits → Vault Idle Account → Strategy Accounts
+Strategy Accounts → Vault Idle Account → User Withdrawals
+```
+
+<Warning>
+Keep some funds idle to service user withdrawals. If all funds are deployed, users may experience delays during the withdrawal process.
+</Warning>

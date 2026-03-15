@@ -1,0 +1,53 @@
+---
+title: Token Verification
+description: Verify your LP token on Jupiter to remove wallet warnings
+---
+
+When users receive LP tokens from your vault, their wallets (Phantom, Solflare, etc.) may display warnings for unverified tokens. Verifying your LP token on Jupiter removes these warnings and builds trust with depositors.
+
+## Why Verification Matters
+
+- **Wallet warnings**: Unverified tokens show warning messages in Phantom and other wallets, which can discourage users from depositing
+- **Jupiter listing**: Verified tokens appear on Jupiter's token list, making them recognizable across the Solana ecosystem
+- **Trust signal**: Verification indicates the token is legitimate and associated with a known project
+
+## Prerequisites
+
+Before applying for verification:
+
+1. **LP token metadata must be set up** — name, symbol, and image URI → See [LP Token Metadata](/vault-owners/initialization/lp-metadata)
+2. **Metadata must be hosted** at a publicly accessible URL
+
+## Jupiter Verification Process
+
+<Steps>
+  <Step title="Apply at Jupiter Verified">
+    Submit your token for verification at [verified.jup.ag](https://verified.jup.ag).
+  </Step>
+  <Step title="Provide Required Information">
+    You'll typically need: token mint address, token metadata (name, symbol, logo URL), project information (website, social links, description), and contact information.
+  </Step>
+  <Step title="Review">
+    The Jupiter team reviews submissions. Approval timelines vary.
+  </Step>
+</Steps>
+
+## After Verification
+
+Once verified:
+
+- Wallet warnings are removed for your LP token
+- The token appears in Jupiter's verified token list
+- Users see your token name, symbol, and logo in their wallets
+
+<Info>
+Verification is not strictly required for your vault to function, but it significantly improves the user experience. We strongly recommend completing this step before actively marketing your vault to users.
+</Info>
+
+## Troubleshooting
+
+| Issue | Solution |
+|---|---|
+| Metadata not showing in wallets | Ensure `createCreateLpMetadataIx` was executed successfully |
+| Logo not displaying | Verify the image URL in your metadata JSON is publicly accessible |
+| Verification rejected | Review Jupiter's requirements; ensure metadata is complete and accurate |

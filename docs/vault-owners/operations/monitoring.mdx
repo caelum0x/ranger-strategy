@@ -1,0 +1,97 @@
+---
+title: Monitoring & API
+description: Monitor vault performance and health using the Ranger Earn API and SDK
+---
+
+<Info>
+API services are only available for indexed vaults. Please reach out to the team to get your vault enabled.
+</Info>
+
+## Ranger Earn API
+
+The Ranger Earn API provides read-only endpoints for querying vault data. This is the recommended approach for monitoring and user-facing applications.
+
+**Base URL**: `https://api.voltr.xyz`
+
+**Full documentation**: [api.voltr.xyz/docs](https://api.voltr.xyz/docs)
+
+## SDK Query Methods
+
+The SDK provides methods for querying on-chain vault state directly. Use these when you need real-time data or data not available through the API.
+
+```typescript
+import { VoltrClient } from "@voltr/vault-sdk";
+import { Connection, PublicKey } from "@solana/web3.js";
+
+const connection = new Connection("your-rpc-url");
+const client = new VoltrClient(connection);
+const vault = new PublicKey("your-vault-address");
+```
+
+### Vault State
+
+```typescript
+const vaultData = await client.getVault(vault);
+console.log("Total assets:", vaultData.asset.totalValue.toString());
+console.log("Admin:", vaultData.admin.toBase58());
+console.log("Manager:", vaultData.manager.toBase58());
+```
+
+### Fee Information
+
+```typescript
+const adminFees = await client.getAccumulatedAdminFeesForVault(vault);
+const managerFees = await client.getAccumulatedManagerFeesForVault(vault);
+console.log("Admin fees (LP):", adminFees.toString());
+console.log("Manager fees (LP):", managerFees.toString());
+
+const hwm = await client.getHighWaterMarkForVault(vault);
+console.log("Highest asset per LP:", hwm.highestAssetPerLp);
+console.log("Last updated:", new Date(hwm.lastUpdatedTs * 1000));
+```
+
+### Share Price & LP Supply
+
+```typescript
+const assetPerLp = await client.getCurrentAssetPerLpForVault(vault);
+console.log("Current asset per LP:", assetPerLp);
+
+const lpBreakdown = await client.getVaultLpSupplyBreakdown(vault);
+console.log("Circulating LP:", lpBreakdown.circulating.toString());
+console.log("Unharvested fees:", lpBreakdown.unharvestedFees.toString());
+console.log("Unrealised fees:", lpBreakdown.unrealisedFees.toString());
+console.log("Total LP:", lpBreakdown.total.toString());
+```
+
+## Best Practices
+
+<Tip>
+**API for reads, SDK for writes**: Use the Ranger Earn API for monitoring, dashboards, and user-facing queries. Use the SDK for manager/admin operations that require signing transactions.
+</Tip>
+
+| Use Case | Recommended |
+|---|---|
+| Dashboard / UI showing vault data | Ranger Earn API |
+| Monitoring vault APY over time | Ranger Earn API |
+| User deposit/withdraw UI | Ranger Earn API |
+| Checking fees before harvesting | SDK (real-time) |
+| Automation scripts (rebalancing) | SDK |
+
+## What to Monitor
+
+### Key Metrics
+
+- **Share price trend** — is the vault generating positive yield?
+- **Total assets vs. idle assets** — what percentage is deployed vs. idle?
+- **APY** — is performance meeting expectations?
+- **Fee accumulation** — are fees ready to harvest?
+- **Strategy health** — are all strategies performing as expected?
+
+### Alert Triggers
+
+Consider setting up alerts for:
+
+- Share price decreasing (potential loss event)
+- Idle balance dropping below threshold (withdrawal pressure)
+- Strategy returning errors
+- SOL balance running low on admin/manager wallets

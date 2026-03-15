@@ -1,0 +1,234 @@
+{
+  "$schema": "https://mintlify.com/docs.json",
+  "theme": "mint",
+  "name": "Ranger Earn Documentation",
+  "colors": {
+    "primary": "#668060",
+    "light": "#B7E5AD",
+    "dark": "#51664D"
+  },
+  "favicon": "/favicon.ico",
+  "navigation": {
+    "tabs": [
+      {
+        "tab": "Documentation",
+        "groups": [
+          {
+            "group": "Getting Started",
+            "icon": "rocket",
+            "pages": [
+              "index",
+              "introduction/how-it-works",
+              "introduction/key-participants"
+            ]
+          },
+          {
+            "group": "For Users",
+            "icon": "user",
+            "pages": [
+              "users/overview",
+              {
+                "group": "Curated Vaults",
+                "expanded": false,
+                "pages": [
+                  {
+                    "group": "Ranger USD (rgUSD)",
+                    "pages": [
+                      "users/rgusd/index",
+                      "users/rgusd/yield-generation",
+                      "users/rgusd/risk-management",
+                      "users/rgusd/audit-and-transparency"
+                    ]
+                  },
+                  "users/vaults/hyperpack-arbitrage",
+                  "users/vaults/stablecoin-multi-lend",
+                  "users/vaults/elemental-usds-lending",
+                  "users/vaults/elemental-usdc-lending",
+                  "users/vaults/driftpack-arbitrage",
+                  "users/vaults/jlp-hyperloop",
+                  "users/vaults/elemental-usdg-lending",
+                  "users/vaults/ultrax-arbitrage"
+                ]
+              },
+              "users/vault-risk-disclosure"
+            ]
+          },
+          {
+            "group": "Technical Guides",
+            "icon": "compass",
+            "pages": [
+              "explore/vault-owners",
+              "explore/yield-protocols",
+              "explore/composing-protocols"
+            ]
+          },
+          {
+            "group": "Resources",
+            "icon": "book-open",
+            "pages": [
+              "explore/security",
+              "explore/github",
+              "explore/api-docs"
+            ]
+          }
+        ]
+      },
+      {
+        "tab": "Vault Managers",
+        "groups": [
+          {
+            "group": "Getting Started",
+            "icon": "vault",
+            "pages": [
+              "vault-owners/overview",
+              "vault-owners/initialization/choose-your-path",
+              "vault-owners/initialization/via-ui"
+            ]
+          },
+          {
+            "group": "Vault Setup (SDK)",
+            "icon": "code",
+            "pages": [
+              "vault-owners/initialization/prerequisites",
+              "vault-owners/initialization/create-vault",
+              "vault-owners/initialization/lp-metadata",
+              "vault-owners/initialization/update-configuration",
+              "vault-owners/initialization/strategy-initialization"
+            ]
+          },
+          {
+            "group": "Strategies & Allocation",
+            "icon": "route",
+            "pages": [
+              "vault-owners/strategies/setup-guide",
+              "vault-owners/strategies/integrations",
+              "vault-owners/allocation/overview",
+              "vault-owners/allocation/prerequisites",
+              "vault-owners/allocation/deploy-funds"
+            ]
+          },
+          {
+            "group": "Operations",
+            "icon": "gears",
+            "pages": [
+              "vault-owners/operations/overview",
+              "vault-owners/operations/bots-and-scripts",
+              "vault-owners/operations/monitoring",
+              "vault-owners/fees-and-accounting"
+            ]
+          },
+          {
+            "group": "Go-To-Market",
+            "icon": "bullhorn",
+            "pages": [
+              "vault-owners/go-to-market/checklist",
+              "vault-owners/go-to-market/indexing-and-listing",
+              "vault-owners/go-to-market/token-verification",
+              "vault-owners/frontend-integration"
+            ]
+          },
+          {
+            "group": "API",
+            "icon": "server",
+            "pages": [
+              "developers/api-overview",
+              "developers/endpoints/vaults",
+              "developers/endpoints/vault"
+            ]
+          },
+          {
+            "group": "SDK",
+            "icon": "book",
+            "pages": [
+              "developers/sdk-reference"
+            ]
+          }
+        ]
+      },
+      {
+        "tab": "Yield Protocols",
+        "groups": [
+          {
+            "group": "Overview",
+            "icon": "sitemap",
+            "pages": [
+              "protocols/overview"
+            ]
+          },
+          {
+            "group": "Adaptor Creation",
+            "icon": "puzzle-piece",
+            "pages": [
+              "protocols/adaptor-creation/index",
+              "protocols/adaptor-creation/core-components",
+              "protocols/adaptor-creation/security"
+            ]
+          }
+        ]
+      },
+      {
+        "tab": "Composing Protocols",
+        "groups": [
+          {
+            "group": "CPI Integration",
+            "icon": "plug",
+            "pages": [
+              "protocols/cpi-integration/index",
+              "protocols/cpi-integration/deposit",
+              "protocols/cpi-integration/request-withdraw",
+              "protocols/cpi-integration/withdraw",
+              "protocols/cpi-integration/instant-withdraw",
+              "protocols/cpi-integration/cancel-withdraw"
+            ]
+          }
+        ]
+      },
+      {
+        "tab": "Security",
+        "groups": [
+          {
+            "group": "Security",
+            "icon": "shield",
+            "pages": [
+              "security/best-practices",
+              "security/deployed-programs",
+              "security/audits"
+            ]
+          },
+          {
+            "group": "Legal",
+            "icon": "file-contract",
+            "pages": [
+              "security/terms",
+              "security/disclaimer"
+            ]
+          }
+        ]
+      }
+    ],
+    "global": {}
+  },
+  "logo": {
+    "light": "/logo/light.svg",
+    "dark": "/logo/dark.svg"
+  },
+  "navbar": {
+    "links": [
+      {
+        "label": "Support",
+        "href": "mailto:support@voltr.xyz"
+      }
+    ],
+    "primary": {
+      "type": "button",
+      "label": "Launch App",
+      "href": "https://app.ranger.finance/earn"
+    }
+  },
+  "footer": {
+    "socials": {
+      "x": "https://x.com/ranger_finance",
+      "github": "https://github.com/ranger-finance"
+    }
+  }
+}

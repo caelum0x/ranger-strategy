@@ -1,0 +1,137 @@
+---
+title: Strategy Initialization
+description: Add adaptors and initialize strategies for your vault
+---
+
+## Setup
+
+Import the required dependencies:
+
+```typescript
+import { BN } from "@coral-xyz/anchor";
+import { VoltrClient, SEEDS, LENDING_ADAPTOR_PROGRAM_ID } from "@voltr/vault-sdk";
+import {
+  Connection,
+  Keypair,
+  PublicKey,
+  sendAndConfirmTransaction,
+} from "@solana/web3.js";
+import fs from "fs";
+```
+
+Vault owners can integrate with the lending adaptor or custom adaptors created by DeFi teams.
+
+## Adding an Adaptor
+
+### 1. Define Required Variables
+
+```typescript
+const adminFilePath = "/path/to/admin.json";
+const assetMintAddress = "...";
+const solanaRpcUrl = "your-solana-rpc-url";
+
+const adminKp = Keypair.fromSecretKey(
+  Uint8Array.from(JSON.parse(fs.readFileSync(adminFilePath, "utf-8")))
+);
+
+const vault = new PublicKey("previously-initialized-vault");
+const connection = new Connection(solanaRpcUrl);
+const client = new VoltrClient(connection);
+```
+
+### 2. Create Add Adaptor Instruction
+
+```typescript
+const createAddAdaptorIx = await client.createAddAdaptorIx({
+  vault,
+  admin: adminKp.publicKey,
+  payer: adminKp.publicKey,
+});
+```
+
+### 3. Send and Confirm
+
+```typescript
+const txSig = await sendAndConfirmTransaction(
+  [createAddAdaptorIx],
+  connection,
+  [adminKp]
+);
+```
+
+## Initializing Strategies
+
+### 1. Derive Strategy Address
+
+```typescript
+// the counterParty's token account the vault will be transferring to
+const counterPartyTa = new PublicKey("...");
+
+const [strategy] = PublicKey.findProgramAddressSync(
+  [SEEDS.STRATEGY, counterPartyTa.toBuffer()],
+  LENDING_ADAPTOR_PROGRAM_ID
+);
+```
+
+### 2. Create Strategy Initialization Instruction
+
+```typescript
+const createInitializeStrategyIx = await client.createInitializeStrategyIx(
+  {},
+  {
+    payer,
+    vault,
+    manager: payer,
+    strategy,
+    remainingAccounts: [
+      { pubkey: protocolProgram, isSigner: false, isWritable: false },
+      // Additional required accounts...
+    ],
+  }
+);
+```
+
+### 3. Send and Confirm
+
+```typescript
+const txSig = await sendAndConfirmTransaction(
+  [createInitializeStrategyIx],
+  connection,
+  [adminKp]
+);
+```
+
+## Required Account Structure
+
+The strategy initialization requires several key accounts:
+
+1. **Core Accounts**: `payer`, `vault`, `manager`, `strategy`, `protocolProgram`
+2. **Protocol-Specific Accounts**: Protocol program account, required protocol state accounts, token accounts and authorities, system accounts (RENT, etc.)
+
+## Best Practices
+
+<AccordionGroup>
+  <Accordion title="Strategy Selection">
+    - Choose strategies that match your vault's risk profile
+    - Understand the underlying protocol's mechanisms
+    - Verify strategy program compatibility
+  </Accordion>
+  <Accordion title="Risk Management">
+    - Start with small deposits to test strategy
+    - Monitor strategy performance regularly
+    - Have a withdrawal plan for emergencies
+  </Accordion>
+  <Accordion title="Security">
+    - Keep admin keys secure
+    - Test on devnet first
+    - Verify all account permissions
+    - Double-check program IDs
+  </Accordion>
+  <Accordion title="Troubleshooting">
+    - **Strategy Creation Fails**: Verify admin authority, check counterparty token account exists, ensure protocol program ID is correct
+    - **Strategy Addition Fails**: Verify vault admin authority, check strategy account exists, ensure adaptor program matches
+    - **Strategy Removal Fails**: Verify strategy has zero balance, check admin authority, ensure all funds are withdrawn
+  </Accordion>
+</AccordionGroup>
+
+For additional support, refer to the [Ranger Earn SDK documentation](https://voltrxyz.github.io/vault-sdk/) or [example scripts](https://github.com/voltrxyz/client-scripts).

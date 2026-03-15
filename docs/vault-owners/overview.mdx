@@ -1,0 +1,62 @@
+---
+title: Owner Overview
+description: Everything you need to know about creating, managing, and operating vaults on the Ranger Earn protocol
+---
+
+## What Is a Vault?
+
+A Ranger Earn vault is an on-chain smart contract on Solana that accepts deposits from users in a **single asset** (e.g., USDC, SOL) and deploys those funds into one or more DeFi strategies to generate yield. Users receive LP tokens representing their proportional share of the vault.
+
+<Info>
+Each vault supports **one asset only**. If you want to manage multiple assets, you need to create separate vaults for each.
+</Info>
+
+## Role-Based Access Control
+
+Ranger Earn enforces role separation for security:
+
+| Role | Capabilities |
+|---|---|
+| **Admin** | Add/remove adaptors, initialize strategies, update vault configuration, calibrate high water mark |
+| **Manager** | Allocate funds between strategies (deposit/withdraw to strategies) |
+
+<Warning>
+Keep admin and manager as **separate keypairs**. The admin controls vault structure; the manager controls fund movement. This separation limits damage if a key is compromised.
+</Warning>
+
+## Vault Lifecycle
+
+<Steps>
+  <Step title="Create the vault">
+    Initialize the on-chain vault account with your asset, fees, and configuration
+  </Step>
+  <Step title="Set up metadata">
+    Create LP token metadata (name, symbol, image) so wallets display it correctly
+  </Step>
+  <Step title="Add adaptors & initialize strategies">
+    Connect to DeFi protocols where funds will be deployed
+  </Step>
+  <Step title="Allocate funds">
+    Deploy idle vault funds into initialized strategies
+  </Step>
+  <Step title="Operate">
+    Monitor performance, rebalance, run automation scripts
+  </Step>
+  <Step title="Go to market">
+    Get indexed on Ranger, verify your LP token on Jupiter
+  </Step>
+</Steps>
+
+## Next Steps
+
+<CardGroup cols={3}>
+  <Card title="Create a Vault" icon="plus" href="/vault-owners/initialization/choose-your-path">
+    Choose UI or SDK path
+  </Card>
+  <Card title="Supported Integrations" icon="plug" href="/vault-owners/strategies/integrations">
+    View available adaptors
+  </Card>
+  <Card title="Fees & Accounting" icon="calculator" href="/vault-owners/fees-and-accounting">
+    Understand the fee model
+  </Card>
+</CardGroup>

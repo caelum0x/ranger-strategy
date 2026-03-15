@@ -1,0 +1,150 @@
+---
+title: Fees & Accounting
+description: Understanding vault fee structures, high water marks, and profit tracking
+---
+
+Fee parameters are configured at vault creation and can be **updated by the admin** at any time. See [Vault Configuration Updates](/vault-owners/initialization/update-configuration) for how to modify fees after creation.
+
+When the vault realizes a profit, that profit increases the overall asset value. However, not all of this profit is immediately available for fee collection. A portion is "locked" and gradually becomes available (or "unlocked") over time. Fees are only charged on new profits that exceed a historical peak — this is known as the **high water mark**.
+
+---
+
+## Locked Profit
+
+To prevent sandwich-ing or frontrunning on gains, newly realized profit is initially locked. Over a set duration, this locked profit degrades until it is fully unlocked:
+
+$$
+\text{Locked Profit} = \left(\frac{\text{Degradation Duration} - \text{Time Elapsed}}{\text{Degradation Duration}}\right) \times \text{Previous Locked Profit}
+$$
+
+Once the degradation period has passed, the locked profit becomes zero.
+
+---
+
+## High Water Mark
+
+The high water mark represents the highest asset-per-share value the vault has ever reached. Fees are only applied to the profit that exceeds this mark:
+
+$$
+\text{Eligible Profit} = \begin{cases} 0, & \text{if } r_{\text{current}} \leq r_{\text{HWM}} \\ \left(r_{\text{current}} - r_{\text{HWM}}\right) \times \text{Total Shares}, & \text{if } r_{\text{current}} > r_{\text{HWM}} \end{cases}
+$$
+
+Where $r_{\text{current}}$ is the current asset-per-share ratio and $r_{\text{HWM}}$ is the high water mark ratio.
+
+---
+
+## Fee Calculation
+
+Once eligible profit is determined, performance fees are calculated based on a preset fee rate (expressed in basis points):
+
+$$
+\text{Fee Amount} = \frac{\text{Eligible Profit} \times \text{Fee Rate (bps)}}{10000}
+$$
+
+If no eligible profit exists (i.e., the current performance does not exceed the high water mark), no fee is charged.
+
+---
+
+## Fee Splitting
+
+The calculated fee amount is split between admin and manager. Suppose the admin's share is defined by $a$ basis points and the manager's by $m$ basis points:
+
+- **Admin Share:**
+
+$$
+\text{Admin Share} = \frac{\text{Fee Amount} \times a}{a + m}
+$$
+
+- **Manager Share:**
+
+$$
+\text{Manager Share} = \text{Fee Amount} - \text{Admin Share}
+$$
+
+---
+
+## Loss Handling
+
+If the vault incurs a loss, the total asset value is reduced by the loss amount. In this scenario, no performance fee is collected, and the loss directly impacts the vault's asset value.
+
+---
+
+## Additional Fee Types
+
+### Issuance Fee
+
+A fee charged when users deposit into the vault. This fee is deducted from the LP tokens minted to the depositor.
+
+$$
+\text{LP Minted} = \frac{\text{Deposit Amount} \times (10000 - \text{Issuance Fee bps})}{10000} \times \frac{\text{Total LP Supply}}{\text{Total Assets}}
+$$
+
+### Redemption Fee
+
+A fee charged when users withdraw from the vault. This fee is deducted from the assets returned to the withdrawer.
+
+$$
+\text{Assets Received} = \text{Proportional Assets} \times \frac{(10000 - \text{Redemption Fee bps})}{10000}
+$$
+
+---
+
+## SDK Integration
+
+### Harvest Accumulated Fees
+
+```typescript
+import { VoltrClient } from "@voltr/vault-sdk";
+import { Connection, PublicKey } from "@solana/web3.js";
+
+const connection = new Connection(rpcUrl);
+const client = new VoltrClient(connection);
+
+// Harvest fees (can be called by anyone, fees go to designated recipients)
+const harvestIx = await client.createHarvestFeeIx({
+  harvester: harvesterPubkey,
+  vaultManager: vaultManagerPubkey,
+  vaultAdmin: vaultAdminPubkey,
+  protocolAdmin: protocolAdminPubkey,
+  vault: vaultPubkey,
+});
+```
+
+### Calibrate High Water Mark
+
+The admin can calibrate the high water mark to reset the performance fee baseline:
+
+```typescript
+const calibrateIx = await client.createCalibrateHighWaterMarkIx({
+  vault: vaultPubkey,
+  admin: adminPubkey,
+});
+```
+
+### Query Fee Information
+
+```typescript
+// Get accumulated admin fees (in LP tokens)
+const adminFees = await client.getAccumulatedAdminFeesForVault(vaultPubkey);
+console.log("Admin fees:", adminFees.toString());
+
+// Get accumulated manager fees (in LP tokens)
+const managerFees = await client.getAccumulatedManagerFeesForVault(vaultPubkey);
+console.log("Manager fees:", managerFees.toString());
+
+// Get high water mark information
+const hwm = await client.getHighWaterMarkForVault(vaultPubkey);
+console.log("Highest asset per LP:", hwm.highestAssetPerLp);
+console.log("Last updated:", new Date(hwm.lastUpdatedTs * 1000));
+
+// Get current asset per LP ratio
+const assetPerLp = await client.getCurrentAssetPerLpForVault(vaultPubkey);
+console.log("Current asset per LP:", assetPerLp);
+
+// Get LP supply breakdown
+const lpBreakdown = await client.getVaultLpSupplyBreakdown(vaultPubkey);
+console.log("Circulating LP:", lpBreakdown.circulating.toString());
+console.log("Unharvested fees:", lpBreakdown.unharvestedFees.toString());
+console.log("Unrealised fees:", lpBreakdown.unrealisedFees.toString());
+console.log("Total LP:", lpBreakdown.total.toString());
+```

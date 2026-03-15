@@ -1,0 +1,22 @@
+[toolchain]
+anchor_version = "0.31.1"
+solana_version = "2.1.21"
+
+[features]
+resolution = true
+skip-lint = false
+
+[programs.localnet]
+mock_ctoken_market = "DPk5Ptke7pfV64sn3RtqQjYGCNYwtA6vmENxXakVfwpJ"
+driftbear_custom_adaptor = "G5RgbPTWyYePXebLMsP6sZTQKkKZhwP3Zn1CnSGhPnPi"
+
+[programs.devnet]
+mock_ctoken_market = "DPk5Ptke7pfV64sn3RtqQjYGCNYwtA6vmENxXakVfwpJ"
+driftbear_custom_adaptor = "G5RgbPTWyYePXebLMsP6sZTQKkKZhwP3Zn1CnSGhPnPi"
+
+[provider]
+cluster = "devnet"
+wallet = "/Users/arhansubasi/ranger/devnet-keypair.json"
+
+[scripts]
+test = "yarn run ts-mocha -p ./tsconfig.json -t 1000000 tests/**/*.ts"

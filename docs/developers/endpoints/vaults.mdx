@@ -1,0 +1,87 @@
+---
+title: Vaults Endpoints
+description: Retrieve aggregated data across all Ranger Earn vaults
+---
+
+The `/vaults` endpoint provides methods for retrieving aggregated data across all Ranger Earn vaults.
+
+## Get All Vaults
+
+Retrieves a list of all active Ranger Earn vaults, including both native and external (e.g., Kamino) integrations. This endpoint is ideal for displaying a comprehensive directory of available vaults.
+
+- **Method**: `GET`
+- **Path**: `/vaults`
+
+### Success Response (200 OK)
+
+```json
+{
+  "success": true,
+  "vaults": [
+    {
+      "pubkey": "8oUwteX3SJELMGDPTEuLqz1WSd58yMdkQ6s4hKwB42nJ",
+      "name": "Ranger Earn USDC APY Maximizer",
+      "theme": "Lending",
+      "org": {
+        "name": "Ranger Earn",
+        "icon": "..."
+      },
+      "asset": {
+        "name": "USDC",
+        "icon": "...",
+        "decimals": 6,
+        "price": 0.9998
+      },
+      "allocations": [
+        {
+          "orgName": "Kamino",
+          "orgIcon": "..."
+        },
+        {
+          "orgName": "Drift",
+          "orgIcon": "..."
+        }
+      ],
+      "age": 1699999999,
+      "capacity": 1000000000000,
+      "tvl": 50000000000,
+      "apy": 12.34
+    }
+  ]
+}
+```
+
+---
+
+## Get Total TVL
+
+Calculates and returns the total value locked (TVL) in USD across all vaults, along with a breakdown by asset.
+
+- **Method**: `GET`
+- **Path**: `/vaults/tvl`
+
+### Success Response (200 OK)
+
+```json
+{
+  "success": true,
+  "data": {
+    "totalTvlUsd": 1234567.89,
+    "breakdown": [
+      {
+        "asset": "USDC",
+        "tvl": 1000000.5,
+        "price": 0.9998,
+        "tvlUsd": 999800.5
+      },
+      {
+        "asset": "SOL",
+        "tvl": 1500.2,
+        "price": 156.48,
+        "tvlUsd": 234759.39
+      }
+    ],
+    "lastUpdated": "2025-11-20T10:00:00.000Z"
+  }
+}
+```

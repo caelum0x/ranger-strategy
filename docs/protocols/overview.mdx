@@ -1,0 +1,46 @@
+---
+title: DeFi Protocol Overview
+description: The Ranger Earn protocol architecture — vaults, adaptors, and fund flow
+---
+
+The Ranger Earn protocol consists of two main programs that enable customizable yield strategies.
+
+## Vault (`voltr-vault program`)
+
+Vaults are the primary user interface, managing deposits and handling the accounting of user shares. When a vault manager allocates funds to a strategy, the vault program calls the adaptor via CPI.
+
+## Adaptor (custom on-chain program)
+
+An adaptor is a Solana program that bridges a Voltr vault with a DeFi protocol. The vault program calls into the adaptor, and the adaptor routes those calls to the target protocol via CPI.
+
+Adaptors:
+
+- Implement three standardized instructions: **initialize**, **deposit**, and **withdraw**
+- Act as a CPI translation layer between the vault and the target protocol
+- Report position values back to the vault (deposit/withdraw return `u64`)
+- Handle protocol-specific account setup and token conversions
+
+## Fund Flow
+
+```
+User deposits → Vault holds idle assets
+                  ↓ (manager allocates)
+              Vault calls Adaptor via CPI
+                  ↓
+              Adaptor calls Target Protocol via CPI
+                  ↓
+              Protocol holds assets, issues receipt tokens
+                  ↓
+              Adaptor reports position value back to Vault
+```
+
+## Integration Paths
+
+<CardGroup cols={2}>
+  <Card title="Build an Adaptor" icon="puzzle-piece" href="/protocols/adaptor-creation/index">
+    Build a custom adaptor to connect your protocol to Voltr vaults
+  </Card>
+  <Card title="CPI Integration" icon="code" href="/protocols/cpi-integration/index">
+    Deposit into and withdraw from Voltr vaults on-chain via CPI
+  </Card>
+</CardGroup>

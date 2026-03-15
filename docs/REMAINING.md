@@ -12,10 +12,10 @@ The repo now has a local self-indexing path for Ranger/Voltr vault telemetry:
 
 ## Remaining Code Gaps
 
-1. Feed the latest indexed snapshot and decision into the live agent before each rebalance cycle.
-2. Extend the decision engine with funding, volatility, and health-factor inputs from the existing Drift strategy modules.
-3. Add a dashboard view for the indexed vault snapshots and rebalance recommendations.
-4. Add a manual backfill command to snapshot vault state without waiting for the next webhook.
+1. Execute the actual Ranger `initialize/deposit/withdraw` flow through the custom adaptor path, not just the account derivation and valuation helpers.
+2. Feed the latest indexed snapshot and decision into the live agent before each rebalance cycle.
+3. Extend the decision engine with funding, volatility, and health-factor inputs from the existing Drift strategy modules.
+4. Add a dashboard view for the indexed vault snapshots and rebalance recommendations.
 
 ## Remaining Operational Gaps
 
@@ -23,3 +23,4 @@ The repo now has a local self-indexing path for Ranger/Voltr vault telemetry:
 2. Record and submit the mandatory demo video.
 3. Verify the seeded-capital story stays fully on-chain in `drift-only` mode.
 4. Register the production webhook with a public URL and confirm events are arriving.
+5. Keep the verified devnet custom adaptor addresses and valuation in `docs/DRIFTBEAR_CUSTOM_ADAPTOR_DEVNET.md`.

@@ -1,0 +1,533 @@
+---
+title: SDK Reference
+description: Complete reference for the Ranger Earn Vault SDK (@voltr/vault-sdk)
+---
+
+## Installation
+
+```bash
+npm install @voltr/vault-sdk
+# or
+yarn add @voltr/vault-sdk
+```
+
+## Client Initialization
+
+```typescript
+import { VoltrClient } from "@voltr/vault-sdk";
+import { Connection, Keypair } from "@solana/web3.js";
+
+const connection = new Connection("https://api.mainnet-beta.solana.com");
+
+// Basic initialization (for read-only operations)
+const client = new VoltrClient(connection);
+
+// With wallet (for signing transactions)
+const wallet = Keypair.fromSecretKey(/* your secret key */);
+const clientWithWallet = new VoltrClient(connection, wallet);
+```
+
+---
+
+## Constants
+
+```typescript
+import {
+  VAULT_PROGRAM_ID,
+  LENDING_ADAPTOR_PROGRAM_ID,
+  DRIFT_ADAPTOR_PROGRAM_ID,
+  METADATA_PROGRAM_ID,
+  SEEDS,
+} from "@voltr/vault-sdk";
+
+// Program IDs
+VAULT_PROGRAM_ID            // vVoLTRjQmtFpiYoegx285Ze4gsLJ8ZxgFKVcuvmG1a8
+LENDING_ADAPTOR_PROGRAM_ID  // aVoLTRCRt3NnnchvLYH6rMYehJHwM5m45RmLBZq7PGz
+DRIFT_ADAPTOR_PROGRAM_ID    // EBN93eXs5fHGBABuajQqdsKRkCgaqtJa8vEFD6vKXiP
+METADATA_PROGRAM_ID         // metaqbxxUerdq28cj1RbAWkYQm3ybzjb6a8bt518x1s
+
+// PDA Seeds
+SEEDS.VAULT_LP_MINT
+SEEDS.VAULT_ASSET_IDLE_AUTH
+SEEDS.STRATEGY_INIT_RECEIPT
+SEEDS.VAULT_STRATEGY_AUTH
+SEEDS.ADAPTOR_ADD_RECEIPT
+SEEDS.DIRECT_WITHDRAW_INIT_RECEIPT_SEED
+SEEDS.REQUEST_WITHDRAW_VAULT_RECEIPT
+SEEDS.STRATEGY
+SEEDS.METADATA
+```
+
+---
+
+## Types
+
+### VaultConfig
+
+```typescript
+interface VaultConfig {
+  maxCap: BN;
+  startAtTs: BN;
+  lockedProfitDegradationDuration: BN;
+  managerManagementFee: number;    // basis points
+  managerPerformanceFee: number;   // basis points
+  adminManagementFee: number;      // basis points
+  adminPerformanceFee: number;     // basis points
+  redemptionFee: number;           // basis points
+  issuanceFee: number;             // basis points
+  withdrawalWaitingPeriod: BN;
+}
+```
+
+### VaultParams
+
+```typescript
+interface VaultParams {
+  config: VaultConfig;
+  name: string;         // Max 32 bytes
+  description: string;  // Max 64 bytes
+}
+```
+
+### RequestWithdrawVaultArgs
+
+```typescript
+interface RequestWithdrawVaultArgs {
+  amount: BN;
+  isAmountInLp: boolean;
+  isWithdrawAll: boolean;
+}
+```
+
+### VaultConfigField
+
+```typescript
+enum VaultConfigField {
+  MaxCap = "maxCap",
+  StartAtTs = "startAtTs",
+  LockedProfitDegradationDuration = "lockedProfitDegradationDuration",
+  WithdrawalWaitingPeriod = "withdrawalWaitingPeriod",
+  ManagerPerformanceFee = "managerPerformanceFee",
+  AdminPerformanceFee = "adminPerformanceFee",
+  ManagerManagementFee = "managerManagementFee",
+  AdminManagementFee = "adminManagementFee",
+  RedemptionFee = "redemptionFee",
+  IssuanceFee = "issuanceFee",
+  Manager = "manager",
+}
+```
+
+---
+
+## PDA Finding Methods
+
+### findVaultLpMint
+
+```typescript
+const vaultLpMint = client.findVaultLpMint(vault);
+```
+
+### findVaultAssetIdleAuth
+
+```typescript
+const vaultAssetIdleAuth = client.findVaultAssetIdleAuth(vault);
+```
+
+### findVaultAddresses
+
+```typescript
+const { vaultLpMint, vaultAssetIdleAuth } = client.findVaultAddresses(vault);
+```
+
+### findVaultStrategyAuth
+
+```typescript
+const vaultStrategyAuth = client.findVaultStrategyAuth(vault, strategy);
+```
+
+### findStrategyInitReceipt
+
+```typescript
+const strategyInitReceipt = client.findStrategyInitReceipt(vault, strategy);
+```
+
+### findDirectWithdrawInitReceipt
+
+```typescript
+const directWithdrawInitReceipt = client.findDirectWithdrawInitReceipt(vault, strategy);
+```
+
+### findVaultStrategyAddresses
+
+```typescript
+const {
+  vaultStrategyAuth,
+  strategyInitReceipt,
+  directWithdrawInitReceipt,
+} = client.findVaultStrategyAddresses(vault, strategy);
+```
+
+### findRequestWithdrawVaultReceipt
+
+```typescript
+const receipt = client.findRequestWithdrawVaultReceipt(vault, user);
+```
+
+### findLpMetadataAccount
+
+```typescript
+const lpMetadataAccount = client.findLpMetadataAccount(vault);
+```
+
+---
+
+## Vault Instructions
+
+### createInitializeVaultIx
+
+```typescript
+const ix = await client.createInitializeVaultIx(
+  {
+    config: { /* VaultConfig */ },
+    name: "My Vault",
+    description: "Vault description"
+  },
+  {
+    vault: vaultPubkey,
+    vaultAssetMint: assetMintPubkey,
+    admin: adminPubkey,
+    manager: managerPubkey,
+    payer: payerPubkey,
+  }
+);
+```
+
+### createUpdateVaultConfigIx
+
+```typescript
+import { VaultConfigField } from "@voltr/vault-sdk";
+
+// Update max cap
+const newMaxCap = new BN(1_000_000_000_000);
+const data = newMaxCap.toArrayLike(Buffer, "le", 8);
+const ix = await client.createUpdateVaultConfigIx(
+  VaultConfigField.MaxCap, data,
+  { vault: vaultPubkey, admin: adminPubkey }
+);
+
+// Update management fee (requires LP mint)
+const feeData = Buffer.alloc(2);
+feeData.writeUInt16LE(100, 0); // 1%
+const ix = await client.createUpdateVaultConfigIx(
+  VaultConfigField.ManagerManagementFee, feeData,
+  { vault: vaultPubkey, admin: adminPubkey, vaultLpMint: client.findVaultLpMint(vaultPubkey) }
+);
+
+// Update manager
+const managerData = new PublicKey("...").toBuffer();
+const ix = await client.createUpdateVaultConfigIx(
+  VaultConfigField.Manager, managerData,
+  { vault: vaultPubkey, admin: adminPubkey }
+);
+```
+
+### createDepositVaultIx
+
+```typescript
+const ix = await client.createDepositVaultIx(
+  new BN(1_000_000_000),
+  {
+    userTransferAuthority: userPubkey,
+    vault: vaultPubkey,
+    vaultAssetMint: assetMintPubkey,
+    assetTokenProgram: TOKEN_PROGRAM_ID,
+  }
+);
+```
+
+### createRequestWithdrawVaultIx
+
+```typescript
+const ix = await client.createRequestWithdrawVaultIx(
+  { amount: new BN(1_000_000_000), isAmountInLp: false, isWithdrawAll: false },
+  { payer: payerPubkey, userTransferAuthority: userPubkey, vault: vaultPubkey }
+);
+```
+
+### createCancelRequestWithdrawVaultIx
+
+```typescript
+const ix = await client.createCancelRequestWithdrawVaultIx({
+  userTransferAuthority: userPubkey,
+  vault: vaultPubkey,
+});
+```
+
+### createWithdrawVaultIx
+
+```typescript
+const ix = await client.createWithdrawVaultIx({
+  userTransferAuthority: userPubkey,
+  vault: vaultPubkey,
+  vaultAssetMint: assetMintPubkey,
+  assetTokenProgram: TOKEN_PROGRAM_ID,
+});
+```
+
+---
+
+## Strategy Instructions
+
+### createAddAdaptorIx
+
+```typescript
+const ix = await client.createAddAdaptorIx({
+  vault: vaultPubkey,
+  payer: payerPubkey,
+  admin: adminPubkey,
+  adaptorProgram: LENDING_ADAPTOR_PROGRAM_ID,
+});
+```
+
+### createRemoveAdaptorIx
+
+```typescript
+const ix = await client.createRemoveAdaptorIx({
+  vault: vaultPubkey,
+  admin: adminPubkey,
+  adaptorProgram: LENDING_ADAPTOR_PROGRAM_ID,
+});
+```
+
+### createInitializeStrategyIx
+
+```typescript
+const ix = await client.createInitializeStrategyIx(
+  { instructionDiscriminator: null, additionalArgs: null },
+  {
+    payer: payerPubkey,
+    vault: vaultPubkey,
+    manager: managerPubkey,
+    strategy: strategyPubkey,
+    adaptorProgram: LENDING_ADAPTOR_PROGRAM_ID,
+    remainingAccounts: [
+      { pubkey: protocolProgram, isSigner: false, isWritable: false },
+    ],
+  }
+);
+```
+
+### createDepositStrategyIx
+
+```typescript
+const ix = await client.createDepositStrategyIx(
+  { depositAmount: new BN(1_000_000_000), instructionDiscriminator: null, additionalArgs: null },
+  {
+    manager: managerPubkey,
+    vault: vaultPubkey,
+    vaultAssetMint: assetMintPubkey,
+    strategy: strategyPubkey,
+    assetTokenProgram: TOKEN_PROGRAM_ID,
+    adaptorProgram: LENDING_ADAPTOR_PROGRAM_ID,
+    remainingAccounts: [
+      { pubkey: counterPartyTa, isSigner: false, isWritable: true },
+      { pubkey: protocolProgram, isSigner: false, isWritable: false },
+    ],
+  }
+);
+```
+
+### createWithdrawStrategyIx
+
+```typescript
+const ix = await client.createWithdrawStrategyIx(
+  { withdrawAmount: new BN(1_000_000_000), instructionDiscriminator: null, additionalArgs: null },
+  {
+    manager: managerPubkey,
+    vault: vaultPubkey,
+    vaultAssetMint: assetMintPubkey,
+    strategy: strategyPubkey,
+    assetTokenProgram: TOKEN_PROGRAM_ID,
+    adaptorProgram: LENDING_ADAPTOR_PROGRAM_ID,
+    remainingAccounts: [
+      { pubkey: counterPartyTaAuth, isSigner: false, isWritable: true },
+      { pubkey: counterPartyTa, isSigner: false, isWritable: true },
+      { pubkey: protocolProgram, isSigner: false, isWritable: false },
+    ],
+  }
+);
+```
+
+### createInitializeDirectWithdrawStrategyIx
+
+```typescript
+const ix = await client.createInitializeDirectWithdrawStrategyIx(
+  { instructionDiscriminator: null, additionalArgs: null, allowUserArgs: false },
+  {
+    payer: payerPubkey,
+    admin: adminPubkey,
+    vault: vaultPubkey,
+    strategy: strategyPubkey,
+    adaptorProgram: LENDING_ADAPTOR_PROGRAM_ID,
+  }
+);
+```
+
+### createDirectWithdrawStrategyIx
+
+```typescript
+const ix = await client.createDirectWithdrawStrategyIx(
+  { userArgs: null },
+  {
+    user: userPubkey,
+    vault: vaultPubkey,
+    strategy: strategyPubkey,
+    vaultAssetMint: assetMintPubkey,
+    assetTokenProgram: TOKEN_PROGRAM_ID,
+    adaptorProgram: LENDING_ADAPTOR_PROGRAM_ID,
+    remainingAccounts: [],
+  }
+);
+```
+
+### createCloseStrategyIx
+
+```typescript
+const ix = await client.createCloseStrategyIx({
+  payer: payerPubkey,
+  manager: managerPubkey,
+  vault: vaultPubkey,
+  strategy: strategyPubkey,
+});
+```
+
+---
+
+## Fee Management
+
+### createHarvestFeeIx
+
+```typescript
+const ix = await client.createHarvestFeeIx({
+  harvester: harvesterPubkey,
+  vaultManager: vaultManagerPubkey,
+  vaultAdmin: vaultAdminPubkey,
+  protocolAdmin: protocolAdminPubkey,
+  vault: vaultPubkey,
+});
+```
+
+### createCalibrateHighWaterMarkIx
+
+```typescript
+const ix = await client.createCalibrateHighWaterMarkIx({
+  vault: vaultPubkey,
+  admin: adminPubkey,
+});
+```
+
+### createCreateLpMetadataIx
+
+```typescript
+const ix = await client.createCreateLpMetadataIx(
+  { name: "My Vault LP", symbol: "MVLP", uri: "https://example.com/metadata.json" },
+  { payer: payerPubkey, admin: adminPubkey, vault: vaultPubkey }
+);
+```
+
+---
+
+## Query Methods
+
+### Account Fetching
+
+```typescript
+const vaultAccount = await client.fetchVaultAccount(vaultPubkey);
+const receipt = await client.fetchStrategyInitReceiptAccount(receiptPubkey);
+const adaptorReceipt = await client.fetchAdaptorAddReceiptAccount(receiptPubkey);
+const withdrawReceipt = await client.fetchRequestWithdrawVaultReceiptAccount(receiptPubkey);
+```
+
+### Bulk Fetching
+
+```typescript
+const allReceipts = await client.fetchAllStrategyInitReceiptAccounts();
+const vaultReceipts = await client.fetchAllStrategyInitReceiptAccountsOfVault(vaultPubkey);
+const adaptorReceipts = await client.fetchAllAdaptorAddReceiptAccountsOfVault(vaultPubkey);
+const withdrawalReceipts = await client.fetchAllRequestWithdrawVaultReceiptsOfVault(vaultPubkey);
+```
+
+### Helper Methods
+
+```typescript
+// Position and total values
+const { totalValue, strategies } = await client.getPositionAndTotalValuesForVault(vaultPubkey);
+
+// Fees
+const adminFees = await client.getAccumulatedAdminFeesForVault(vaultPubkey);
+const managerFees = await client.getAccumulatedManagerFeesForVault(vaultPubkey);
+
+// Share price
+const assetPerLp = await client.getCurrentAssetPerLpForVault(vaultPubkey);
+
+// High water mark
+const hwm = await client.getHighWaterMarkForVault(vaultPubkey);
+// Returns: { highestAssetPerLp: number, lastUpdatedTs: number }
+
+// Pending withdrawals
+const pending = await client.getPendingWithdrawalForUser(vaultPubkey, userPubkey);
+// Returns: { user, amountAssetToWithdrawEffective, amountAssetToWithdrawAtRequest,
+//   amountAssetToWithdrawAtPresent, amountLpEscrowed, withdrawableFromTs }
+
+const allPending = await client.getAllPendingWithdrawalsForVault(vaultPubkey);
+
+// LP supply breakdown
+const breakdown = await client.getVaultLpSupplyBreakdown(vaultPubkey);
+// Returns: { circulating: BN, unharvestedFees: BN, unrealisedFees: BN, total: BN }
+```
+
+---
+
+## Calculation Helpers
+
+### calculateAssetsForWithdraw
+
+```typescript
+const assetsToReceive = await client.calculateAssetsForWithdraw(
+  vaultPubkey, new BN(1_000_000_000)
+);
+```
+
+### calculateLpForWithdraw
+
+```typescript
+const lpToBurn = await client.calculateLpForWithdraw(
+  vaultPubkey, new BN(1_000_000_000)
+);
+```
+
+### calculateLpForDeposit
+
+```typescript
+const lpToReceive = await client.calculateLpForDeposit(
+  vaultPubkey, new BN(1_000_000_000)
+);
+```
+
+---
+
+## Deprecated Methods
+
+### createUpdateVaultIx (Deprecated)
+
+Use `createUpdateVaultConfigIx` instead for more granular configuration updates.
+
+```typescript
+// DEPRECATED - avoid using
+const ix = await client.createUpdateVaultIx(vaultConfig, { vault, admin });
+
+// USE INSTEAD
+const ix = await client.createUpdateVaultConfigIx(
+  VaultConfigField.MaxCap, data, { vault, admin }
+);
+```

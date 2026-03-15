@@ -13,6 +13,7 @@ import {
 } from "@drift-labs/sdk";
 import {
   VaultClient,
+  getDriftVaultProgram,
   encodeName,
   decodeName,
   getVaultAddressSync,
@@ -129,15 +130,11 @@ export class DriftVaultManager {
       { commitment: "confirmed" }
     );
 
-    // Load IDL and create program
-    // Use `as any` casts to work around duplicate type conflicts between
-    // the project's @coral-xyz/anchor and the vaults-sdk's nested version
-    const idl = require("@drift-labs/vaults-sdk/src/idl/drift_vaults.json");
-    this.program = new Program(
-      idl as any,
-      VAULT_PROGRAM_ID as any,
-      provider as any
-    );
+    // Let the vault SDK construct the Program with the Anchor version it expects.
+    this.program = getDriftVaultProgram(
+      this.connection as any,
+      this.wallet as any
+    ) as any;
 
     // Create VaultClient — cast driftClient and program to `any` to bridge
     // the type mismatch between different @drift-labs/sdk versions

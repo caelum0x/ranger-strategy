@@ -29,7 +29,8 @@ export const sendAndConfirmOptimisedTx = async (
   computeUnitLimit: number | null = null
 ): Promise<string> => {
   const connection = new Connection(heliusRpcUrl);
-  let optimalCUs: number;
+  const defaultCUs = 1_400_000;
+  let optimalCUs: number = defaultCUs;
 
   if (computeUnitLimit) {
     optimalCUs = computeUnitLimit;
@@ -47,13 +48,18 @@ export const sendAndConfirmOptimisedTx = async (
     );
     cuTx.sign([payerKp, ...signers]);
 
-    const sim = await connection.simulateTransaction(cuTx, {
-      replaceRecentBlockhash: true,
-      sigVerify: false,
-    });
-    const used = sim.value.unitsConsumed;
-    if (!used) throw new Error("Failed to simulate CU usage");
-    optimalCUs = Math.ceil(used * 1.1);
+    try {
+      const sim = await connection.simulateTransaction(cuTx, {
+        replaceRecentBlockhash: true,
+        sigVerify: false,
+      });
+      const used = sim.value.unitsConsumed;
+      if (used) {
+        optimalCUs = Math.ceil(used * 1.1);
+      }
+    } catch (error) {
+      console.warn("CU simulation failed; falling back to default CU limit", error);
+    }
   }
 
   instructions.push(
@@ -69,30 +75,34 @@ export const sendAndConfirmOptimisedTx = async (
   );
   feTx.sign([payerKp, ...signers]);
 
-  const resp = await fetch(heliusRpcUrl, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      jsonrpc: "2.0",
-      id: "1",
-      method: "getPriorityFeeEstimate",
-      params: [
-        {
-          transaction: bs58.encode(feTx.serialize()),
-          options: { priorityLevel: "High" },
-        },
-      ],
-    }),
-  });
-  const data = (await resp.json()) as any;
-  const feeEstimate = data.result;
-  if (!feeEstimate) throw new Error("Failed to get priority fee estimate");
-
-  instructions.push(
-    ComputeBudgetProgram.setComputeUnitPrice({
-      microLamports: feeEstimate.priorityFeeEstimate,
-    })
-  );
+  try {
+    const resp = await fetch(heliusRpcUrl, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        jsonrpc: "2.0",
+        id: "1",
+        method: "getPriorityFeeEstimate",
+        params: [
+          {
+            transaction: bs58.encode(feTx.serialize()),
+            options: { priorityLevel: "High" },
+          },
+        ],
+      }),
+    });
+    const data = (await resp.json()) as any;
+    const feeEstimate = data?.result?.priorityFeeEstimate;
+    if (feeEstimate) {
+      instructions.push(
+        ComputeBudgetProgram.setComputeUnitPrice({
+          microLamports: feeEstimate,
+        })
+      );
+    }
+  } catch (error) {
+    console.warn("Priority fee estimate failed; continuing without it", error);
+  }
 
   const tx = new VersionedTransaction(
     new TransactionMessage({

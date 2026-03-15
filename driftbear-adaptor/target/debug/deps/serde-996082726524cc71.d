@@ -1,0 +1,12 @@
+/Users/arhansubasi/ranger/driftbear-adaptor/target/debug/deps/serde-996082726524cc71.d: /Users/arhansubasi/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.228/src/lib.rs /Users/arhansubasi/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.228/src/integer128.rs /Users/arhansubasi/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.228/src/private/mod.rs /Users/arhansubasi/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.228/src/private/de.rs /Users/arhansubasi/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.228/src/private/ser.rs /Users/arhansubasi/ranger/driftbear-adaptor/target/debug/build/serde-ffe1212ea6083ba8/out/private.rs
+
+/Users/arhansubasi/ranger/driftbear-adaptor/target/debug/deps/libserde-996082726524cc71.rmeta: /Users/arhansubasi/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.228/src/lib.rs /Users/arhansubasi/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.228/src/integer128.rs /Users/arhansubasi/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.228/src/private/mod.rs /Users/arhansubasi/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.228/src/private/de.rs /Users/arhansubasi/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.228/src/private/ser.rs /Users/arhansubasi/ranger/driftbear-adaptor/target/debug/build/serde-ffe1212ea6083ba8/out/private.rs
+
+/Users/arhansubasi/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.228/src/lib.rs:
+/Users/arhansubasi/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.228/src/integer128.rs:
+/Users/arhansubasi/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.228/src/private/mod.rs:
+/Users/arhansubasi/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.228/src/private/de.rs:
+/Users/arhansubasi/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.228/src/private/ser.rs:
+/Users/arhansubasi/ranger/driftbear-adaptor/target/debug/build/serde-ffe1212ea6083ba8/out/private.rs:
+
+# env-dep:OUT_DIR=/Users/arhansubasi/ranger/driftbear-adaptor/target/debug/build/serde-ffe1212ea6083ba8/out

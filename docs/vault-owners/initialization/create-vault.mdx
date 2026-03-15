@@ -1,0 +1,181 @@
+---
+title: Vault Creation
+description: Create and initialize a new vault using the Ranger Earn SDK
+---
+
+<Info>
+**Prefer the UI?** You can create a vault without code at [vaults.ranger.finance/create](https://vaults.ranger.finance/create). See [Quick Start (UI)](/vault-owners/initialization/via-ui).
+</Info>
+
+## Setup
+
+Import the required dependencies:
+
+```typescript
+import { BN } from "@coral-xyz/anchor";
+import { VaultConfig, VaultParams, VoltrClient } from "@voltr/vault-sdk";
+import {
+  Connection,
+  Keypair,
+  PublicKey,
+  sendAndConfirmTransaction,
+} from "@solana/web3.js";
+import fs from "fs";
+```
+
+## Step-by-Step Guide
+
+### 1. Prepare Vault Configuration
+
+```typescript
+const vaultConfig: VaultConfig = {
+  maxCap: new BN("18446744073709551615"),         // Uncapped (u64 max) — see warning below
+  startAtTs: new BN(0),                           // Activation timestamp (0 = immediate)
+  lockedProfitDegradationDuration: new BN(86400), // 24 hours in seconds
+  managerPerformanceFee: 1000,                    // 10% in basis points
+  adminPerformanceFee: 500,                       // 5% in basis points
+  managerManagementFee: 50,                       // 0.5% in basis points
+  adminManagementFee: 25,                         // 0.25% in basis points
+  redemptionFee: 10,                              // 0.1% in basis points
+  issuanceFee: 10,                                // 0.1% in basis points
+  withdrawalWaitingPeriod: new BN(0),             // Waiting period in seconds (0 = immediate)
+};
+
+const vaultParams: VaultParams = {
+  config: vaultConfig,
+  name: "My Ranger Earn Vault",                         // Max 32 characters
+  description: "Short vault strategy description", // Max 64 characters
+};
+```
+
+<Warning>
+**Critical: maxCap of 0 means ZERO capacity, not unlimited.** Setting `maxCap: new BN(0)` will prevent all deposits. For an uncapped vault, use `new BN("18446744073709551615")` (u64 max value).
+</Warning>
+
+<Warning>
+**Description limit**: The description field is limited to **64 characters**. Exceeding this limit will cause the vault creation transaction to fail.
+</Warning>
+
+### 2. Define Required Variables
+
+```typescript
+// File paths for keypairs
+const adminFilePath = "/path/to/admin.json";
+const managerFilePath = "/path/to/manager.json";
+
+// Network and asset configuration
+const assetMintAddress = "..."; // Your asset token mint
+const solanaRpcUrl = "your-solana-rpc-url";
+
+// Load keypairs
+const adminKp = Keypair.fromSecretKey(
+  Uint8Array.from(JSON.parse(fs.readFileSync(adminFilePath, "utf-8")))
+);
+const managerKp = Keypair.fromSecretKey(
+  Uint8Array.from(JSON.parse(fs.readFileSync(managerFilePath, "utf-8")))
+);
+
+// Generate vault keypair
+const vaultKp = Keypair.generate();
+
+// Initialize client
+const connection = new Connection(solanaRpcUrl);
+const client = new VoltrClient(connection);
+```
+
+### 3. Create Vault Initialization Instruction
+
+```typescript
+const createVaultIx = await client.createInitializeVaultIx(
+  vaultParams,
+  {
+    vault: vaultKp,
+    vaultAssetMint: new PublicKey(assetMintAddress),
+    admin: adminKp.publicKey,
+    manager: managerKp.publicKey,
+    payer: adminKp.publicKey,
+  }
+);
+```
+
+### 4. Send and Confirm the Transaction
+
+```typescript
+const txSig = await sendAndConfirmTransaction(
+  [createVaultIx],
+  connection,
+  [adminKp, vaultKp]
+);
+
+console.log("Vault created:", vaultKp.publicKey.toBase58());
+console.log("Transaction:", txSig);
+```
+
+**Save your vault public key** — you'll need it for all subsequent operations.
+
+## Account Structure
+
+The vault account contains the following data:
+
+```typescript
+interface Vault {
+  name: string;           // Max 32 bytes
+  description: string;    // Max 64 bytes
+  asset: {
+    mint: PublicKey;      // Token mint address
+    idleAuth: PublicKey;  // Idle token authority
+    totalValue: BN;       // Total assets in vault
+  };
+  vaultConfiguration: {
+    maxCap: BN;
+    startAtTs: BN;
+    lockedProfitDegradationDuration: BN;
+    withdrawalWaitingPeriod: BN;
+  };
+  feeConfiguration: {
+    managerPerformanceFee: number;   // In basis points
+    adminPerformanceFee: number;
+    managerManagementFee: number;
+    adminManagementFee: number;
+    redemptionFee: number;
+    issuanceFee: number;
+  };
+  feeState: {
+    accumulatedLpAdminFees: BN;
+    accumulatedLpManagerFees: BN;
+    accumulatedLpProtocolFees: BN;
+  };
+  highWaterMark: {
+    highestAssetPerLpDecimalBits: BN;
+    lastUpdatedTs: BN;
+  };
+  admin: PublicKey;
+  manager: PublicKey;
+}
+```
+
+## What's Next?
+
+<Warning>
+**Your vault won't generate yield yet.** After creation, deposited funds sit idle in the vault's token account. You must:
+
+1. [Set up LP token metadata](/vault-owners/initialization/lp-metadata) so wallets display your token correctly
+2. [Initialize strategies](/vault-owners/strategies/setup-guide) to connect to DeFi protocols
+3. [Allocate funds](/vault-owners/allocation/overview) to move idle funds into strategies
+</Warning>
+
+## Important Considerations
+
+<AccordionGroup>
+  <Accordion title="Security Best Practices">
+    1. **Key Management**: Keep admin and manager keys separate. Use different keypairs for different environments. Never commit private keys to version control.
+    2. **Fee Configuration**: Management fees typically 0.25% - 2% (25-200 basis points). Performance fees typically 5% - 20% (500-2000 basis points). Consider the impact on user returns.
+    3. **Asset Handling**: Validate token decimals match between asset and LP tokens. Set appropriate maxCap to manage risk. Account for minimum deposit requirements.
+  </Accordion>
+  <Accordion title="Error Handling">
+    1. **Initialization Failures**: Verify account rent exemption. Check authority permissions. Ensure description is within 64 characters.
+    2. **Transaction Failures**: Monitor for insufficient SOL. Handle RPC timeouts. Implement proper retry logic.
+  </Accordion>
+</AccordionGroup>
+
+For additional support, refer to the [Ranger Earn SDK documentation](https://voltrxyz.github.io/vault-sdk/) or [example scripts](https://github.com/voltrxyz/base-scripts).

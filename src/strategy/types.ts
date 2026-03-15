@@ -1,5 +1,23 @@
 import Decimal from "decimal.js";
 
+export interface IndexerSnapshotSummary {
+  vault: string;
+  aum: Decimal;
+  sharePrice?: Decimal;
+  highWaterMark?: Decimal;
+  strategyCount: number;
+  timestamp: number;
+}
+
+export interface IndexerDecisionSummary {
+  action: "rebalance" | "hold" | "reduce-risk";
+  confidence: Decimal;
+  rationale: string;
+  targetAllocation?: Decimal;
+  targetLeverage?: Decimal;
+  createdAt: number;
+}
+
 export interface Position {
   asset: string;
   side: "long" | "short";
@@ -40,6 +58,9 @@ export interface StrategyState {
   regime: MarketRegime;
   cycleCount: number;
   directionFlips: number;
+  strategyProfile?: "generic" | "driftbear-neutral-farmer";
+  indexerSnapshot?: IndexerSnapshotSummary;
+  indexerDecision?: IndexerDecisionSummary;
 }
 
 export type MarketRegime = "bull" | "bear" | "neutral" | "volatile";

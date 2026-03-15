@@ -1,0 +1,49 @@
+---
+title: API Overview
+description: Ranger Earn REST API for querying vault data and building transactions
+---
+
+Welcome to the Ranger Earn REST API. This API provides developers with the tools to query on-chain and off-chain vault data, calculate metrics, and construct transactions for interacting with Ranger Earn vaults.
+
+## Base URL
+
+All API endpoints are relative to: `https://api.voltr.xyz`
+
+## Authentication
+
+The Ranger Earn API is public and does not require an API key for access.
+
+## Key Concept: Transaction Building
+
+A critical feature of the Ranger Earn API is its approach to transaction creation. Instead of executing transactions on the server, the API **builds and returns an unsigned, serialized versioned transaction** as a base58 encoded string.
+
+This design ensures that user private keys are never required on the backend, maintaining a non-custodial and secure user experience.
+
+### Typical Workflow
+
+<Steps>
+  <Step title="Request">
+    Your application sends a `POST` request to a transaction creation endpoint (e.g., `/vault/{pubkey}/deposit`).
+  </Step>
+  <Step title="Receive">
+    The API returns a JSON response containing the serialized transaction string.
+  </Step>
+  <Step title="Sign & Send">
+    Your client-side application deserializes this string, signs it with the user's wallet, and sends it to the Solana network.
+  </Step>
+</Steps>
+
+```json
+{
+  "success": true,
+  "transaction": "AQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABAAI..."
+}
+```
+
+## Interactive Documentation
+
+For live testing and a detailed, interactive view of all endpoints, visit the Swagger documentation:
+
+<Card title="Swagger API Docs" icon="arrow-up-right-from-square" href="https://api.voltr.xyz/docs">
+  Interactive API documentation with live testing
+</Card>

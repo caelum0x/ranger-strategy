@@ -1,0 +1,54 @@
+---
+title: Via User Interface
+description: Create and configure a vault without writing any code
+---
+
+The Ranger vault creation UI provides the fastest way to create and configure a vault without writing any code.
+
+## Step 1: Create Your Vault
+
+Navigate to [vaults.ranger.finance/create](https://vaults.ranger.finance/create) and connect your wallet.
+
+Click "Initialize Vault" and approve the transaction in your wallet. The vault will be created on-chain and you'll receive the vault public key.
+
+<Warning>
+**Save your vault public key** — you'll need it for all subsequent operations.
+</Warning>
+
+## Step 2: Add Adaptors and Manage Your Vault
+
+After creation, manage your vault at:
+
+```
+https://vaults.ranger.finance/manage/<VAULT_PUBKEY>
+```
+
+Replace `<VAULT_PUBKEY>` with your vault's public key.
+
+From the manage page you can:
+
+- View, add, and remove Adaptors
+- Update vault configuration (as admin)
+
+## Step 3: Next Steps (Requires SDK/Scripts)
+
+The UI handles vault creation and configuration, but the following operations require the SDK or protocol-specific scripts:
+
+<Steps>
+  <Step title="Initialize strategies">
+    Connect your vault to DeFi protocols → See [Strategy Setup Guide](/vault-owners/strategies/setup-guide)
+  </Step>
+  <Step title="Allocate funds">
+    Deploy idle funds into strategies → See [Fund Allocation Guide](/vault-owners/allocation/overview)
+  </Step>
+  <Step title="Set up automation">
+    Bots for rebalancing and rewards claiming → See [Running Bots & Scripts](/vault-owners/operations/bots-and-scripts)
+  </Step>
+  <Step title="Get listed on Ranger">
+    Make your vault visible to users → See [Indexing & Listing](/vault-owners/go-to-market/indexing-and-listing)
+  </Step>
+</Steps>
+
+<Info>
+Creating a vault via the UI is just the first step. Your vault won't generate yield until you initialize strategies and allocate funds to them using the SDK.
+</Info>

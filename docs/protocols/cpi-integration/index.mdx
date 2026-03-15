@@ -1,0 +1,76 @@
+---
+title: CPI Integration Guide
+description: Cross-Program Invocation integration with Ranger Earn vaults
+---
+
+This guide covers Cross-Program Invocation (CPI) integration with the Ranger Earn Vault program. If your protocol needs to deposit into or withdraw from Ranger Earn vaults on-chain, use these CPI instructions.
+
+<Info>
+**When to use CPI vs. the TypeScript SDK**: CPI is for on-chain programs that need to interact with Ranger Earn vaults programmatically (e.g., a router or aggregator). If you are building off-chain automation or a frontend, use the [TypeScript SDK](https://voltrxyz.github.io/vault-sdk/) instead.
+</Info>
+
+## How It Works
+
+Users deposit assets into a vault and receive LP tokens representing their share. Withdrawals follow a **two-step process** to ensure vault stability and manage liquidity:
+
+1. **Request withdrawal** — locks LP tokens into an escrow receipt
+2. **Claim withdrawal** — after the vault's waiting period, burns the locked LP tokens and returns the underlying assets
+
+Alternatively, vaults with a zero waiting period support **instant withdrawal**, which combines both steps into a single transaction. Users can also **cancel** a pending withdrawal request to reclaim their LP tokens.
+
+```
+Deposit:          User Assets ──► Vault ──► LP Tokens to User
+
+Withdraw:         LP Tokens ──► Escrow Receipt ──(waiting period)──► Assets to User
+
+Cancel Withdraw:  Escrow Receipt ──► LP Tokens back to User
+
+Instant Withdraw: LP Tokens ──► Assets to User (single transaction)
+```
+
+## Deployed Address
+
+| Network | Program Address |
+|---|---|
+| Mainnet | `vVoLTRjQmtFpiYoegx285Ze4gsLJ8ZxgFKVcuvmG1a8` |
+
+## CPI Instructions
+
+| Instruction | Purpose | Reference |
+|---|---|---|
+| `deposit_vault` | Deposit assets and receive LP tokens | [Deposit](/protocols/cpi-integration/deposit) |
+| `request_withdraw_vault` | Lock LP tokens into an escrow receipt | [Request Withdraw](/protocols/cpi-integration/request-withdraw) |
+| `withdraw_vault` | Claim assets after the waiting period | [Withdraw](/protocols/cpi-integration/withdraw) |
+| `cancel_request_withdraw_vault` | Cancel a pending withdrawal request | [Cancel Withdraw](/protocols/cpi-integration/cancel-withdraw) |
+| `instant_withdraw_vault` | Withdraw assets instantly (zero waiting period vaults) | [Instant Withdraw](/protocols/cpi-integration/instant-withdraw) |
+
+## PDA Derivation
+
+All PDAs are derived from the Ranger Earn Vault program (`vVoLTRjQmtFpiYoegx285Ze4gsLJ8ZxgFKVcuvmG1a8`):
+
+| Account | Seeds |
+|---|---|
+| `protocol` | `["protocol"]` |
+| `vault_asset_idle_auth` | `["vault_asset_idle_auth", vault_key]` |
+| `vault_lp_mint_auth` | `["vault_lp_mint_auth", vault_key]` |
+| `request_withdraw_vault_receipt` | `["request_withdraw_vault_receipt", vault_key, user_key]` |
+
+<Warning>
+Your program does **not** need to provide PDA signer seeds for the vault's internal PDAs. The Ranger Earn Vault program handles its own `invoke_signed` calls internally. You only need to pass the correct PDA addresses in the account list.
+</Warning>
+
+## Error Handling
+
+Your program should handle the following errors from the Ranger Earn Vault program:
+
+| Error | Cause |
+|---|---|
+| `InvalidAmount` | Input amount is zero or invalid |
+| `MaxCapExceeded` | Deposit would exceed the vault's maximum capacity |
+| `WithdrawalNotYetAvailable` | `withdraw_vault` called before the waiting period has passed |
+| `InstantWithdrawNotAllowed` | `instant_withdraw_vault` called on a vault with a non-zero waiting period |
+| `OperationNotAllowed` | The protocol has globally disabled the attempted operation |
+
+## Reference Repository
+
+Full reference implementations are available at [github.com/voltrxyz/vault-cpi](https://github.com/voltrxyz/vault-cpi).

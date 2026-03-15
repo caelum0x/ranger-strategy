@@ -1,0 +1,183 @@
+---
+title: Security Considerations
+description: Security best practices for custom adaptor development
+---
+
+This guide outlines critical security considerations and best practices when developing custom adaptors for the Ranger Earn Protocol.
+
+## Account Security
+
+### 1. Strategy Mapping Validation
+
+Always validate that the `strategy` account passed by the vault matches your protocol's expected state account:
+
+```rust
+#[account(constraint = strategy.key() == market.key())]
+pub strategy: AccountInfo<'info>,
+```
+
+### 2. PDA Derivation Security
+
+Verify protocol accounts using seeds to prevent spoofed accounts:
+
+```rust
+#[account(
+    mut,
+    seeds = [MARKET_SEED, token_mint.key().as_ref()],
+    bump,
+    seeds::program = protocol_program.key()
+)]
+pub market: Account<'info, Market>,
+
+#[account(
+    mut,
+    seeds = [CTOKEN_MINT_SEED, token_mint.key().as_ref()],
+    bump,
+    seeds::program = protocol_program.key()
+)]
+pub ctoken_mint: AccountInfo<'info>,
+```
+
+Key considerations: Use consistent seed ordering, verify seeds against the correct program, validate bump values.
+
+### 3. Token Account Safety
+
+Validate token account ownership and associations:
+
+```rust
+#[account(
+    mut,
+    associated_token::mint = ctoken_mint,
+    associated_token::authority = user,
+    associated_token::token_program = ctoken_token_program,
+)]
+pub user_ctoken_ata: Box<InterfaceAccount<'info, TokenAccount>>,
+```
+
+## Position Value Accuracy
+
+### Accurate Return Values
+
+The vault relies on the `u64` returned by deposit and withdraw to track strategy positions and compute P&L. Inaccurate values can lead to incorrect fee calculations or accounting errors.
+
+```rust
+// Always reload accounts after CPI calls before computing position value
+ctx.accounts.user_ctoken_ata.reload()?;
+ctx.accounts.market.reload()?;
+
+let position_value = ctx
+    .accounts
+    .market
+    .ctoken_to_liquidity(ctx.accounts.user_ctoken_ata.amount);
+Ok(position_value)
+```
+
+### Handling Edge Cases
+
+```rust
+// Handle first deposit (zero supply)
+fn liquidity_to_ctoken(&self, liquidity_amount: u64) -> u64 {
+    if self.liquidity_deposited == 0 {
+        return liquidity_amount;
+    }
+    // Normal exchange rate calculation
+    (liquidity_amount as u128)
+        .checked_mul(self.ctokens_minted as u128)
+        .unwrap()
+        .checked_div(self.liquidity_deposited as u128)
+        .unwrap() as u64
+}
+```
+
+## CPI Safety
+
+### Delegate Validation to the Target Program
+
+When your adaptor is a CPI wrapper, the target protocol program validates its own accounts. Use `/// CHECK: check in CPI call` to document this delegation:
+
+```rust
+/// CHECK: check in CPI call
+#[account(mut)]
+pub market_liquidity_ata: AccountInfo<'info>,
+```
+
+### CPI Context Construction
+
+Build CPI contexts carefully, mapping adaptor accounts to the target program's expected structure:
+
+```rust
+ctoken_market_program::cpi::deposit_market(
+    CpiContext::new(
+        ctx.accounts.ctoken_market_program.to_account_info(),
+        ctoken_market_program::cpi::accounts::DepositOrWithdraw {
+            user: ctx.accounts.user.to_account_info(),
+            market: ctx.accounts.market.to_account_info(),
+            liquidity_mint: ctx.accounts.token_mint.to_account_info(),
+            // ... map all required accounts
+        },
+    ),
+    amount,
+)?;
+```
+
+## Arithmetic Safety
+
+### Use Checked Math
+
+All arithmetic must use checked operations to prevent overflows:
+
+```rust
+let ctoken_amount = amount
+    .checked_mul(ctx.accounts.user_ctoken_ata.amount)
+    .ok_or(AdaptorError::MathOverflow)?
+    .checked_div(authority_holdings)
+    .ok_or(AdaptorError::MathOverflow)?;
+```
+
+### Use u128 for Intermediate Calculations
+
+Prevent overflow in multiplication before division:
+
+```rust
+let result = (value_a as u128)
+    .checked_mul(value_b as u128)
+    .unwrap()
+    .checked_div(value_c as u128)
+    .unwrap() as u64;
+```
+
+## Testing Requirements
+
+1. **Core Flow Tests**: Deposit, withdraw, and initialize with valid inputs
+2. **Edge Cases**: First deposit (zero supply), full withdrawal, zero-amount operations
+3. **Position Value Tests**: Verify returned `u64` values match expected position values after operations
+4. **Integration Tests**: End-to-end tests with the vault program calling your adaptor
+5. **Error Cases**: Invalid accounts, overflow scenarios, unauthorized access
+
+## Security Checklist
+
+<AccordionGroup>
+  <Accordion title="Account Security">
+    - [ ] Strategy account mapping validated
+    - [ ] PDA derivation verified with correct seeds and program
+    - [ ] Token accounts validated (mint, authority, token program)
+    - [ ] Signer constraints enforced
+  </Accordion>
+  <Accordion title="Position Value">
+    - [ ] Accounts reloaded after CPI calls before computing position value
+    - [ ] First-deposit edge case handled (zero supply)
+    - [ ] Exchange rate calculation uses u128 intermediates
+    - [ ] Returned u64 accurately represents position in underlying token terms
+  </Accordion>
+  <Accordion title="CPI Safety">
+    - [ ] CPI accounts correctly mapped to target program
+    - [ ] CHECK comments document which program validates each unchecked account
+    - [ ] All CPI return values checked
+  </Accordion>
+  <Accordion title="Testing">
+    - [ ] Core flow tests passed
+    - [ ] Edge cases covered
+    - [ ] Integration tests with vault program
+    - [ ] Error scenarios tested
+  </Accordion>
+</AccordionGroup>

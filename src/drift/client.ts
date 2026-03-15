@@ -33,6 +33,10 @@ const MARKET_INDEX: Record<string, { perp: number; spot: number }> = {
 export interface DriftManagerConfig {
   /** Path to keypair JSON file, or raw Uint8Array */
   keypair: string | Uint8Array;
+  /** Optional explicit subaccounts to subscribe for liquidation / routing. */
+  subAccountIds?: number[];
+  /** Active subaccount to default to when multiple are configured. */
+  activeSubAccountId?: number;
   /** Optional: operate as delegate for a vault's Drift user account */
   delegateFor?: {
     authority: PublicKey;
@@ -45,12 +49,16 @@ export class DriftManager {
   private client!: DriftClient;
   private connection: SolConnection;
   private wallet: Wallet;
+  private subAccountIds?: number[];
+  private activeSubAccountId?: number;
   private delegateConfig?: DriftManagerConfig["delegateFor"];
   private _hasUser = false;
 
   constructor(cfg: DriftManagerConfig) {
     const { Connection, Keypair } = require("@solana/web3.js");
     this.connection = new Connection(config.solanaRpcUrl, "confirmed");
+    this.subAccountIds = cfg.subAccountIds;
+    this.activeSubAccountId = cfg.activeSubAccountId ?? cfg.subAccountIds?.[0];
     this.delegateConfig = cfg.delegateFor;
 
     // Load wallet from keypair path or raw bytes
@@ -90,6 +98,14 @@ export class DriftManager {
       logger.info("Drift client configured for delegated account", {
         authority: this.delegateConfig.authority.toBase58(),
         subAccountIds: this.delegateConfig.subAccountIds,
+      });
+    } else if (this.subAccountIds && this.subAccountIds.length > 0) {
+      clientConfig.subAccountIds = this.subAccountIds;
+      clientConfig.activeSubAccountId =
+        this.activeSubAccountId ?? this.subAccountIds[0];
+      logger.info("Drift client configured with explicit subaccounts", {
+        subAccountIds: this.subAccountIds,
+        activeSubAccountId: clientConfig.activeSubAccountId,
       });
     }
 

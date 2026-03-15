@@ -20,6 +20,12 @@ import { OpenRouterClient } from "../ai/openrouter";
 import { TradeLogger } from "../utils/trade-logger";
 import { VaultPerformanceTracker } from "../vault/performance";
 import { withRetry } from "../utils/retry";
+import { IndexerStore } from "../indexer/db";
+import { RangerSorClient } from "../ranger/sor-client";
+import {
+  IndexerDecisionSummary,
+  IndexerSnapshotSummary,
+} from "../strategy/types";
 
 class StrategyAgent {
   private drift!: DriftManager;
@@ -39,6 +45,8 @@ class StrategyAgent {
   private tradeLogger: TradeLogger = new TradeLogger();
   private vaultPerf: VaultPerformanceTracker = new VaultPerformanceTracker();
   private telegram: TelegramAlerter = new TelegramAlerter();
+  private indexerStore: IndexerStore = new IndexerStore();
+  private sorClient: RangerSorClient = new RangerSorClient();
   private running = false;
 
   async start(): Promise<void> {
@@ -271,7 +279,7 @@ class StrategyAgent {
       name: "Ranger Delta-Neutral Vault Agent",
       version: "0.1.0",
       uptime: Math.round((Date.now() - this.startTime) / 1000),
-      endpoints: ["/status", "/positions", "/yield", "/predictions", "/reasoning", "/trades", "/vault", "/health"],
+      endpoints: ["/status", "/positions", "/yield", "/predictions", "/reasoning", "/trades", "/vault", "/health", "/indexer", "/sor"],
     }));
 
     this.monitor.route("/status", () => this.getStatus());
@@ -391,6 +399,55 @@ class StrategyAgent {
         cycle: state.cycleCount,
       };
     });
+
+    this.monitor.route("/indexer", () => {
+      if (!this.engine) return { snapshot: null, decision: null };
+      const state = this.engine.getState();
+      return {
+        strategyProfile: state.strategyProfile || config.strategyProfile,
+        snapshot: state.indexerSnapshot
+          ? {
+              vault: state.indexerSnapshot.vault,
+              aum: state.indexerSnapshot.aum.toFixed(0),
+              sharePrice: state.indexerSnapshot.sharePrice?.toFixed(6) || null,
+              strategyCount: state.indexerSnapshot.strategyCount,
+              timestamp: state.indexerSnapshot.timestamp,
+            }
+          : null,
+        decision: state.indexerDecision
+          ? {
+              action: state.indexerDecision.action,
+              confidence: state.indexerDecision.confidence.toFixed(2),
+              rationale: state.indexerDecision.rationale,
+              targetAllocation:
+                state.indexerDecision.targetAllocation?.toFixed(2) || null,
+            }
+          : null,
+      };
+    });
+
+    this.monitor.route("/sor", async () => {
+      if (!this.sorClient.isConfigured()) {
+        return { configured: false, positions: [] };
+      }
+
+      try {
+        const positions = await this.sorClient.getPositions(
+          this.drift.getWallet().publicKey.toBase58()
+        );
+        return {
+          configured: true,
+          count: positions.length,
+          positions: positions.slice(0, 10),
+        };
+      } catch (error: any) {
+        return {
+          configured: true,
+          error: error.message || "sor_request_failed",
+          positions: [],
+        };
+      }
+    });
   }
 
   private startTime = Date.now();
@@ -452,6 +509,7 @@ class StrategyAgent {
     if (!this.running) return;
 
     try {
+      this.engine.setIndexerContext(this.readIndexerContext());
       await this.engine.runCycle();
 
       // Log state for monitoring
@@ -472,7 +530,17 @@ class StrategyAgent {
         directionFlips: state.directionFlips.toString(),
         freeCollateral: this.drift.getFreeCollateral().toFixed(2),
         apyEstimate: `${state.apyEstimate.toFixed(2)}%`,
+        strategyProfile: state.strategyProfile || config.strategyProfile,
       };
+
+      if (state.indexerDecision) {
+        summary.indexerAction = state.indexerDecision.action;
+        summary.indexerConfidence = state.indexerDecision.confidence.toFixed(2);
+      }
+      if (state.indexerSnapshot) {
+        summary.indexerAum = state.indexerSnapshot.aum.toFixed(0);
+        summary.indexerStrategyCount = state.indexerSnapshot.strategyCount.toString();
+      }
 
       // ── Ranger Earn liquidity management ──────────────────────────────────
       // Check pending withdrawal requests and ensure idle USDC is sufficient.
@@ -693,6 +761,7 @@ class StrategyAgent {
       mode: config.strategyMode,
       cycle: state.cycleCount,
       regime: state.regime,
+      strategyProfile: state.strategyProfile || config.strategyProfile,
       totalCapital: state.totalCapital.toFixed(2),
       deployedCapital: state.deployedCapital.toFixed(2),
       idleCapital: state.idleCapital.toFixed(2),
@@ -713,7 +782,57 @@ class StrategyAgent {
         notional: p.notionalValue.toFixed(2),
         pnl: p.unrealizedPnl.toFixed(4),
       })),
+      indexerDecision: state.indexerDecision
+        ? {
+            action: state.indexerDecision.action,
+            confidence: state.indexerDecision.confidence.toFixed(2),
+            rationale: state.indexerDecision.rationale,
+            targetAllocation:
+              state.indexerDecision.targetAllocation?.toFixed(2) || null,
+          }
+        : null,
       lastRebalance: new Date(state.lastRebalance).toISOString(),
+    };
+  }
+
+  private readIndexerContext(): {
+    snapshot?: IndexerSnapshotSummary;
+    decision?: IndexerDecisionSummary;
+  } {
+    const snapshot = this.indexerStore.getLatestSnapshot();
+    const decision = this.indexerStore.getLatestDecision();
+
+    return {
+      snapshot: snapshot
+        ? {
+            vault: snapshot.vault,
+            aum: new Decimal(snapshot.aum),
+            sharePrice: snapshot.sharePrice
+              ? new Decimal(snapshot.sharePrice)
+              : undefined,
+            highWaterMark: snapshot.highWaterMark
+              ? new Decimal(snapshot.highWaterMark)
+              : undefined,
+            strategyCount: snapshot.strategyPositions.length,
+            timestamp: snapshot.timestamp,
+          }
+        : undefined,
+      decision: decision
+        ? {
+            action: decision.action,
+            confidence: new Decimal(decision.confidence),
+            rationale: decision.rationale,
+            targetAllocation:
+              decision.targetAllocation !== undefined
+                ? new Decimal(decision.targetAllocation)
+                : undefined,
+            targetLeverage:
+              decision.targetLeverage !== undefined
+                ? new Decimal(decision.targetLeverage)
+                : undefined,
+            createdAt: decision.createdAt,
+          }
+        : undefined,
     };
   }
 }

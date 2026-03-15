@@ -1,0 +1,28 @@
+---
+title: Yield Generation
+description: "rgUSD generates yield through dynamic lending optimization"
+---
+
+## Yield Aggregator
+
+Proprietary smart routing algorithm dynamically allocates capital to the highest-yielding USDC lending pools on Solana. It continuously monitors yield across major platforms on Solana and simulates price impact every 30 seconds, rebalancing deposits when simulated returns exceed certain thresholds. If conditions don't warrant immediate rebalancing, the system naturally rebalances every 10 minutes.
+
+This dynamic capital allocation allows rgUSD to capture the highest lending rates on Solana at any point of time as individual pools naturally go through cycles of high and low lending rates depending on utilisation and TVL flows. By routing between platforms, rgUSD captures multiple yield peaks while avoiding the dips, maintaining higher average returns over time.
+
+Currently, rgUSD utilises the following lending protocols:
+
+- Jupiter Lend
+- Drift Protocol
+- Kamino Finance
+
+These platforms were integrated for their size, liquidity depth and operational resilience, helping to minimise counterparty and systemic risks.
+
+## Performance Summary
+
+<Note>Performance data as of 23 Nov 2025</Note>
+
+| Metric | Ranger | Drift | Kamino | Jupiter Lend | Lulo Classic |
+|---|:---:|:---:|:---:|:---:|:---:|
+| **7-Day APY** | **8.56%** | 3.51% | 4.20% | 4.82% | 5.52% |
+| **30-Day APY** | **8.89%** | 6.06% | 3.83% | 6.61% | 6.67% |
+| **Yield Strategy** | Dynamic lending optimization | Lending only | Lending only | Lending only | Lending only |

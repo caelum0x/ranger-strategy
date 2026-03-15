@@ -8,6 +8,8 @@ import { RiskManager } from "../risk/manager";
 import { config } from "../config";
 import {
   FundingRate,
+  IndexerDecisionSummary,
+  IndexerSnapshotSummary,
   MarketRegime,
   Position,
   StrategyState,
@@ -75,6 +77,7 @@ export class StrategyEngine {
       regime: "neutral",
       cycleCount: 0,
       directionFlips: 0,
+      strategyProfile: config.strategyProfile,
     };
   }
 
@@ -104,6 +107,14 @@ export class StrategyEngine {
    */
   setAdvisor(advisor: StrategyAdvisor): void {
     this.advisor = advisor;
+  }
+
+  setIndexerContext(context: {
+    snapshot?: IndexerSnapshotSummary;
+    decision?: IndexerDecisionSummary;
+  }): void {
+    this.state.indexerSnapshot = context.snapshot;
+    this.state.indexerDecision = context.decision;
   }
 
   /**
@@ -505,6 +516,8 @@ export class StrategyEngine {
   ): TradeSignal[] {
     const signals: TradeSignal[] = [];
     const isDriftOnly = config.strategyMode === "drift-only";
+    const isDriftBear = this.isDriftBearMode();
+    const indexerDecision = this.state.indexerDecision;
 
     // Use on-chain funding analysis if available
     const onChainAnalyses = this.fundingAnalyzer
@@ -589,8 +602,15 @@ export class StrategyEngine {
         return bScore.minus(aScore).toNumber();
       });
 
+    const candidateAssets =
+      isDriftBear && config.driftBearTopAssetOnly
+        ? rankedAssets.slice(0, 1)
+        : rankedAssets;
+
     logger.info("Asset ranking (bi-directional funding)", {
       mode: config.strategyMode,
+      profile: this.state.strategyProfile,
+      indexerAction: indexerDecision?.action,
       assets: rankedAssets.map((a) => ({
         asset: a.asset,
         rate: a.primaryRate.toFixed(4),
@@ -603,7 +623,7 @@ export class StrategyEngine {
 
     // Check existing positions — close if no longer attractive or direction flipped
     for (const pos of this.state.positions) {
-      const ranked = rankedAssets.find((a) => a.asset === pos.asset);
+      const ranked = candidateAssets.find((a) => a.asset === pos.asset);
 
       // Close if asset is no longer attractive
       if (!ranked) {
@@ -665,12 +685,18 @@ export class StrategyEngine {
       this.pendingWithdrawals
     );
 
-    for (const ranked of rankedAssets) {
+    const allowNewEntries = !(
+      indexerDecision &&
+      indexerDecision.action === "hold" &&
+      indexerDecision.confidence.gte("0.6")
+    );
+
+    for (const ranked of candidateAssets) {
       const existingPos = this.state.positions.find(
         (p) => p.asset === ranked.asset && p.venue === "drift"
       );
 
-      if (!existingPos && deployableCapital.gt(new Decimal(5))) {
+      if (!existingPos && deployableCapital.gt(new Decimal(5)) && allowNewEntries) {
         // Check LLM trade decision if available
         const llmDecision = this.lastLLMAdvice?.decisions.find(
           (d) => d.asset === ranked.asset
@@ -688,10 +714,21 @@ export class StrategyEngine {
           ranked.perpSide
         );
 
+        let positionBudget = deployableCapital;
+        if (isDriftBear) {
+          positionBudget = deployableCapital.mul(
+            indexerDecision?.targetAllocation || config.driftBearNeutralAllocation
+          );
+        }
+
+        if (indexerDecision?.action === "reduce-risk") {
+          positionBudget = positionBudget.mul("0.5");
+        }
+
         let positionSize: Decimal;
         if (llmDecision && llmDecision.allocationFraction > 0) {
           // LLM-driven position sizing (respects withdrawal-reserved liquidity)
-          positionSize = deployableCapital
+          positionSize = positionBudget
             .mul(llmDecision.allocationFraction)
             .mul(regimeMultiplier);
           // Override perp side if LLM disagrees
@@ -705,12 +742,19 @@ export class StrategyEngine {
         } else {
           // Fallback: risk-manager-driven sizing (respects withdrawal-reserved liquidity)
           const baseSize = this.riskManager.calculatePositionSize(
-            deployableCapital,
+            positionBudget,
             ranked.asset,
             ranked.absYield,
             ranked.confidence
           );
           positionSize = baseSize.mul(regimeMultiplier);
+        }
+
+        if (isDriftBear) {
+          const hardCap = deployableCapital.mul(
+            indexerDecision?.targetAllocation || config.driftBearNeutralAllocation
+          );
+          positionSize = Decimal.min(positionSize, hardCap);
         }
 
         // Momentum-scaled sizing: rising momentum → up to 30% larger,
@@ -1273,5 +1317,9 @@ export class StrategyEngine {
     // Negative funding = bear
     if (avgRate.lt(new Decimal("-0.05"))) return "bear";
     return "neutral";
+  }
+
+  private isDriftBearMode(): boolean {
+    return (this.state.strategyProfile || config.strategyProfile) === "driftbear-neutral-farmer";
   }
 }

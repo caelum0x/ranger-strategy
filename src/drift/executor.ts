@@ -9,6 +9,7 @@
  */
 import {
   DriftClient,
+  getTokenAmount,
   MarketType,
   PositionDirection,
   OrderType,
@@ -20,7 +21,14 @@ import {
 } from "@drift-labs/sdk";
 import { ComputeBudgetProgram, TransactionInstruction } from "@solana/web3.js";
 import Decimal from "decimal.js";
+import { config } from "../config";
 import { logger } from "../utils/logger";
+import { fetchHeliusPriorityFeeEstimate } from "../utils/priority-fee";
+import { RangerSorClient } from "../ranger/sor-client";
+import {
+  decimalPriceToBN,
+  deriveExecutionPricingPlan,
+} from "../utils/execution-pricing";
 
 const PERP_INDEX: Record<string, number> = { SOL: 0, BTC: 1, ETH: 2 };
 const SPOT_INDEX: Record<string, number> = {
@@ -28,6 +36,12 @@ const SPOT_INDEX: Record<string, number> = {
   SOL: 1,
   BTC: 2,
   ETH: 3,
+};
+const SPOT_ASSET: Record<number, string> = {
+  0: "USDC",
+  1: "SOL",
+  2: "BTC",
+  3: "ETH",
 };
 
 const MARKET_INDEX: Record<string, { perp: number; spot: number }> = {
@@ -41,13 +55,89 @@ const DEFAULT_SLIPPAGE_BPS = 50; // 0.5%
 export class DriftExecutor {
   protected client: DriftClient;
   private defaultPriorityFee: number;
+  private readonly sorClient: RangerSorClient;
 
-  constructor(client: DriftClient, priorityFeeMicroLamports: number = 50_000) {
+  constructor(
+    client: DriftClient,
+    priorityFeeMicroLamports: number = 50_000,
+    sorClient: RangerSorClient = new RangerSorClient()
+  ) {
     this.client = client;
     this.defaultPriorityFee = priorityFeeMicroLamports;
+    this.sorClient = sorClient;
+  }
+
+  private async withActiveSubaccount<T>(
+    subAccountId: number | undefined,
+    fn: () => Promise<T>
+  ): Promise<T> {
+    if (subAccountId === undefined || subAccountId === this.client.activeSubAccountId) {
+      return fn();
+    }
+
+    const previousSubAccountId = this.client.activeSubAccountId;
+    await this.client.switchActiveUser(subAccountId, this.client.authority);
+    try {
+      return await fn();
+    } finally {
+      await this.client.switchActiveUser(previousSubAccountId, this.client.authority);
+    }
+  }
+
+  private async resolvePriorityFee(
+    extraAccountKeys: string[] = [],
+    priorityFee?: number
+  ): Promise<number> {
+    if (priorityFee) {
+      return priorityFee;
+    }
+
+    const accountKeys = [
+      this.client.wallet.publicKey.toBase58(),
+      ...extraAccountKeys,
+    ];
+    const estimated = await fetchHeliusPriorityFeeEstimate(accountKeys);
+    return estimated || this.defaultPriorityFee;
   }
 
   // ── Atomic Cancel & Replace ─────────────────────────────────────
+
+  private async getSorQuotedPrice(
+    asset: string,
+    side: "long" | "short",
+    baseAmount: Decimal,
+    collateralAmount: Decimal
+  ): Promise<Decimal | undefined> {
+    if (!this.sorClient.isConfigured()) {
+      return undefined;
+    }
+
+    try {
+      const metadata = await this.sorClient.getOrderMetadata({
+        fee_payer: this.client.wallet.publicKey.toBase58(),
+        symbol: asset,
+        side: side === "long" ? "Long" : "Short",
+        size: Number(baseAmount.toFixed(6)),
+        collateral: Number(collateralAmount.toFixed(6)),
+        size_denomination: asset,
+        collateral_denomination: "USDC",
+        adjustment_type: "Increase",
+      });
+
+      if (!metadata || metadata.total_size <= 0 || metadata.total_collateral <= 0) {
+        return undefined;
+      }
+
+      return new Decimal(metadata.total_collateral).div(metadata.total_size);
+    } catch (error) {
+      logger.warn("SOR quote fetch failed, using oracle fallback", {
+        asset,
+        side,
+        error,
+      });
+      return undefined;
+    }
+  }
 
   /**
    * Atomically cancel all orders on a market and place new ones.
@@ -109,7 +199,7 @@ export class DriftExecutor {
     if (marketIndex === undefined)
       throw new Error(`Unknown perp: ${asset}`);
 
-    const fee = priorityFee || this.defaultPriorityFee;
+    const fee = await this.resolvePriorityFee([this.client.wallet.publicKey.toBase58()], priorityFee);
 
     // Build the order IX
     const orderParams = price
@@ -179,7 +269,7 @@ export class DriftExecutor {
     priorityFee?: number,
     computeUnits: number = 400_000
   ): Promise<string> {
-    const fee = priorityFee || this.defaultPriorityFee;
+    const fee = await this.resolvePriorityFee([], priorityFee);
 
     const computePrice = ComputeBudgetProgram.setComputeUnitPrice({
       microLamports: fee,
@@ -255,24 +345,31 @@ export class DriftExecutor {
       // Non-critical — proceed with original amount
     }
 
-    // Slippage-protected limit prices (50bps)
-    const slippageBps = DEFAULT_SLIPPAGE_BPS;
     const spotDirection = perpDirection === "short"
       ? PositionDirection.LONG
       : PositionDirection.SHORT;
     const perpDir = perpDirection === "short"
       ? PositionDirection.SHORT
       : PositionDirection.LONG;
+    const spotSide = perpDirection === "short" ? "long" : "short";
+    const quotedSpotPrice = await this.getSorQuotedPrice(
+      asset,
+      spotSide,
+      baseAmount,
+      usdcAmount
+    );
 
-    // Spot limit: buying → oracle * (1 + slip), selling → oracle * (1 - slip)
-    const spotLimitPrice = perpDirection === "short"
-      ? oraclePrice.mul(new BN(10000 + slippageBps)).div(new BN(10000))
-      : oraclePrice.mul(new BN(10000 - slippageBps)).div(new BN(10000));
-
-    // Perp limit: shorting → oracle * (1 - slip), longing → oracle * (1 + slip)
-    const perpLimitPrice = perpDirection === "short"
-      ? oraclePrice.mul(new BN(10000 - slippageBps)).div(new BN(10000))
-      : oraclePrice.mul(new BN(10000 + slippageBps)).div(new BN(10000));
+    const spotPlan = deriveExecutionPricingPlan({
+      side: spotSide,
+      oraclePrice: new Decimal(price),
+      fallbackSlippageBps: DEFAULT_SLIPPAGE_BPS,
+      quotedPrice: quotedSpotPrice,
+    });
+    const perpPlan = deriveExecutionPricingPlan({
+      side: perpDirection,
+      oraclePrice: new Decimal(price),
+      fallbackSlippageBps: DEFAULT_SLIPPAGE_BPS,
+    });
 
     // Cancel all existing orders
     const cancelIx = await this.client.getCancelOrdersIx(null, null, null);
@@ -284,7 +381,7 @@ export class DriftExecutor {
         marketIndex: spotIdx,
         direction: spotDirection,
         baseAssetAmount: new BN(baseAmount.mul(1e9).toFixed(0)),
-        price: spotLimitPrice,
+        price: decimalPriceToBN(spotPlan.limitPrice),
       })
     );
 
@@ -297,7 +394,7 @@ export class DriftExecutor {
         baseAssetAmount: this.client.convertToPerpPrecision(
           parseFloat(baseAmount.toFixed(9))
         ),
-        price: perpLimitPrice,
+        price: decimalPriceToBN(perpPlan.limitPrice),
       })
     );
 
@@ -305,7 +402,10 @@ export class DriftExecutor {
     logger.info(
       `Atomic cancel+enter: ${asset} | ${spotSideStr} spot + ${perpDirection.toUpperCase()} perp | ` +
         `$${usdcAmount.toFixed(2)} | ${baseAmount.toFixed(6)} base | ` +
-        `oracle=$${price.toFixed(2)} | slippage=${slippageBps}bps`
+        `oracle=$${price.toFixed(2)} | spotSlip=${spotPlan.slippageBps}bps | perpSlip=${perpPlan.slippageBps}bps` +
+        (spotPlan.quotedPrice
+          ? ` | sor=$${spotPlan.quotedPrice.toFixed(4)}`
+          : "")
     );
 
     return this.executeBatchedIxs([cancelIx, spotIx, perpIx]);
@@ -346,6 +446,40 @@ export class DriftExecutor {
     return this.executeBatchedIxs([ix]);
   }
 
+  async jupiterSwapByMarketIndex(params: {
+    inMarketIndex: number;
+    outMarketIndex: number;
+    amount: BN;
+    slippageBps?: number;
+    subAccountId?: number;
+  }): Promise<string> {
+    const { inMarketIndex, outMarketIndex, amount, subAccountId } = params;
+    const slippageBps =
+      params.slippageBps ?? config.jupiterSwapSlippageBps;
+
+    return this.withActiveSubaccount(subAccountId, async () => {
+      const userAccountPublicKey = await this.client.getUserAccountPublicKey(
+        subAccountId
+      );
+      const swap = await (this.client as any).getJupiterSwapIxV6({
+        inMarketIndex,
+        outMarketIndex,
+        amount,
+        slippageBps,
+        userAccountPublicKey,
+      });
+
+      const instructions = Array.isArray(swap?.ixs) ? swap.ixs : [swap];
+      logger.info("Jupiter derisk swap", {
+        inMarketIndex,
+        outMarketIndex,
+        amount: amount.toString(),
+        subAccountId,
+      });
+      return this.executeBatchedIxs(instructions, undefined, 900_000);
+    });
+  }
+
   // ── Cancel Helpers ──────────────────────────────────────────────
 
   /**
@@ -354,6 +488,13 @@ export class DriftExecutor {
   async cancelAllOrders(): Promise<void> {
     logger.info("Canceling all orders");
     await (this.client as any).cancelOrders(null, null, null);
+  }
+
+  async cancelAllOrdersForSubaccount(subAccountId?: number): Promise<void> {
+    await this.withActiveSubaccount(subAccountId, async () => {
+      logger.info("Canceling all orders for subaccount", { subAccountId });
+      await (this.client as any).cancelOrders(null, null, null);
+    });
   }
 
   /**
@@ -403,6 +544,41 @@ export class DriftExecutor {
       await this.executeBatchedIxs(ixs);
       logger.info(`Settled PnL for markets: ${marketIndices.join(", ")}`);
     }
+  }
+
+  async settlePnlForSubaccount(
+    marketIndices: number[],
+    subAccountId?: number
+  ): Promise<void> {
+    await this.withActiveSubaccount(subAccountId, async () => {
+      let user: any;
+      try {
+        user = this.client.getUser(subAccountId);
+      } catch {
+        return;
+      }
+
+      const userAccountPublicKey = await this.client.getUserAccountPublicKey(
+        subAccountId
+      );
+      const ixs = await this.client.getSettlePNLsIxs(
+        [
+          {
+            settleeUserAccountPublicKey: userAccountPublicKey,
+            settleeUserAccount: user.getUserAccount(),
+          },
+        ],
+        marketIndices
+      );
+
+      if (ixs.length > 0) {
+        await this.executeBatchedIxs(ixs);
+        logger.info("Settled PnL for subaccount", {
+          subAccountId,
+          markets: marketIndices,
+        });
+      }
+    });
   }
 
   // ── Modify Orders ────────────────────────────────────────────
@@ -500,6 +676,210 @@ export class DriftExecutor {
     return this.executeBatchedIxs(ixs);
   }
 
+  async closePerpPositionByMarketIndex(
+    marketIndex: number,
+    priorityFee?: number,
+    subAccountId?: number
+  ): Promise<string> {
+    const user = this.client.getUser(subAccountId);
+    const perpPos = user.getPerpPosition(marketIndex);
+    if (!perpPos || perpPos.baseAssetAmount.isZero()) {
+      return "";
+    }
+
+    const direction = perpPos.baseAssetAmount.isNeg()
+      ? PositionDirection.LONG
+      : PositionDirection.SHORT;
+
+    const closePerpIx = await this.client.getPlacePerpOrderIx(
+      getMarketOrderParams({
+        marketIndex,
+        marketType: MarketType.PERP,
+        direction,
+        baseAssetAmount: perpPos.baseAssetAmount.abs(),
+        reduceOnly: true,
+      }),
+      subAccountId
+    );
+
+    logger.info("Closing inherited perp exposure", {
+      marketIndex,
+      baseAssetAmount: perpPos.baseAssetAmount.abs().toString(),
+    });
+
+    return this.executeBatchedIxs([closePerpIx], priorityFee, 600_000);
+  }
+
+  async closeSpotPositionByMarketIndex(
+    marketIndex: number,
+    priorityFee?: number,
+    subAccountId?: number
+  ): Promise<string> {
+    const user = this.client.getUser(subAccountId);
+    const tokenAmount = user.getTokenAmount(marketIndex);
+    if (tokenAmount.isZero()) {
+      return "";
+    }
+
+    const spotAmountRaw = convertToNumber(tokenAmount, new BN(1e9));
+    if (Math.abs(spotAmountRaw) <= 0.0001) {
+      return "";
+    }
+
+    const direction = spotAmountRaw > 0
+      ? PositionDirection.SHORT
+      : PositionDirection.LONG;
+
+    const closeSpotIx = await this.client.getPlaceSpotOrderIx(
+      getMarketOrderParams({
+        marketIndex,
+        marketType: MarketType.SPOT,
+        direction,
+        baseAssetAmount: new BN(
+          new Decimal(Math.abs(spotAmountRaw)).mul(1e9).toFixed(0)
+        ),
+      }),
+      subAccountId
+    );
+
+    logger.info("Closing inherited spot exposure", {
+      marketIndex,
+      tokenAmount: tokenAmount.toString(),
+    });
+
+    return this.executeBatchedIxs([closeSpotIx], priorityFee, 600_000);
+  }
+
+  async deriskSpotMarketToUsdc(
+    marketIndex: number,
+    subAccountId?: number,
+    priorityFee?: number
+  ): Promise<string> {
+    if (marketIndex === SPOT_INDEX.USDC) {
+      return "";
+    }
+
+    const user = this.client.getUser(subAccountId);
+    const spotPosition = user.getSpotPosition(marketIndex);
+    if (!spotPosition) {
+      return "";
+    }
+
+    const spotMarket = this.client.getSpotMarketAccount(marketIndex);
+    if (!spotMarket) {
+      return "";
+    }
+
+    const tokenAmount = getTokenAmount(
+      spotPosition.scaledBalance,
+      spotMarket,
+      spotPosition.balanceType
+    );
+
+    if (tokenAmount.lte(new BN(0))) {
+      return this.closeSpotPositionByMarketIndex(
+        marketIndex,
+        priorityFee,
+        subAccountId
+      );
+    }
+
+    return this.jupiterSwapByMarketIndex({
+      inMarketIndex: marketIndex,
+      outMarketIndex: SPOT_INDEX.USDC,
+      amount: tokenAmount,
+      slippageBps: config.jupiterSwapSlippageBps,
+      subAccountId,
+    });
+  }
+
+  async deriskSubaccount(
+    subAccountId: number,
+    priorityFee?: number
+  ): Promise<void> {
+    const user = this.client.getUser(subAccountId);
+    const activeSpotPositions = user.getActiveSpotPositions();
+    const perpMarkets = user
+      .getActivePerpPositions()
+      .filter(
+        (position) =>
+          !position.baseAssetAmount.isZero() ||
+          !position.quoteAssetAmount.isZero() ||
+          position.openOrders > 0
+      )
+      .map((position) => position.marketIndex);
+    const borrowSpotMarkets = activeSpotPositions
+      .filter(
+        (position) =>
+          position.marketIndex !== SPOT_INDEX.USDC &&
+          user.getTokenAmount(position.marketIndex).lt(new BN(0))
+      )
+      .map((position) => position.marketIndex);
+    const depositSpotMarkets = activeSpotPositions
+      .filter(
+        (position) =>
+          position.marketIndex !== SPOT_INDEX.USDC &&
+          user.getTokenAmount(position.marketIndex).gt(new BN(0))
+      )
+      .map((position) => position.marketIndex);
+
+    await this.cancelAllOrdersForSubaccount(subAccountId);
+
+    for (const marketIndex of perpMarkets) {
+      await this.closePerpPositionByMarketIndex(
+        marketIndex,
+        priorityFee,
+        subAccountId
+      );
+    }
+
+    if (perpMarkets.length > 0) {
+      await this.settlePnlForSubaccount(perpMarkets, subAccountId);
+    }
+
+    for (const marketIndex of borrowSpotMarkets) {
+      await this.deriskSpotMarketToUsdc(
+        marketIndex,
+        subAccountId,
+        priorityFee
+      );
+    }
+
+    for (const marketIndex of depositSpotMarkets) {
+      await this.deriskSpotMarketToUsdc(
+        marketIndex,
+        subAccountId,
+        priorityFee
+      );
+    }
+
+    await this.cancelAllOrdersForSubaccount(subAccountId);
+
+    const refreshedUser = this.client.getUser(subAccountId);
+    const residualPerpMarkets = refreshedUser
+      .getActivePerpPositions()
+      .filter(
+        (position) =>
+          !position.baseAssetAmount.isZero() ||
+          !position.quoteAssetAmount.isZero()
+      )
+      .map((position) => position.marketIndex);
+    if (residualPerpMarkets.length > 0) {
+      await this.settlePnlForSubaccount(residualPerpMarkets, subAccountId);
+    }
+
+    logger.info("Completed subaccount derisk sequence", {
+      subAccountId,
+      perpMarkets,
+      borrowSpotMarkets: borrowSpotMarkets.map(
+        (marketIndex) => SPOT_ASSET[marketIndex] || marketIndex
+      ),
+      depositSpotMarkets: depositSpotMarkets.map(
+        (marketIndex) => SPOT_ASSET[marketIndex] || marketIndex
+      ),
+    });
+  }
+
   // ── Order Fill Monitoring ───────────────────────────────────────
 
   /**
@@ -590,12 +970,13 @@ export class DriftExecutor {
       );
     }
 
-    // 2. Calculate slippage-adjusted limit price
-    //    oraclePrice * (10000 +/- slippageBps) / 10000
-    const limitPrice =
-      direction === "long"
-        ? oraclePrice.mul(new BN(10000 + slippageBps)).div(new BN(10000))
-        : oraclePrice.mul(new BN(10000 - slippageBps)).div(new BN(10000));
+    const plan = deriveExecutionPricingPlan({
+      side: direction,
+      oraclePrice: new Decimal(
+        convertToNumber(oraclePrice, PRICE_PRECISION)
+      ),
+      fallbackSlippageBps: slippageBps,
+    });
 
     const positionDirection =
       direction === "long"
@@ -607,14 +988,14 @@ export class DriftExecutor {
       marketIndex,
       direction: positionDirection,
       baseAssetAmount: baseAmount,
-      price: limitPrice,
+      price: decimalPriceToBN(plan.limitPrice),
     });
 
     logger.info(
       `Slippage-protected ${direction} ${asset} ${marketType} | ` +
         `oracle=${convertToNumber(oraclePrice, PRICE_PRECISION).toFixed(4)} | ` +
-        `limit=${convertToNumber(limitPrice, PRICE_PRECISION).toFixed(4)} | ` +
-        `slippage=${slippageBps}bps`
+        `limit=${plan.limitPrice.toFixed(4)} | ` +
+        `slippage=${plan.slippageBps}bps`
     );
 
     // 3. Place via the appropriate order method

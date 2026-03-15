@@ -1,0 +1,14 @@
+{
+  "name": "driftbear-neutral-farmer",
+  "private": true,
+  "version": "0.1.0",
+  "description": "Starter scaffold for a DriftBear neutral Ranger vault",
+  "workspaces": [
+    "setup",
+    "bot"
+  ],
+  "scripts": {
+    "setup:readme": "echo 'See setup/README.md'",
+    "bot:readme": "echo 'See bot/README.md'"
+  }
+}

@@ -1,0 +1,19 @@
+{
+  "strategies": [
+    {
+      "type": "driftEarn",
+      "name": "Drift-Lend-USDC",
+      "marketIndex": 0
+    },
+    {
+      "type": "driftEarn",
+      "name": "Drift-Perps-Short-SOL",
+      "marketIndex": 1,
+      "custom": true
+    },
+    {
+      "type": "jupiterLend",
+      "name": "Jupiter-Swap-to-SOL"
+    }
+  ]
+}

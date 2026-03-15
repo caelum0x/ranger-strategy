@@ -1,0 +1,119 @@
+---
+title: Instant Withdraw
+description: CPI instruction for instant withdrawal from zero-waiting-period vaults
+---
+
+The `instant_withdraw_vault` instruction allows a user to withdraw assets from the vault instantly, bypassing the two-step request/withdraw flow. This burns LP tokens directly and transfers the underlying assets in a single transaction.
+
+<Warning>
+This instruction will fail with `InstantWithdrawNotAllowed` if the vault's `withdrawal_waiting_period` is not zero. Only vaults configured with instant withdrawals support this instruction.
+</Warning>
+
+## Discriminator
+
+```rust
+/// sha256("global:instant_withdraw_vault")[0..8]
+fn get_instant_withdraw_vault_discriminator() -> [u8; 8] {
+    [221, 56, 115, 168, 128, 220, 235, 245]
+}
+```
+
+## Parameters
+
+| Parameter | Type | Description |
+|---|---|---|
+| `amount` | `u64` | The withdrawal amount (interpretation depends on `is_amount_in_lp`) |
+| `is_amount_in_lp` | `bool` | If `true`, `amount` is in LP tokens. If `false`, `amount` is in underlying asset tokens |
+| `is_withdraw_all` | `bool` | If `true`, withdraws the user's entire LP balance regardless of `amount` |
+
+## Accounts
+
+| Account | Mutability | Signer | Description |
+|---|---|---|---|
+| `user_transfer_authority` | Immutable | Yes | The user withdrawing assets |
+| `protocol` | Immutable | No | Global Ranger Earn protocol state account |
+| `vault` | Mutable | No | The vault state account |
+| `vault_asset_mint` | Immutable | No | The mint of the asset being withdrawn |
+| `vault_lp_mint` | Mutable | No | The vault's LP mint |
+| `user_lp_ata` | Mutable | No | The user's LP token account (source for burn) |
+| `vault_asset_idle_ata` | Mutable | No | The vault's idle asset token account |
+| `vault_asset_idle_auth` | Mutable | No | PDA authority over `vault_asset_idle_ata` |
+| `user_asset_ata` | Mutable | No | The user's asset token account (destination) |
+| `asset_token_program` | Immutable | No | Token Program or Token-2022 for assets |
+| `lp_token_program` | Immutable | No | Token Program for LP tokens |
+| `system_program` | Immutable | No | Solana System Program |
+
+## CPI Struct
+
+```rust
+pub struct InstantWithdrawVaultParams<'info> {
+    pub user_transfer_authority: AccountInfo<'info>,
+    pub protocol: AccountInfo<'info>,
+    pub vault: AccountInfo<'info>,
+    pub vault_asset_mint: AccountInfo<'info>,
+    pub vault_lp_mint: AccountInfo<'info>,
+    pub user_lp_ata: AccountInfo<'info>,
+    pub vault_asset_idle_ata: AccountInfo<'info>,
+    pub vault_asset_idle_auth: AccountInfo<'info>,
+    pub user_asset_ata: AccountInfo<'info>,
+    pub asset_token_program: AccountInfo<'info>,
+    pub lp_token_program: AccountInfo<'info>,
+    pub system_program: AccountInfo<'info>,
+    pub voltr_vault_program: AccountInfo<'info>,
+}
+```
+
+## Implementation
+
+```rust
+use anchor_lang::prelude::*;
+use anchor_lang::solana_program::{
+    account_info::AccountInfo,
+    instruction::{ AccountMeta, Instruction },
+    program::invoke,
+};
+
+impl<'info> InstantWithdrawVaultParams<'info> {
+    pub fn instant_withdraw_vault(
+        &self,
+        amount: u64,
+        is_amount_in_lp: bool,
+        is_withdraw_all: bool,
+    ) -> Result<()> {
+        let mut instruction_data = get_instant_withdraw_vault_discriminator().to_vec();
+        instruction_data.extend_from_slice(&amount.to_le_bytes());
+        instruction_data.push(is_amount_in_lp as u8);
+        instruction_data.push(is_withdraw_all as u8);
+
+        let account_metas = vec![
+            AccountMeta::new_readonly(*self.user_transfer_authority.key, true),
+            AccountMeta::new_readonly(*self.protocol.key, false),
+            AccountMeta::new(*self.vault.key, false),
+            AccountMeta::new_readonly(*self.vault_asset_mint.key, false),
+            AccountMeta::new(*self.vault_lp_mint.key, false),
+            AccountMeta::new(*self.user_lp_ata.key, false),
+            AccountMeta::new(*self.vault_asset_idle_ata.key, false),
+            AccountMeta::new(*self.vault_asset_idle_auth.key, false),
+            AccountMeta::new(*self.user_asset_ata.key, false),
+            AccountMeta::new_readonly(*self.asset_token_program.key, false),
+            AccountMeta::new_readonly(*self.lp_token_program.key, false),
+            AccountMeta::new_readonly(*self.system_program.key, false),
+        ];
+
+        let instruction = Instruction {
+            program_id: *self.voltr_vault_program.key,
+            accounts: account_metas,
+            data: instruction_data,
+        };
+
+        invoke(&instruction, &self.to_account_infos())
+            .map_err(|_| ErrorCodes::CpiToVoltrVaultFailed.into())
+    }
+}
+```
+
+<Info>
+The `instant_withdraw_vault` instruction shares the same parameters as [`request_withdraw_vault`](/protocols/cpi-integration/request-withdraw) but does not create a receipt account. The LP burn and asset transfer happen atomically in a single transaction.
+</Info>
+
+Full reference implementation: [instant_withdraw_vault.rs](https://github.com/voltrxyz/vault-cpi/blob/main/references/instant_withdraw_vault.rs)

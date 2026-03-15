@@ -1,0 +1,98 @@
+---
+title: Cancel Request Withdraw
+description: CPI instruction to cancel a pending withdrawal request
+---
+
+The `cancel_request_withdraw_vault` instruction cancels a pending withdrawal request. The escrowed LP tokens are refunded to the user (minus any redemption fee that may apply), and the receipt account is closed.
+
+<Info>
+This instruction can be called at any time after a [`request_withdraw_vault`](/protocols/cpi-integration/request-withdraw) has been created, regardless of whether the waiting period has passed.
+</Info>
+
+## Discriminator
+
+```rust
+/// sha256("global:cancel_request_withdraw_vault")[0..8]
+fn get_cancel_request_withdraw_vault_discriminator() -> [u8; 8] {
+    [231, 54, 14, 6, 223, 124, 127, 238]
+}
+```
+
+## Parameters
+
+This instruction takes no parameters beyond the discriminator.
+
+## Accounts
+
+| Account | Mutability | Signer | Description |
+|---|---|---|---|
+| `user_transfer_authority` | Mutable | Yes | The user cancelling the withdrawal; receives closed receipt's rent |
+| `protocol` | Immutable | No | Global Ranger Earn protocol state account |
+| `vault` | Mutable | No | The vault state account |
+| `vault_lp_mint` | Mutable | No | The vault's LP mint |
+| `user_lp_ata` | Mutable | No | The user's LP token account (destination for refunded LP tokens) |
+| `request_withdraw_lp_ata` | Mutable | No | The receipt's ATA holding escrowed LP tokens |
+| `request_withdraw_vault_receipt` | Mutable | No | The PDA receipt account (closed after cancellation) |
+| `lp_token_program` | Immutable | No | Token Program for LP tokens |
+| `system_program` | Immutable | No | Solana System Program |
+
+## CPI Struct
+
+```rust
+pub struct CancelRequestWithdrawVaultParams<'info> {
+    pub user_transfer_authority: AccountInfo<'info>,
+    pub protocol: AccountInfo<'info>,
+    pub vault: AccountInfo<'info>,
+    pub vault_lp_mint: AccountInfo<'info>,
+    pub user_lp_ata: AccountInfo<'info>,
+    pub request_withdraw_lp_ata: AccountInfo<'info>,
+    pub request_withdraw_vault_receipt: AccountInfo<'info>,
+    pub lp_token_program: AccountInfo<'info>,
+    pub system_program: AccountInfo<'info>,
+    pub voltr_vault_program: AccountInfo<'info>,
+}
+```
+
+## Implementation
+
+```rust
+use anchor_lang::prelude::*;
+use anchor_lang::solana_program::{
+    account_info::AccountInfo,
+    instruction::{ AccountMeta, Instruction },
+    program::invoke,
+};
+
+impl<'info> CancelRequestWithdrawVaultParams<'info> {
+    pub fn cancel_request_withdraw_vault(&self) -> Result<()> {
+        let instruction_data = get_cancel_request_withdraw_vault_discriminator().to_vec();
+
+        let account_metas = vec![
+            AccountMeta::new(*self.user_transfer_authority.key, true),
+            AccountMeta::new_readonly(*self.protocol.key, false),
+            AccountMeta::new(*self.vault.key, false),
+            AccountMeta::new(*self.vault_lp_mint.key, false),
+            AccountMeta::new(*self.user_lp_ata.key, false),
+            AccountMeta::new(*self.request_withdraw_lp_ata.key, false),
+            AccountMeta::new(*self.request_withdraw_vault_receipt.key, false),
+            AccountMeta::new_readonly(*self.lp_token_program.key, false),
+            AccountMeta::new_readonly(*self.system_program.key, false),
+        ];
+
+        let instruction = Instruction {
+            program_id: *self.voltr_vault_program.key,
+            accounts: account_metas,
+            data: instruction_data,
+        };
+
+        invoke(&instruction, &self.to_account_infos())
+            .map_err(|_| ErrorCodes::CpiToVoltrVaultFailed.into())
+    }
+}
+```
+
+<Info>
+After a successful `cancel_request_withdraw_vault` call, the `request_withdraw_vault_receipt` account is closed and its rent is returned. The user may receive fewer LP tokens back than originally escrowed if the vault's value has changed since the request was made.
+</Info>
+
+Full reference implementation: [cancel_request_withdraw_vault.rs](https://github.com/voltrxyz/vault-cpi/blob/main/references/cancel_request_withdraw_vault.rs)

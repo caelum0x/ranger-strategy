@@ -1,0 +1,68 @@
+# Tutorial: Order Trigger Bot
+
+## Introduction
+
+Order Trigger Bots (Trigger Bots) are responsible for marking orders that satisfy the trigger condition, including:
+
+-   **Trigger Market Orders -** Stop Market and Take Profit
+
+-   **Trigger Limit Orders -** Stop Limit and Take Profit Limit
+
+Trigger Bots receive a small compensation for each successfully marked order.
+
+See [Keepers & Decentralised Orderbook](/protocol/about-v3/decentralized-orderbook) for a technical explanation of how the decentralised orderbook (DLOB) and matching incentives work.
+
+Trigger Bots are similar to [Tutorial: Order Matching Bot](/developers/trading-automation/keeper-bots/order-matching-bot) in that they:
+
+-   also maintain a local copy of the [Keepers & Decentralised Orderbook](/protocol/about-v3/decentralized-orderbook);
+
+-   do not require the operator to manage collateral; and
+
+-   receive a small reward for performing their duties.
+
+## Getting Started
+
+The reference implementation of a Trigger Bot is available [here](https://github.com/drift-labs/keeper-bots-v2/blob/master/src/bots/trigger.ts).
+
+Follow [Keeper Bots](/developers/trading-automation/keeper-bots) to set required environment variables and initialize a Drift user account.
+
+Start the Trigger Bot:
+
+```shell copy
+yarn run dev:trigger
+```
+
+## Technical Explanation
+
+The trigger bot polls the DLOB for orders whose trigger conditions are now met (e.g. oracle price crossed a stop-loss level) and submits a transaction to mark them as triggered, earning a small keeper reward.
+
+<Steps>
+### Get nodes from the DLOB that are ready to be triggered
+
+The DLOB tracks conditional orders (stop market, stop limit, take profit, take profit limit) and their trigger prices. `findNodesToTrigger` returns orders where the current oracle price has crossed the trigger threshold — these are ready to be marked on-chain.
+
+```typescript copy
+const market = this.driftClient.getMarketAccounts()[0]; // get a MarketAccount
+
+const oraclePriceData = this.driftClient.getOracleDataForMarket(marketIndex);
+
+const nodesToTrigger = this.dlob.findNodesToTrigger(
+    marketIndex,
+    this.slotSubscriber.getSlot(),
+    oraclePriceData.price
+);
+```
+
+### Call `trigger_order` on `DriftClient`
+
+Submit the trigger transaction for each eligible node. Once triggered on-chain, the order becomes a regular order available for matching bots to fill. Expect competition from other trigger bots — handle errors gracefully and continue to the next node.
+
+```typescript copy
+const user = this.userMap.get(nodeToTrigger.node.userAccount.toString());
+const txSig = await this.driftClient.triggerOrder(
+    nodeToTrigger.node.userAccount,
+    user.getUserAccount(),
+    nodeToTrigger.node.order
+);
+```
+</Steps>

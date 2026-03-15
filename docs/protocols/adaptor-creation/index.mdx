@@ -1,0 +1,61 @@
+---
+title: Adaptor Creation Guide
+description: Build custom adaptors to bridge Ranger Earn vaults with external DeFi protocols
+---
+
+Adaptors serve as the bridge between Ranger Earn vaults and external DeFi protocols, enabling standardized interactions while abstracting protocol-specific complexities. The Ranger Earn protocol supports both built-in adaptors and custom adaptors created by external protocols.
+
+## How It Works
+
+When a vault manager allocates or deallocates funds, the vault program:
+
+1. Transfers tokens to/from the `vault_strategy_auth` PDA
+2. Calls your adaptor's `deposit` or `withdraw` instruction via CPI
+3. Reads the returned `u64` (via Solana's `get_return_data`) to track the strategy's position value
+
+Your adaptor translates these calls into whatever your protocol needs — initializing markets, minting receipt tokens, managing exchange rates, etc.
+
+## Core Requirements
+
+Every adaptor must implement at minimum these three instructions:
+
+| Instruction | Called When | Must Return |
+|---|---|---|
+| `initialize` | Strategy is first created | `Result<()>` |
+| `deposit` | Vault allocates funds to strategy | `Result<u64>` — current position value in underlying token terms |
+| `withdraw` | Vault deallocates funds from strategy | `Result<u64>` — remaining position value in underlying token terms |
+
+Adaptors can define additional instructions beyond these three for protocol-specific workflows — such as multi-step withdrawals (request → withdraw), reward harvesting, or rebalancing. These extra instructions are invoked by the vault manager via `remaining_accounts` or separate transactions, not by the vault program itself.
+
+## Key Concept: Strategy = Your Protocol's State
+
+The vault passes a `strategy` account to your adaptor. This account maps to your protocol's own state — a market PDA, a reserve, a lending pool, etc. Your adaptor validates this mapping:
+
+```rust
+// Example: strategy must be the ctoken market account
+#[account(constraint = strategy.key() == market.key())]
+pub strategy: AccountInfo<'info>,
+```
+
+Each vault strategy is a 1:1 mapping to a specific instance of your protocol.
+
+## Accounts Passed by the Vault
+
+The vault program always passes these accounts in a fixed order when calling your adaptor:
+
+**Initialize:** `payer`, `vault_strategy_auth` (signer), `strategy`, `system_program`, + remaining accounts
+
+**Deposit / Withdraw:** `vault_strategy_auth` (signer), `strategy`, `vault_asset_mint`, `vault_strategy_asset_ata`, `asset_token_program`, + remaining accounts
+
+Any additional protocol-specific accounts are appended via `remaining_accounts`.
+
+## Getting Started
+
+<CardGroup cols={2}>
+  <Card title="Core Components" icon="cubes" href="/protocols/adaptor-creation/core-components">
+    Required instructions and account structures
+  </Card>
+  <Card title="Security Considerations" icon="shield" href="/protocols/adaptor-creation/security">
+    Security best practices for adaptor development
+  </Card>
+</CardGroup>

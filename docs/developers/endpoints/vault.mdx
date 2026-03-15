@@ -1,0 +1,165 @@
+---
+title: Vault Endpoints
+description: Detailed information and interaction methods for a specific vault
+---
+
+The `/vault/{pubkey}` endpoint provides detailed information and interaction methods for a specific vault.
+
+### Path Parameter
+
+| Name | Type | Description |
+|---|---|---|
+| `pubkey` | string | The public key of the Ranger Earn vault |
+
+---
+
+## Vault Data
+
+### Get Vault Details
+
+Retrieves comprehensive information for a single vault, including configuration, asset details, APY, and current allocations.
+
+- **Method**: `GET`
+- **Path**: `/vault/{pubkey}`
+
+---
+
+### Get Historical Fee Earned
+
+Calculates the total performance and management fees earned by a vault within a specified time range, denominated in the vault's LP token.
+
+- **Method**: `GET`
+- **Path**: `/vault/{pubkey}/fee-earned`
+
+#### Query Parameters
+
+| Name | Type | Description |
+|---|---|---|
+| `startTs` | number | Optional. Start timestamp (Unix seconds). Defaults to 0. |
+| `endTs` | number | Optional. End timestamp (Unix seconds). Defaults to now. |
+
+---
+
+### Get Historical Share Price
+
+Retrieves the interpolated share price (asset per LP token) for a vault at a specific point in time.
+
+- **Method**: `GET`
+- **Path**: `/vault/{pubkey}/share-price`
+
+#### Query Parameters
+
+| Name | Type | Description |
+|---|---|---|
+| `ts` | number | Optional. Timestamp (Unix seconds). Defaults to now. |
+
+---
+
+## User-Specific Data
+
+### Get User Vault Balance
+
+Calculates and returns a user's total balance in a vault, denominated in the vault's underlying asset.
+
+- **Method**: `GET`
+- **Path**: `/vault/{pubkey}/user/{userPubkey}/balance`
+
+### Get User Pending Withdrawal
+
+Checks for and returns a user's pending withdrawal request from a vault, including the withdrawable amount and timestamp.
+
+- **Method**: `GET`
+- **Path**: `/vault/{pubkey}/user/{userPubkey}/pending-withdrawal`
+
+---
+
+## Transaction Creation
+
+<Info>
+**Important:** These endpoints return a serialized, unsigned transaction. Your client application must sign this transaction with the user's wallet and broadcast it to the Solana network. See the [API Overview](/developers/api-overview) for more details.
+</Info>
+
+### Create Deposit Transaction
+
+Builds a transaction to deposit assets into a vault.
+
+- **Method**: `POST`
+- **Path**: `/vault/{pubkey}/deposit`
+
+#### Body Parameters
+
+| Name | Type | Description |
+|---|---|---|
+| `userPubkey` | string | The user's wallet public key |
+| `lamportAmount` | string | The amount of the asset to deposit in lamports |
+| `assetMint` | string | Optional. The mint address of the asset |
+| `assetTokenProgram` | string | Optional. The token program for the asset |
+
+---
+
+### Create Request Withdrawal Transaction
+
+Builds a transaction to initiate a withdrawal request. Funds enter a waiting period before they can be claimed.
+
+- **Method**: `POST`
+- **Path**: `/vault/{pubkey}/request-withdrawal`
+
+#### Body Parameters
+
+| Name | Type | Description |
+|---|---|---|
+| `userPubkey` | string | The user's wallet public key |
+| `lamportAmount` | string | The amount to withdraw |
+| `isAmountInLp` | boolean | Optional. `true` if amount is in LP tokens, `false` if in underlying asset |
+| `isWithdrawAll` | boolean | Optional. `true` to withdraw the user's entire balance |
+
+---
+
+### Create Cancel Withdrawal Transaction
+
+Builds a transaction to cancel a pending withdrawal request.
+
+- **Method**: `POST`
+- **Path**: `/vault/{pubkey}/cancel-withdrawal`
+
+#### Body Parameters
+
+| Name | Type | Description |
+|---|---|---|
+| `userPubkey` | string | The user's wallet public key |
+
+---
+
+### Create Claim Withdrawal Transaction
+
+Builds a transaction to claim funds from a completed withdrawal request.
+
+- **Method**: `POST`
+- **Path**: `/vault/{pubkey}/withdraw`
+
+#### Body Parameters
+
+| Name | Type | Description |
+|---|---|---|
+| `userPubkey` | string | The user's wallet public key |
+| `assetMint` | string | Optional. The mint address of the asset |
+| `assetTokenProgram` | string | Optional. The token program for the asset |
+
+---
+
+### Create Direct Withdrawal Transaction
+
+Builds a transaction for an instant "direct withdrawal" from supported vaults, bypassing the standard waiting period.
+
+- **Method**: `POST`
+- **Path**: `/vault/{pubkey}/direct-withdraw`
+
+#### Body Parameters
+
+| Name | Type | Description |
+|---|---|---|
+| `userPubkey` | string | The user's wallet public key |
+| `lamportAmount` | string | The amount of the asset to withdraw in lamports |
+| `isWithdrawAll` | boolean | `true` to withdraw the user's entire balance |
+| `assetMint` | string | Optional. The mint address of the asset |
+| `assetTokenProgram` | string | Optional. The token program for the asset |

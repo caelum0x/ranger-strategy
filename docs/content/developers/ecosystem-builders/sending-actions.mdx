@@ -1,0 +1,222 @@
+# Sending Actions
+
+This page covers every way to send transactions in your app -- from the high-level `AuthorityDrift` methods (what `drift-ui-template` uses) to raw SDK instruction builders for full control.
+
+## AuthorityDrift methods
+
+`AuthorityDrift` exposes high-level methods for the operations app builders use most. Each method handles transaction construction, compute budget, and sending.
+
+### Place a perp order
+
+```ts
+import { BigNum, PositionDirection } from "@drift-labs/sdk";
+
+await drift.openPerpOrder({
+  subAccountId: 0,
+  marketIndex: 0,
+  direction: PositionDirection.LONG,
+  assetType: "base",
+  size: BigNum.fromPrint("1", 9),   // 1 SOL in base precision
+  orderConfig: {
+    orderType: "market",
+  },
+});
+
+// Or a limit order:
+await drift.openPerpOrder({
+  subAccountId: 0,
+  marketIndex: 0,
+  direction: PositionDirection.LONG,
+  assetType: "base",
+  size: BigNum.fromPrint("1", 9),
+  orderConfig: {
+    orderType: "limit",
+    limitPrice: BigNum.fromPrint("120", 6),
+  },
+});
+```
+
+### Cancel orders
+
+```ts
+await drift.cancelOrders({
+  subAccountId: 0,
+  orderIds: [1, 2, 3],
+});
+```
+
+### Settle PnL
+
+```ts
+await drift.settleAccountPnl({
+  subAccountId: 0,
+});
+```
+
+### Deposit and withdraw
+
+```ts
+await drift.deposit({
+  subAccountId: 0,
+  spotMarketIndex: 0,     // USDC
+  amount: depositAmount,  // BigNum in market precision
+});
+
+await drift.withdraw({
+  subAccountId: 0,
+  spotMarketIndex: 0,
+  amount: withdrawAmount, // BigNum in market precision
+});
+```
+
+### Swap
+
+```ts
+const quote = await drift.getSwapQuote({
+  fromMarketIndex: 1,   // SOL
+  toMarketIndex: 0,     // USDC
+  amount: swapAmount,   // BigNum in source market precision
+  subAccountId: 0,
+});
+
+await drift.swap({
+  subAccountId: 0,
+  fromMarketIndex: 1,
+  toMarketIndex: 0,
+  amount: swapAmount,
+  quote,
+});
+```
+
+## SDK instruction builders
+
+For advanced use cases, you can drop down to the raw Drift SDK and build transactions with multiple instructions. This gives you atomicity, custom compute budgets, and full control over transaction composition.
+
+| Approach | Use when |
+|---|---|
+| `AuthorityDrift` methods (above) | Simple flows -- one action per transaction, default compute budget |
+| Instruction builders (below) | Multiple instructions in one transaction, custom compute budget, or atomic cancel-and-replace |
+
+Most ecosystem apps start with `AuthorityDrift` methods and move to instruction builders when they need atomic multi-step transactions or fine-grained priority fee control.
+
+<Steps>
+### Initialize a DriftClient
+
+If you're not using `AuthorityDrift`, initialize a `DriftClient` directly: [SDK setup](/developers/drift-sdk/setup)
+
+### Place and cancel orders
+
+Use the SDK's order helpers for common flows: [Orders](/developers/drift-sdk/orders)
+
+### Manage collateral and accounts
+
+Deposits, withdrawals, and account lifecycle: [Deposits & withdrawals](/developers/drift-sdk/deposits-withdrawals), [Users](/developers/drift-sdk/users)
+
+### Monitor risk and health
+
+UI parity requires the same risk/health calculations: [PnL & risk](/developers/drift-sdk/pnl-risk)
+
+### Build custom transactions
+
+Build transactions with multiple instructions for atomicity -- either all instructions succeed or none do.
+
+<SDKDoc>
+  <TypeScript name="getPlacePerpOrderIx" type="method" owner="DriftClient">
+```js
+import { ComputeBudgetProgram } from "@solana/web3.js";
+import { getMarketOrderParams, PositionDirection } from "@drift-labs/sdk";
+
+const orderParams = getMarketOrderParams({
+  marketIndex: 0,
+  direction: PositionDirection.LONG,
+  baseAssetAmount: driftClient.convertToPerpPrecision(1),
+});
+
+const placeOrderIx = await driftClient.getPlacePerpOrderIx(orderParams);
+
+const tx = await driftClient.txSender.getVersionedTransaction(
+  [
+    ComputeBudgetProgram.setComputeUnitLimit({ units: 400000 }),
+    ComputeBudgetProgram.setComputeUnitPrice({ microLamports: 50000 }),
+    placeOrderIx,
+  ],
+  [],
+  driftClient.wallet.publicKey
+);
+
+const signature = await driftClient.txSender.sendVersionedTransaction(
+  tx,
+  [],
+  driftClient.opts
+);
+console.log("Transaction:", signature);
+```
+  </TypeScript>
+</SDKDoc>
+
+#### Atomic cancel-and-place (order replacement)
+
+A common pattern for trading UIs is atomically canceling existing orders and placing new ones in a single transaction. This prevents the window where you have no orders resting while updating prices.
+
+<SDKDoc>
+  <TypeScript name="cancelAndPlaceOrders" type="method" owner="DriftClient">
+```js
+import { ComputeBudgetProgram } from "@solana/web3.js";
+import { getLimitOrderParams, PositionDirection } from "@drift-labs/sdk";
+
+const cancelIx = await driftClient.getCancelOrdersIx(
+  null,   // marketType (null = all)
+  null,   // marketIndex (null = all)
+  null    // direction (null = both)
+);
+
+const bidParams = getLimitOrderParams({
+  marketIndex: 0,
+  direction: PositionDirection.LONG,
+  baseAssetAmount: driftClient.convertToPerpPrecision(1),
+  price: driftClient.convertToPricePrecision(120),
+  postOnly: true,
+});
+
+const askParams = getLimitOrderParams({
+  marketIndex: 0,
+  direction: PositionDirection.SHORT,
+  baseAssetAmount: driftClient.convertToPerpPrecision(1),
+  price: driftClient.convertToPricePrecision(125),
+  postOnly: true,
+});
+
+const bidIx = await driftClient.getPlacePerpOrderIx(bidParams);
+const askIx = await driftClient.getPlacePerpOrderIx(askParams);
+
+const tx = await driftClient.txSender.getVersionedTransaction(
+  [
+    ComputeBudgetProgram.setComputeUnitLimit({ units: 600000 }),
+    ComputeBudgetProgram.setComputeUnitPrice({ microLamports: 50000 }),
+    cancelIx,
+    bidIx,
+    askIx,
+  ],
+  [],
+  driftClient.wallet.publicKey
+);
+
+const signature = await driftClient.txSender.sendVersionedTransaction(
+  tx,
+  [],
+  driftClient.opts
+);
+console.log("Cancel + place transaction:", signature);
+```
+  </TypeScript>
+</SDKDoc>
+</Steps>
+
+## Transaction performance
+
+If you're batching or sending frequent transactions, consider:
+
+- **Priority fees** -- Set `ComputeUnitPrice` to land transactions faster during congestion
+- **Compute budget** -- Use `setComputeUnitLimit` to allocate enough CU for multi-instruction transactions
+- **Address Lookup Tables (ALTs)** -- Reduce transaction size when referencing many accounts. See SDK documentation for details.
+- **Retry logic** -- Transactions can be dropped; implement retries with backoff for production systems

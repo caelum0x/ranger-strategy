@@ -1,0 +1,89 @@
+---
+title: Key Participants
+description: Understand the roles and permissions in the Ranger Earn ecosystem
+---
+
+## Users
+
+Users deposit assets into vaults to earn yield:
+
+- Deposit assets into any vault of their choice
+- Receive LP tokens representing their share of the vault
+- Withdraw their assets plus earned yields at any time
+- Track their positions and yields through LP token value
+
+<Card title="User Guide" icon="arrow-right" href="/users/overview">
+  Learn how to use Ranger Earn vaults
+</Card>
+
+## Vault Managers
+
+Vault managers create, configure, and operate vaults. They handle both the structural setup and day-to-day capital allocation:
+
+- Create new vaults with custom parameters
+- Add or remove adaptors to determine available strategies
+- Set fee structures (performance, management, issuance, redemption)
+- Rebalance assets between DeFi protocols based on market conditions
+- Configure vault parameters like deposit caps and withdrawal periods
+- Run automation bots and monitor performance
+
+<Info>
+Ranger Earn enforces role separation between **admin** (vault structure and configuration) and **manager** (fund allocation). These should be separate keypairs for security. See [Vault Manager Overview](/vault-owners/overview) for details.
+</Info>
+
+<CardGroup cols={2}>
+  <Card title="Get Started" icon="arrow-right" href="/vault-owners/initialization/choose-your-path">
+    Create your first vault
+  </Card>
+  <Card title="API & SDK" icon="arrow-right" href="/developers/api-overview">
+    Build with the REST API or TypeScript SDK
+  </Card>
+</CardGroup>
+
+## Yield Protocols
+
+DeFi protocols that want their yield strategies accessible through Ranger Earn vaults by building custom adaptors:
+
+- Develop adaptors that wrap protocol-specific interactions
+- Define deposit, withdraw, and initialization logic
+- Implement the standard adaptor interface
+- Enable vault managers to allocate funds into your protocol
+
+<Card title="Adaptor Creation Guide" icon="arrow-right" href="/protocols/adaptor-creation/index">
+  Build a custom adaptor
+</Card>
+
+## Composing Protocols
+
+Protocols that build new DeFi primitives on top of Ranger Earn vaults via Cross-Program Invocation (CPI):
+
+- Deposit into and withdraw from vaults programmatically on-chain
+- Build derivatives such as junior/senior tranching
+- Create fractional reserve systems backed by vault LP tokens
+- Compose vault yields into new structured products
+
+<Card title="CPI Integration Guide" icon="arrow-right" href="/protocols/cpi-integration/index">
+  Integrate via CPI
+</Card>
+
+## Interaction Flow
+
+<Steps>
+  <Step title="Yield Protocols create adaptors to bring their strategies into Ranger Earn" />
+  <Step title="Vault Managers set up vaults, connect adaptors, and configure parameters" />
+  <Step title="Users deposit into vaults and earn yield via LP tokens" />
+  <Step title="Vault Managers allocate funds across strategies and rebalance" />
+  <Step title="Composing Protocols build new products on top of vault LP tokens" />
+</Steps>
+
+## Roles and Permissions
+
+| Action | Users | Vault Managers (Admin) | Vault Managers (Manager) | Yield Protocols | Composing Protocols |
+|---|---|---|---|---|---|
+| Deposit/Withdraw from vault | ✓ | | | | ✓ |
+| Create vault | | ✓ | | | |
+| Add/Remove adaptors | | ✓ | | | |
+| Set fees and configuration | | ✓ | | | |
+| Allocate funds to strategies | | | ✓ | | |
+| Create adaptors | | | | ✓ | |
+| CPI into vaults | | | | | ✓ |

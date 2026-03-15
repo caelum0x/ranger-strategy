@@ -62,7 +62,7 @@ function makeDriftClientMock() {
     })),
     getUserAccountPublicKey: jest.fn().mockResolvedValue("pubkey"),
     getSettlePNLsIxs: jest.fn().mockResolvedValue([]),
-    wallet: { publicKey: "mock-pubkey" },
+    wallet: { publicKey: { toBase58: () => "mock-pubkey" } },
     opts: {},
     txSender: {
       getVersionedTransaction: jest.fn().mockResolvedValue("mock-tx"),
@@ -74,10 +74,15 @@ function makeDriftClientMock() {
 describe("DriftExecutor", () => {
   let executor: DriftExecutor;
   let client: ReturnType<typeof makeDriftClientMock>;
+  let sorClient: { isConfigured: jest.Mock; getOrderMetadata: jest.Mock };
 
   beforeEach(() => {
     client = makeDriftClientMock();
-    executor = new DriftExecutor(client);
+    sorClient = {
+      isConfigured: jest.fn(() => false),
+      getOrderMetadata: jest.fn(),
+    };
+    executor = new DriftExecutor(client, 50_000, sorClient as any);
   });
 
   // ── atomicCancelAndEnterDeltaNeutral ──────────────────────────────
@@ -139,6 +144,24 @@ describe("DriftExecutor", () => {
 
       // Should have called the IXs (no error = valid direction)
       expect(client.getPlacePerpOrderIx).toHaveBeenCalled();
+    });
+
+    it("uses SOR metadata for spot leg pricing when configured", async () => {
+      sorClient.isConfigured.mockReturnValue(true);
+      sorClient.getOrderMetadata.mockResolvedValue({
+        total_collateral: 101,
+        total_size: 0.5,
+        venues: [],
+      });
+
+      await executor.atomicCancelAndEnterDeltaNeutral(
+        "SOL",
+        new Decimal("100"),
+        "short"
+      );
+
+      expect(sorClient.getOrderMetadata).toHaveBeenCalled();
+      expect(client.getPlaceSpotOrderIx).toHaveBeenCalled();
     });
   });
 

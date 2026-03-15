@@ -1,0 +1,201 @@
+---
+title: Fund Allocation
+description: Deposit and withdraw funds between vault and strategies
+---
+
+This guide explains how to use the Ranger Earn SDK to deposit and withdraw funds between the vault's idle account and strategies.
+
+## Setup
+
+```typescript
+import { Connection, Keypair, PublicKey, TransactionInstruction } from "@solana/web3.js";
+import { VoltrClient, LENDING_ADAPTOR_PROGRAM_ID, SEEDS } from "@voltr/vault-sdk";
+import { BN } from "@coral-xyz/anchor";
+import {
+  createAssociatedTokenAccountInstruction,
+  getAssociatedTokenAddressSync,
+  getAccount,
+  TOKEN_PROGRAM_ID,
+} from "@solana/spl-token";
+import fs from "fs";
+```
+
+```typescript
+const managerKp = Keypair.fromSecretKey(
+  Uint8Array.from(JSON.parse(fs.readFileSync("/path/to/manager.json", "utf-8")))
+);
+const manager = managerKp.publicKey;
+
+const connection = new Connection("your-rpc-url");
+const client = new VoltrClient(connection);
+
+const vault = new PublicKey("your-vault-address");
+const vaultAssetMint = new PublicKey("your-asset-mint");
+```
+
+## Depositing Funds to Strategies
+
+Accounts required for deposit are protocol-specific. Use the protocol-specific scripts:
+
+| Protocol / Adaptor | Deposit Scripts |
+|---|---|
+| Kamino Adaptor | [Kamino Vault](https://github.com/voltrxyz/kamino-scripts/blob/main/src/scripts/manager-deposit-kvault.ts), [Kamino Lending Market](https://github.com/voltrxyz/kamino-scripts/blob/main/src/scripts/manager-deposit-market.ts) |
+| Drift Adaptor | [Drift Lend](https://github.com/voltrxyz/drift-scripts/blob/main/src/scripts/manager-deposit-earn.ts), [Drift Perps](https://github.com/voltrxyz/drift-scripts/blob/main/src/scripts/manager-deposit-user.ts) |
+| Jupiter Adaptor | [Spot via Jupiter Swap](https://github.com/voltrxyz/spot-scripts/blob/main/src/scripts/manager-buy-spot.ts), [Jupiter Lend](https://github.com/voltrxyz/spot-scripts/blob/main/src/scripts/manager-deposit-earn.ts) |
+| Trustful Adaptor | [Centralised Exchanges](https://github.com/voltrxyz/trustful-scripts/blob/main/src/scripts/manager-deposit-arbitrary.ts) |
+
+### 1. Account Setup
+
+```typescript
+const counterPartyTa = new PublicKey("protocol-token-account");
+
+const [strategy] = PublicKey.findProgramAddressSync(
+  [SEEDS.STRATEGY, counterPartyTa.toBuffer()],
+  LENDING_ADAPTOR_PROGRAM_ID
+);
+
+const { vaultStrategyAuth } = client.findVaultStrategyAddresses(vault, strategy);
+
+const vaultStrategyAssetAta = getAssociatedTokenAddressSync(
+  vaultAssetMint,
+  vaultStrategyAuth,
+  true
+);
+
+let transactionIxs: TransactionInstruction[] = [];
+try {
+  await getAccount(connection, vaultStrategyAssetAta);
+} catch {
+  transactionIxs.push(
+    createAssociatedTokenAccountInstruction(
+      manager,
+      vaultStrategyAssetAta,
+      vaultStrategyAuth,
+      vaultAssetMint
+    )
+  );
+}
+```
+
+<Info>
+**ATA behavior**: ATAs created for strategy operations are **not closed** between deposit/withdraw cycles. The rent cost (~0.002 SOL per ATA) is a one-time cost paid by the manager.
+</Info>
+
+### 2. Create Deposit Instruction
+
+```typescript
+const depositAmount = new BN("1000000"); // Amount in smallest unit (e.g., 1 USDC = 1000000)
+
+const depositIx = await client.createDepositStrategyIx(
+  { depositAmount },
+  {
+    manager,
+    vault,
+    vaultAssetMint,
+    assetTokenProgram: TOKEN_PROGRAM_ID,
+    strategy,
+    remainingAccounts: [
+      { pubkey: counterPartyTa, isSigner: false, isWritable: true },
+      { pubkey: protocolProgram, isSigner: false, isWritable: false },
+      // Additional protocol-specific accounts...
+    ],
+  }
+);
+
+transactionIxs.push(depositIx);
+```
+
+### 3. Send Transaction
+
+```typescript
+const txSig = await sendAndConfirmOptimisedTx(
+  transactionIxs,
+  "your-rpc-url",
+  managerKp
+);
+```
+
+## Withdrawing Funds from Strategies
+
+| Protocol / Adaptor | Withdraw Scripts |
+|---|---|
+| Kamino Adaptor | [Kamino Vault](https://github.com/voltrxyz/kamino-scripts/blob/main/src/scripts/manager-withdraw-kvault.ts), [Kamino Lending Market](https://github.com/voltrxyz/kamino-scripts/blob/main/src/scripts/manager-withdraw-market.ts) |
+| Drift Adaptor | [Drift Lend](https://github.com/voltrxyz/drift-scripts/blob/main/src/scripts/manager-withdraw-earn.ts), [Drift Perps](https://github.com/voltrxyz/drift-scripts/blob/main/src/scripts/manager-withdraw-user.ts) |
+| Jupiter Adaptor | [Spot via Jupiter Swap](https://github.com/voltrxyz/spot-scripts/blob/main/src/scripts/manager-sell-spot.ts), [Jupiter Lend](https://github.com/voltrxyz/spot-scripts/blob/main/src/scripts/manager-withdraw-earn.ts) |
+| Trustful Adaptor | [Centralised Exchanges](https://github.com/voltrxyz/trustful-scripts/blob/main/src/scripts/manager-withdraw-arbitrary.ts) |
+
+### 1. Account Setup
+
+```typescript
+const counterPartyTaAuth = await getAccount(
+  connection,
+  counterPartyTa,
+  "confirmed"
+).then((account) => account.owner);
+
+let transactionIxs: TransactionInstruction[] = [];
+try {
+  await getAccount(connection, vaultStrategyAssetAta);
+} catch {
+  transactionIxs.push(
+    createAssociatedTokenAccountInstruction(
+      manager,
+      vaultStrategyAssetAta,
+      vaultStrategyAuth,
+      vaultAssetMint
+    )
+  );
+}
+```
+
+### 2. Create Withdrawal Instruction
+
+```typescript
+const withdrawAmount = new BN("500000");
+
+const withdrawIx = await client.createWithdrawStrategyIx(
+  { withdrawAmount },
+  {
+    manager,
+    vault,
+    vaultAssetMint,
+    assetTokenProgram: TOKEN_PROGRAM_ID,
+    strategy,
+    remainingAccounts: [
+      { pubkey: counterPartyTaAuth, isSigner: false, isWritable: true },
+      { pubkey: counterPartyTa, isSigner: false, isWritable: true },
+      { pubkey: protocolProgram, isSigner: false, isWritable: false },
+    ],
+  }
+);
+
+transactionIxs.push(withdrawIx);
+```
+
+### 3. Send Transaction
+
+```typescript
+const txSig = await sendAndConfirmOptimisedTx(
+  transactionIxs,
+  "your-rpc-url",
+  managerKp
+);
+```
+
+## Best Practices
+
+- **Keep idle reserves**: Don't deploy 100% of funds — leave a buffer for user withdrawals
+- **Batch operations**: Combine ATA creation and allocation in a single transaction
+- **Monitor allocations**: Track how funds are distributed across strategies
+- **Automate**: Use bots/scripts for regular rebalancing (see [Running Bots & Scripts](/vault-owners/operations/bots-and-scripts))
+
+## Troubleshooting
+
+| Issue | Solution |
+|---|---|
+| Transaction too large | Use Lookup Tables |
+| Insufficient funds | Check idle balance, ensure enough SOL for gas |
+| Authority error | Verify manager keypair matches vault's manager |
+| ATA not found | Create the ATA before the allocation instruction |
+
+For additional support, refer to the [Ranger Earn SDK documentation](https://voltrxyz.github.io/vault-sdk/).

@@ -1,0 +1,69 @@
+---
+title: User Overview
+description: Access automated high-yield vaults with a simple interface
+---
+
+Ranger Earn provides curated access to institutional-grade yield strategies managed by professional asset managers and hedge funds. The platform simplifies access to sophisticated trading strategies that traditionally require specialized tools and expertise, making them available through a one-click interface.
+
+<Card title="Explore Vaults" icon="arrow-up-right-from-square" href="https://app.ranger.finance/earn">
+  Start earning yield on Ranger Finance
+</Card>
+
+---
+
+## How It Works
+
+### Transparent Yield Generation
+
+All vault positions and protocol interactions are visible on-chain. Users can see exactly how yield is generated and assess the protocols involved, enabling informed decision-making around protocol risk exposure.
+
+### Non-Custodial Security
+
+Ranger vaults operate on a non-custodial basis:
+
+- **On-chain vaults** — Neither Ranger nor curators can withdraw user deposits. Strategy execution is restricted to whitelisted protocols and functions, ensuring funds remain under programmatic control.
+- **Off-chain strategy vaults** — For strategies involving centralized exchanges or cross-chain DEXs, curators may withdraw funds to whitelisted addresses. These are typically third-party custodians or curator-managed exchange accounts, with withdrawal permissions clearly disclosed in vault documentation.
+
+### Professional Curation
+
+All vault curators featured on Ranger Earn have completed KYC/KYB verification and demonstrated proven track records in strategy execution. This vetting process helps mitigate counterparty risk and ensures only quality strategies are presented to users.
+
+---
+
+## Fee Structure
+
+Fees vary by vault. Each vault manager configures their own fee parameters.
+
+| Fee Type | Charged On | Description |
+|---|---|---|
+| **Issuance Fee** | Deposit | Percentage deducted from deposits before LP tokens are minted |
+| **Redemption Fee** | Withdrawal | Percentage deducted from assets during withdrawal |
+| **Management Fee** | AUM | Annual percentage fee that accrues continuously based on time elapsed |
+| **Performance Fee** | Net Profit | Percentage of profits generated, subject to High Water Mark |
+
+<Info>
+Performance fees use a **High Water Mark** mechanism — fees are only charged on new profits that exceed the vault's historical peak value. This ensures you never pay performance fees twice on the same gains.
+</Info>
+
+---
+
+## Ranger-Managed Vaults
+
+| Vault | Strategy | Docs |
+|---|---|---|
+| [Ranger USD ($rgUSD)](/users/rgusd/index) | Dynamic lending yield optimization | [Full docs](/users/rgusd/index) |
+
+## Partner Vaults
+
+| Vault | Manager | Docs |
+|---|---|---|
+| HyperPack Arbitrage | Vectis | [External](https://docs.vectis.finance/vaults/hyperpack-arbitrage) |
+| Stablecoin Multi Lend | Vectis | [External](https://docs.vectis.finance/vaults/multi-lend-vault) |
+| Elemental USDS Lending | Elemental | [External](https://docs.elemental.fund/elemental-lend/introduction-to-elemental-lend) |
+| Elemental USDC Lending | Elemental | [External](https://docs.elemental.fund/elemental-lend/introduction-to-elemental-lend) |
+| DriftPack Arbitrage | Vectis | [External](https://docs.vectis.finance/vaults/driftpack-arbitrage) |
+| JLP HyperLoop | Vectis | [External](https://docs.vectis.finance/vaults/jlp-hyperloop-vault) |
+| Elemental USDG Lending | Elemental | [External](https://docs.elemental.fund/elemental-lend/introduction-to-elemental-lend) |
+| Vectis UltraX Arb | Vectis | [External](https://docs.vectis.finance/vaults/ultrax-arbitrage) |
+
+Each vault has its own risk profile, fee structure, and withdrawal terms. Review the vault-specific documentation before depositing. For general risks, see the [Vault Risk Disclosure](/users/vault-risk-disclosure).

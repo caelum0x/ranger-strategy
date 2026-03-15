@@ -10,6 +10,9 @@ jest.mock("../config", () => ({
     maxDrawdownPct: new (require("decimal.js"))("3.0"),
     minFundingAPY: new (require("decimal.js"))("0.05"),
     strategyMode: "drift-only",
+    strategyProfile: "generic",
+    driftBearNeutralAllocation: new (require("decimal.js"))("0.50"),
+    driftBearTopAssetOnly: true,
     targetAssets: ["SOL", "BTC", "ETH"],
     rebalanceIntervalMs: 28800000,
   },
@@ -235,6 +238,36 @@ describe("StrategyEngine", () => {
       expect(openSignals[0].perpSide).toBe("long"); // negative funding → long perp
       expect(openSignals[1].asset).toBe("SOL");
       expect(openSignals[1].perpSide).toBe("short"); // positive funding → short perp
+    });
+
+    it("suppresses new opens when the indexer says hold with high confidence", () => {
+      engine.setIndexerContext({
+        decision: {
+          action: "hold",
+          confidence: new Decimal("0.9"),
+          rationale: "wait",
+          createdAt: Date.now(),
+        },
+      });
+
+      const driftRates = [makeFundingRate("SOL", "drift", 0.10)];
+      const signals = engine.generateSignals(driftRates, []);
+
+      expect(signals.filter((s) => s.action === "open")).toHaveLength(0);
+    });
+
+    it("caps driftbear entries at the target neutral allocation", () => {
+      (engine as any).state.strategyProfile = "driftbear-neutral-farmer";
+      (engine as any).riskManager.calculatePositionSize.mockReturnValue(
+        new Decimal("1000")
+      );
+
+      const driftRates = [makeFundingRate("SOL", "drift", 0.10)];
+      const signals = engine.generateSignals(driftRates, []);
+      const openSignal = signals.find((s) => s.action === "open");
+
+      expect(openSignal).toBeDefined();
+      expect(openSignal!.spotSize.eq(new Decimal("450"))).toBe(true);
     });
   });
 

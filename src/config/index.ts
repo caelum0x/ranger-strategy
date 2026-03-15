@@ -3,10 +3,43 @@ import Decimal from "decimal.js";
 
 dotenv.config();
 
+function parseIntegerList(value: string | undefined, fallback: number[]): number[] {
+  if (!value || !value.trim()) {
+    return fallback;
+  }
+
+  return value
+    .split(",")
+    .map((entry) => parseInt(entry.trim(), 10))
+    .filter((entry) => Number.isFinite(entry));
+}
+
+function parseMarketSubaccountMap(
+  value: string | undefined
+): Record<number, number> {
+  const result: Record<number, number> = {};
+  if (!value || !value.trim()) {
+    return result;
+  }
+
+  for (const pair of value.split(",")) {
+    const [marketIndexRaw, subaccountIdRaw] = pair.split(":");
+    const marketIndex = parseInt((marketIndexRaw || "").trim(), 10);
+    const subaccountId = parseInt((subaccountIdRaw || "").trim(), 10);
+    if (Number.isFinite(marketIndex) && Number.isFinite(subaccountId)) {
+      result[marketIndex] = subaccountId;
+    }
+  }
+
+  return result;
+}
+
 export const config = {
   // Solana
   solanaRpcUrl:
-    process.env.SOLANA_RPC_URL || "https://api.mainnet-beta.solana.com",
+    process.env.HELIUS_RPC_URL ||
+    process.env.SOLANA_RPC_URL ||
+    "https://api.mainnet-beta.solana.com",
   /** Helius RPC URL — required for getPriorityFeeEstimate in sendAndConfirmOptimisedTx */
   heliusRpcUrl:
     process.env.HELIUS_RPC_URL ||
@@ -27,6 +60,13 @@ export const config = {
   webhookPath: process.env.WEBHOOK_PATH || "/webhook",
   indexerStorePath:
     process.env.INDEXER_STORE_PATH || ".ranger-state/indexer-state.json",
+  sorApiKey: process.env.SOR_API_KEY || "",
+  sorApiBaseUrl:
+    process.env.SOR_API_BASE_URL ||
+    "https://staging-sor-api-437363704888.asia-northeast1.run.app/v1",
+  sorDataApiBaseUrl:
+    process.env.SOR_DATA_API_BASE_URL ||
+    "https://data-api-staging-437363704888.asia-northeast1.run.app/v1",
 
   // Drift
   driftEnv: (process.env.DRIFT_ENV || "mainnet-beta") as
@@ -45,6 +85,13 @@ export const config = {
   strategyMode: (process.env.STRATEGY_MODE || "drift-only") as
     | "drift-only"
     | "cross-venue",
+  strategyProfile: (process.env.STRATEGY_PROFILE || "driftbear-neutral-farmer") as
+    | "generic"
+    | "driftbear-neutral-farmer",
+  driftBearNeutralAllocation: new Decimal(
+    process.env.DRIFTBEAR_NEUTRAL_ALLOCATION || "0.50"
+  ),
+  driftBearTopAssetOnly: process.env.DRIFTBEAR_TOP_ASSET_ONLY !== "false",
   maxLeverage: new Decimal(process.env.MAX_LEVERAGE || "2.0"),
   healthRatioFloor: new Decimal(process.env.HEALTH_RATIO_FLOOR || "1.10"),
   maxDrawdownPct: new Decimal(process.env.MAX_DRAWDOWN_PCT || "3.0"),
@@ -53,7 +100,46 @@ export const config = {
   rebalanceIntervalMs: parseInt(
     process.env.REBALANCE_INTERVAL_MS || "28800000"
   ), // 8 hours
+  jupiterSwapSlippageBps: parseInt(
+    process.env.JUPITER_SWAP_SLIPPAGE_BPS || "100"
+  ),
   targetAssets: (process.env.TARGET_ASSETS || "SOL,BTC,ETH").split(","),
+  liquidationScanIntervalMs: parseInt(
+    process.env.LIQUIDATION_SCAN_INTERVAL_MS || "5000"
+  ),
+  liquidationMaxUsersPerTick: parseInt(
+    process.env.LIQUIDATION_MAX_USERS_PER_TICK || "5"
+  ),
+  liquidationTakeoverPct: parseFloat(
+    process.env.LIQUIDATION_TAKEOVER_PCT || "0.25"
+  ),
+  liquidationAutoDerisk: process.env.LIQUIDATION_AUTO_DERISK !== "false",
+  liquidationDryRun: process.env.LIQUIDATION_DRY_RUN === "true",
+  liquidationSubaccounts: parseIntegerList(
+    process.env.LIQUIDATION_SUBACCOUNTS,
+    [0]
+  ),
+  liquidationDefaultSubaccountId: parseInt(
+    process.env.LIQUIDATION_DEFAULT_SUBACCOUNT_ID || "0"
+  ),
+  liquidationPerpSubaccountMap: parseMarketSubaccountMap(
+    process.env.LIQUIDATION_PERP_SUBACCOUNT_MAP
+  ),
+  liquidationSpotSubaccountMap: parseMarketSubaccountMap(
+    process.env.LIQUIDATION_SPOT_SUBACCOUNT_MAP
+  ),
+  liquidationPriorityFeeMultiplier: parseFloat(
+    process.env.LIQUIDATION_PRIORITY_FEE_MULTIPLIER || "1.2"
+  ),
+  liquidationMaxPriorityFeeMicroLamports: parseInt(
+    process.env.LIQUIDATION_MAX_PRIORITY_FEE_MICROLAMPORTS || "250000"
+  ),
+  liquidationFallbackPriorityFeeMicroLamports: parseInt(
+    process.env.LIQUIDATION_FALLBACK_PRIORITY_FEE_MICROLAMPORTS || "50000"
+  ),
+  liquidationComputeUnits: parseInt(
+    process.env.LIQUIDATION_COMPUTE_UNITS || "1400000"
+  ),
 
   // AI Agent
   fundingPredictionLookbackHours: parseInt(
@@ -69,6 +155,9 @@ export const config = {
     driftVaults: "vAuLTsyrvSfZRuRB3XgvkPwNGgYSs9YRYymVebLKoxR",
     vaultProgram: "vVoLTRjQmtFpiYoegx285Ze4gsLJ8ZxgFKVcuvmG1a8",
     driftAdaptor: "EBN93eXs5fHGBABuajQqdsKRkCgaqtJa8vEFD6vKXiP",
+    driftbearCustomAdaptor:
+      process.env.DRIFTBEAR_CUSTOM_ADAPTOR_PROGRAM ||
+      "G5RgbPTWyYePXebLMsP6sZTQKkKZhwP3Zn1CnSGhPnPi",
     lendingAdaptor: "aVoLTRCRt3NnnchvLYH6rMYehJHwM5m45RmLBZq7PGz",
     trustfulAdaptor: "3pnpK9nrs1R65eMV1wqCXkDkhSgN18xb1G5pgYPwoZjJ",
   },

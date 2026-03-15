@@ -1,0 +1,32 @@
+---
+title: Allocation Prerequisites
+description: Requirements before allocating vault funds
+---
+
+Before allocating vault funds, ensure you have:
+
+## 1. Manager Keypair & SOL
+
+You need the **manager** keypair for your vault. The manager pays for fund allocation transaction fees.
+
+<Info>
+The **manager** pays gas fees for allocation transactions. Additionally, the manager pays rent for any Associated Token Accounts (ATAs) that need to be created during allocation.
+</Info>
+
+## 2. Solana RPC Endpoint
+
+Access to a reliable Solana RPC endpoint (e.g., Helius, Triton, QuickNode).
+
+## 3. Manager Role on the Vault
+
+You must be the designated manager of the vault. Verify by checking the vault's `manager` field matches your keypair.
+
+## 4. Initialized Strategies
+
+Funds can only be allocated to **already initialized** strategies. If you haven't set up strategies yet, see [Strategy Setup Guide](/vault-owners/strategies/setup-guide).
+
+## 5. SDK & Dependencies
+
+```bash
+npm install @voltr/vault-sdk @solana/web3.js @coral-xyz/anchor @solana/spl-token
+```

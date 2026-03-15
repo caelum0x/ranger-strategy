@@ -1,0 +1,126 @@
+---
+title: Vault Risk Disclosure
+description: "Last Updated: 29 December 2025"
+---
+
+Ranger provides vault infrastructure that enables external managers to deploy and execute yield strategies. By depositing into any vault, you acknowledge substantial risks including total loss of principal. This document outlines the key risks you should understand before depositing.
+
+<Warning>
+By depositing into any Ranger vault, you confirm that you have read and understood this risk disclosure, accept full responsibility for your decisions, and will not hold Ranger liable for vault performance or losses.
+</Warning>
+
+---
+
+## External Manager Risk
+
+Vaults listed on Ranger are managed by independent third parties, not by Ranger. While Ranger conducts KYC and reviews manager track records before listing, and monitors ongoing vault performance, this vetting does not eliminate the risk of future underperformance, errors, or misconduct. Ranger is not responsible for manager decisions, performance, or losses.
+
+Managers have discretion over strategy execution within their stated parameters. You face counterparty risk including the possibility of manager errors, misconduct, or the manager becoming unresponsive or ceasing operations. Past performance does not guarantee future results. If a manager stops processing redemption requests, Ranger monitors vault operations and communicates with managers regarding pending redemptions, but cannot force processing of redemption requests.
+
+---
+
+## Custody and Infrastructure Risk
+
+Ranger's custody model varies depending on whether vaults execute strategies on-chain or require off-chain operations.
+
+**On-chain vaults:** Your funds remain in vault program accounts on the blockchain in a non-custodial arrangement. These vaults are protected by Ranger's protocol guardrails, which restrict managers to whitelisted protocols and functions only. However, you remain subject to smart contract risk across multiple layers including Ranger's vault infrastructure, the manager's vault-specific contracts, and any underlying DeFi protocols the vault interacts with.
+
+**Off-chain strategy vaults:** For vaults executing off-chain strategies that require CEX access or cross-chain operations, custody arrangements differ. Funds may be withdrawn from the on-chain vault to third-party custodian infrastructure or to manager-controlled CEX accounts.
+
+- For vaults using **third-party custodian infrastructure**, Ranger serves as a co-signer for withdrawals to whitelisted addresses, providing an additional layer of protection against unauthorized fund movements. However, this does not protect against losses from legitimate but unprofitable strategy execution.
+- For vaults using **manager-controlled CEX accounts**, Ranger has no signing authority and you are fully trusting the manager with custody.
+
+Ranger never has direct custody of your funds. While Ranger's guardrails reduce risk by preventing unauthorized protocol access, they do not eliminate risk. Whitelisting cannot protect against losses from legitimate but unprofitable trades or strategy failures.
+
+---
+
+## Strategy-Specific Risks
+
+Different vault strategies carry distinct risk profiles. You should understand the specific risks associated with each vault's strategy before depositing.
+
+**Leveraged strategies** amplify both gains and losses relative to underlying asset volatility. These strategies face liquidation risk during adverse price movements and may incur significant funding rate or borrowing costs that erode returns.
+
+**Liquidity provision and market making** strategies expose you to impermanent loss (also called divergence loss), where the value of your position may underperform simply holding the underlying assets. Concentrated liquidity positions face additional risks, and market making can suffer from adverse selection.
+
+**Delta-neutral and basis trading** strategies, while designed to be market-neutral, carry basis risk where the spread between positions compresses or inverts. These strategies are also exposed to funding rate volatility and execution slippage when entering or exiting multi-leg positions.
+
+**Cross-protocol strategies** introduce additional complexity and risk. Bridge risk exists for cross-chain operations, different protocols have varying liquidation mechanics, and liquidity may be fragmented across venues.
+
+---
+
+## Withdrawal and Liquidity Risk
+
+Redemption terms vary by vault. Some vaults offer instant withdrawals while others require you to submit redemption requests that managers must process before you can withdraw funds. There are no guaranteed liquidity provisions or redemption timelines. Market conditions, vault liquidity, and manager responsiveness all impact withdrawal processing. You may not be able to access your funds when desired.
+
+---
+
+## Smart Contract and Technical Risk
+
+All vaults involve smart contract interaction, which carries inherent risk of exploits, bugs, or vulnerabilities. Loss of funds can occur from issues in any layer of the system including Ranger's vault infrastructure, manager vault contracts, underlying DeFi protocols, oracle systems, or cross-chain bridges where applicable. Smart contracts may not perform as intended under all market conditions or edge cases. Code audits reduce but do not eliminate these risks.
+
+---
+
+## Network and Blockchain Risk
+
+Vaults operate on blockchain networks that carry inherent technical risks. Network congestion can delay or cause transaction failures, impacting time-sensitive operations like redemptions or rebalancing. Network outages, while rare, can temporarily prevent all vault operations. Network upgrades or forks could potentially disrupt vault operations.
+
+---
+
+## Market and Volatility Risk
+
+Cryptocurrency markets are highly volatile with rapid price movements that can cause strategy failures. Liquidation cascades and market dislocations can occur suddenly. During periods of low liquidity, losses can be amplified and execution costs increased. Vaults provide no protection against adverse market conditions, and even well-designed strategies can suffer losses during extreme volatility.
+
+---
+
+## Regulatory and Legal Risk
+
+The regulatory treatment of DeFi and digital assets remains uncertain and varies by jurisdiction. Future regulations may restrict access to vaults or certain operations. You may face tax implications from vault deposits, withdrawals, and vault token holdings. You are solely responsible for compliance with all applicable local regulations.
+
+Vaults are not available to US persons or residents of OFAC-sanctioned jurisdictions. Users are responsible for ensuring they are legally permitted to access and use Ranger vaults in their jurisdiction.
+
+---
+
+## Vault Tokens
+
+Vault deposits are represented by tokenized receipts (vault tokens) which represent pro-rata claims on vault assets. Vault tokens may be transferable depending on vault configuration. Users are responsible for understanding the legal, regulatory, and tax treatment of vault tokens in their jurisdiction.
+
+---
+
+## No Insurance or Guarantees
+
+Vault deposits are not insured by any government agency, private insurer, or other entity. There is no FDIC, SIPC, or equivalent protection. Ranger does not provide any treasury backstop for vault losses. Ranger, as an infrastructure provider, is not liable for losses resulting from manager decisions, strategy performance, market conditions, or technical failures. You may lose your entire principal with no recourse for recovery.
+
+---
+
+## Ranger's Role and Monitoring
+
+Ranger's role is limited to providing vault infrastructure. While Ranger monitors vault performance and maintains communication with managers, this monitoring does not prevent losses and Ranger cannot control manager decisions or market outcomes. Ranger may remove underperforming or problematic vaults from the platform, but such removal does not recover past losses or guarantee future protection.
+
+---
+
+## Your Responsibility
+
+You are solely responsible for:
+
+- Understanding vault strategies and associated risks
+- Evaluating manager track records and credibility
+- Assessing your own risk tolerance and financial situation
+- Monitoring your vault positions
+- Understanding tax and regulatory implications in your jurisdiction
+- Making independent investment decisions
+
+**Do not deposit funds you cannot afford to lose.**
+
+---
+
+## Acknowledgment
+
+By depositing into any Ranger vault, you confirm that:
+
+- You have read and understood this risk disclosure
+- You understand you may lose your entire principal
+- You accept full responsibility for your decisions
+- You acknowledge Ranger's role as infrastructure provider only
+- You will not hold Ranger liable for vault performance or losses
+
+If you do not fully understand and accept these risks, do not deposit into vaults.

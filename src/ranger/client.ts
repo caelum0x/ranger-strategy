@@ -19,6 +19,12 @@ import {
   setupTokenAccount,
   getAddressLookupTableAccounts,
 } from "../utils/solana-helpers";
+import {
+  buildDriftBearDepositRemainingAccounts,
+  buildDriftBearInitializeRemainingAccounts,
+  buildDriftBearWithdrawRemainingAccounts,
+  deriveDriftBearStrategy,
+} from "./driftbear-adaptor";
 
 // ── Drift constants ───────────────────────────────────────────────────────────
 const DRIFT_PROGRAM_ID   = "dRiftyHA39MWEi3m9aunc5MzRF1JYuBsbn6VPcn33UH";
@@ -351,6 +357,77 @@ export class RangerVaultManager {
     return { strategyPubkey: strategy, txSignature: sig };
   }
 
+  async initializeDriftBearCustomAdaptorStrategy(
+    marketIndex: number = USDC_MARKET_INDEX
+  ): Promise<{ strategyPubkey: PublicKey; txSignature: string }> {
+    if (!this.vaultPubkey) throw new Error("Vault not initialized");
+
+    const adaptorProgram = new PublicKey(
+      config.programs.driftbearCustomAdaptor
+    );
+    const adaptorInfo = await this.connection.getAccountInfo(adaptorProgram);
+    if (!adaptorInfo || !adaptorInfo.executable) {
+      throw new Error(
+        `DriftBear custom adaptor program not found on ${config.heliusRpcUrl}. Deploy it to devnet or update DRIFTBEAR_CUSTOM_ADAPTOR_PROGRAM.`
+      );
+    }
+    const strategy = deriveDriftBearStrategy(
+      adaptorProgram,
+      this.vaultPubkey,
+      marketIndex
+    );
+    const { vaultStrategyAuth } = this.client.findVaultStrategyAddresses(
+      this.vaultPubkey,
+      strategy
+    );
+
+    const transactionIxs: TransactionInstruction[] = [];
+    await setupTokenAccount(
+      this.connection,
+      this.adminKp.publicKey,
+      new PublicKey(USDC_MINT),
+      vaultStrategyAuth,
+      transactionIxs,
+      TOKEN_PROGRAM_ID
+    );
+
+    const additionalArgs = Buffer.from(
+      new BN(marketIndex).toArrayLike(Buffer, "le", 2)
+    );
+    transactionIxs.push(
+      await this.client.createInitializeStrategyIx(
+        { instructionDiscriminator: null, additionalArgs },
+        {
+          payer: this.adminKp.publicKey,
+          vault: this.vaultPubkey,
+          manager: this.managerKp.publicKey,
+          strategy,
+          adaptorProgram,
+          remainingAccounts: buildDriftBearInitializeRemainingAccounts({
+            adaptorProgram,
+            strategy,
+            vaultStrategyAuth,
+            marketIndex,
+            subAccountId: SUB_ACCOUNT_ID,
+          }),
+        }
+      )
+    );
+
+    const txSignature = await sendAndConfirmOptimisedTx(
+      transactionIxs,
+      config.heliusRpcUrl,
+      this.adminKp
+    );
+    logger.info("Initialized DriftBear custom adaptor strategy", {
+      strategyPubkey: strategy.toBase58(),
+      marketIndex,
+      txSignature,
+    });
+
+    return { strategyPubkey: strategy, txSignature };
+  }
+
   // ── Strategy capital allocation ───────────────────────────────────────────
 
   /**
@@ -396,7 +473,7 @@ export class RangerVaultManager {
     // Short-lived DriftClient to fetch remaining accounts
     const driftClient = new DriftClient({
       connection: this.connection as any,
-      wallet: new Wallet(this.managerKp),
+      wallet: new Wallet(this.managerKp as any) as any,
       env: "mainnet-beta",
       skipLoadUsers: true,
     });
@@ -511,7 +588,7 @@ export class RangerVaultManager {
     // Short-lived DriftClient to fetch remaining accounts
     const driftClient = new DriftClient({
       connection: this.connection as any,
-      wallet: new Wallet(this.managerKp),
+      wallet: new Wallet(this.managerKp as any) as any,
       env: "mainnet-beta",
       skipLoadUsers: true,
     });
@@ -574,6 +651,144 @@ export class RangerVaultManager {
 
     logger.info(`Withdrew $${amount.toFixed(2)} from Drift strategy`, {
       strategy: strategy.toBase58(),
+      txSignature: sig,
+    });
+  }
+
+  async depositToDriftBearCustomAdaptorStrategy(
+    amount: Decimal,
+    marketIndex: number = USDC_MARKET_INDEX
+  ): Promise<void> {
+    if (!this.vaultPubkey) throw new Error("Vault not initialized");
+
+    const adaptorProgram = new PublicKey(
+      config.programs.driftbearCustomAdaptor
+    );
+    const strategy = deriveDriftBearStrategy(
+      adaptorProgram,
+      this.vaultPubkey,
+      marketIndex
+    );
+    const { vaultStrategyAuth } = this.client.findVaultStrategyAddresses(
+      this.vaultPubkey,
+      strategy
+    );
+    const depositAmount = new BN(amount.mul(new Decimal(1e6)).toFixed(0));
+
+    const transactionIxs: TransactionInstruction[] = [];
+    await setupTokenAccount(
+      this.connection,
+      this.managerKp.publicKey,
+      new PublicKey(USDC_MINT),
+      vaultStrategyAuth,
+      transactionIxs,
+      TOKEN_PROGRAM_ID
+    );
+
+    transactionIxs.push(
+      await this.client.createDepositStrategyIx(
+        {
+          depositAmount,
+          instructionDiscriminator: null,
+          additionalArgs: Buffer.from(
+            new BN(marketIndex).toArrayLike(Buffer, "le", 2)
+          ),
+        },
+        {
+          manager: this.managerKp.publicKey,
+          vault: this.vaultPubkey,
+          vaultAssetMint: new PublicKey(USDC_MINT),
+          strategy,
+          assetTokenProgram: TOKEN_PROGRAM_ID,
+          adaptorProgram,
+          remainingAccounts: buildDriftBearDepositRemainingAccounts({
+            adaptorProgram,
+            strategy,
+            vaultStrategyAuth,
+            marketIndex,
+            subAccountId: SUB_ACCOUNT_ID,
+          }),
+        }
+      )
+    );
+
+    const sig = await sendAndConfirmOptimisedTx(
+      transactionIxs,
+      config.heliusRpcUrl,
+      this.managerKp
+    );
+    logger.info("Deposited to DriftBear custom adaptor strategy", {
+      strategy: strategy.toBase58(),
+      marketIndex,
+      txSignature: sig,
+    });
+  }
+
+  async withdrawFromDriftBearCustomAdaptorStrategy(
+    amount: Decimal,
+    marketIndex: number = USDC_MARKET_INDEX
+  ): Promise<void> {
+    if (!this.vaultPubkey) throw new Error("Vault not initialized");
+
+    const adaptorProgram = new PublicKey(
+      config.programs.driftbearCustomAdaptor
+    );
+    const strategy = deriveDriftBearStrategy(
+      adaptorProgram,
+      this.vaultPubkey,
+      marketIndex
+    );
+    const { vaultStrategyAuth } = this.client.findVaultStrategyAddresses(
+      this.vaultPubkey,
+      strategy
+    );
+    const withdrawAmount = new BN(amount.mul(new Decimal(1e6)).toFixed(0));
+
+    const transactionIxs: TransactionInstruction[] = [];
+    await setupTokenAccount(
+      this.connection,
+      this.managerKp.publicKey,
+      new PublicKey(USDC_MINT),
+      vaultStrategyAuth,
+      transactionIxs,
+      TOKEN_PROGRAM_ID
+    );
+
+    transactionIxs.push(
+      await this.client.createWithdrawStrategyIx(
+        {
+          withdrawAmount,
+          instructionDiscriminator: null,
+          additionalArgs: Buffer.from(
+            new BN(marketIndex).toArrayLike(Buffer, "le", 2)
+          ),
+        },
+        {
+          manager: this.managerKp.publicKey,
+          vault: this.vaultPubkey,
+          vaultAssetMint: new PublicKey(USDC_MINT),
+          strategy,
+          assetTokenProgram: TOKEN_PROGRAM_ID,
+          adaptorProgram,
+          remainingAccounts: buildDriftBearWithdrawRemainingAccounts({
+            adaptorProgram,
+            strategy,
+            vaultStrategyAuth,
+            marketIndex,
+            subAccountId: SUB_ACCOUNT_ID,
+          }),
+        }
+      )
+    );
+
+    const sig = await sendAndConfirmOptimisedTx(
+      transactionIxs,
+      config.heliusRpcUrl,
+      this.managerKp
+    );
+    logger.info("Withdrew from DriftBear custom adaptor strategy", {
+      strategy: strategy.toBase58(),
+      marketIndex,
       txSignature: sig,
     });
   }

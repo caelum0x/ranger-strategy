@@ -1,0 +1,53 @@
+---
+title: Introduction to Ranger Earn
+description: Modular infrastructure layer for structured yield strategies on Solana
+---
+
+Ranger Earn opens up access to sophisticated yield generation strategies on Solana to anyone. Through our Vaults, users can participate in automated yield optimization without requiring deep knowledge of underlying DeFi protocols or complex trading strategies.
+
+Ranger Earn is a permissionless framework enabling anyone — from renowned hedge funds to boutique funds — to create and manage yield-generating vaults. These vaults automatically identify and allocate capital to the most attractive opportunities across Solana's DeFi ecosystem.
+
+## Allocation Strategy Examples
+
+<Tabs>
+  <Tab title="APY Maximizer">
+    - Monitor real-time APYs across all integrated lending protocols (Solend, Drift, Marginfi, Kamino)
+    - Calculate true APY including base lending rates, rewards token values, and gas costs for rebalancing
+    - Dynamically reallocate capital to highest yielding protocol
+    - Implement minimum time locks between reallocations to prevent excessive churn
+  </Tab>
+  <Tab title="Risk-Weighted">
+    - Assign risk scores to protocols based on TVL, audit status, historical exploits, and protocol maturity
+    - Weight allocations inversely to risk scores
+    - Set maximum allocation caps per risk tier
+    - Maintain minimum diversification across 3+ protocols
+  </Tab>
+  <Tab title="Liquidation Protection">
+    - Monitor health factors across lending positions
+    - Keep buffer in low-risk protocols for quick deleverage
+    - Set dynamic allocation limits based on market volatility, protocol utilization rates, and collateral factors
+    - Automatically reduce positions approaching liquidation thresholds
+  </Tab>
+  <Tab title="Yield Optimization">
+    - Monitor lending rates across all integrated protocols in real-time
+    - Simulate price impact and rebalance when projected returns exceed thresholds
+    - Capture yield peaks across platforms while avoiding dips through dynamic routing
+  </Tab>
+</Tabs>
+
+## Who is Ranger Earn for?
+
+<CardGroup cols={2}>
+  <Card title="Users" icon="user" href="/users/overview">
+    Deposit assets into automated high-yield vaults with a simple interface
+  </Card>
+  <Card title="Vault Owners" icon="vault" href="/vault-owners/overview">
+    Create and manage yield-generating vaults with custom strategies
+  </Card>
+  <Card title="DeFi Protocols" icon="plug" href="/protocols/overview">
+    Integrate your protocol with Ranger Earn vaults via custom adaptors
+  </Card>
+  <Card title="Developers" icon="code" href="/developers/api-overview">
+    Build with our REST API and TypeScript SDK
+  </Card>
+</CardGroup>

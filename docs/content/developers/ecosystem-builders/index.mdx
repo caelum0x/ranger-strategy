@@ -1,0 +1,179 @@
+# Ecosystem Builders
+
+This section is for teams building apps, analytics, or integrations on top of Drift. The [`drift-common`](https://github.com/drift-labs/drift-common) monorepo and the [`drift-ui-template`](https://github.com/drift-labs/drift-ui-template) use the same building blocks as the official Drift UI, so you get UI parity without reinventing the wheel.
+
+## Packages
+
+| Package | npm | Purpose |
+|---|---|---|
+| `@drift-labs/react` | `npm i @drift-labs/react` | React providers, hooks, and stores for Drift integration |
+| `@drift-labs/common` | `npm i @drift-labs/common` | TypeScript utilities, market types, number formatting, `AuthorityDrift` client |
+| `@drift-labs/icons` | `npm i @drift-labs/icons` | Market and token icons used across the Drift UI |
+
+## Setup
+
+Every app starts by creating an `AuthorityDrift` instance from `@drift-labs/common`, subscribing to on-chain data, and syncing updates into your stores. This is how `drift-ui-template` does it:
+
+### Initialize and subscribe
+
+```ts
+import { AuthorityDrift, COMMON_UI_UTILS, MarketId } from "@drift-labs/common";
+import { MarketType } from "@drift-labs/sdk";
+
+const drift = new AuthorityDrift({
+  solanaRpcEndpoint: "https://...",
+  driftEnv: "mainnet-beta",
+  wallet: connectedWallet, // IWallet from @solana/wallet-adapter
+  tradableMarkets: [
+    new MarketId(0, MarketType.SPOT),  // USDC
+    new MarketId(1, MarketType.SPOT),  // SOL
+    new MarketId(0, MarketType.PERP),  // SOL-PERP
+    new MarketId(1, MarketType.PERP),  // BTC-PERP
+  ],
+});
+
+await drift.subscribe();
+```
+
+If the wallet hasn't connected yet, pass a placeholder so the client can still subscribe to market data:
+
+```ts
+const placeholderWallet = COMMON_UI_UTILS.createPlaceholderIWallet();
+const drift = new AuthorityDrift({
+  solanaRpcEndpoint: "https://...",
+  driftEnv: "mainnet-beta",
+  wallet: placeholderWallet,
+});
+
+await drift.subscribe();
+
+// Later, when wallet connects:
+drift.updateAuthority(realWallet);
+```
+
+### Sync into Zustand stores
+
+After subscribing, wire the caches into your app's stores so components re-render on updates:
+
+```ts
+// Oracle prices
+drift.onOraclePricesUpdate((oraclePrices) => {
+  setOraclePriceStore((s) => {
+    s.lookup = { ...s.lookup, ...oraclePrices };
+  });
+});
+
+// Mark prices (bid/ask/mark from DLOB)
+drift.onMarkPricesUpdate((markPrices) => {
+  setMarkPriceStore((s) => {
+    s.lookup = { ...s.lookup, ...markPrices };
+  });
+});
+
+// User account data (positions, orders, balances, margin)
+drift.onUserAccountUpdate((newUserAccount) => {
+  setUserAccountDataStore((s) => {
+    s.lookup[
+      UserAccountCache.getUserAccountKey(
+        newUserAccount.subAccountId,
+        newUserAccount.authority,
+      )
+    ] = newUserAccount;
+  });
+});
+```
+
+### React apps: DriftProvider
+
+If you're using `@drift-labs/react`, wrap your app with `DriftProvider` to handle wallet connection, DriftClient initialization, RPC management, geoblocking, and idle polling:
+
+```tsx
+import { DriftProvider, DEFAULT_BREAKPOINTS } from "@drift-labs/react";
+
+function App() {
+  return (
+    <DriftProvider breakpoints={DEFAULT_BREAKPOINTS}>
+      <YourApp />
+    </DriftProvider>
+  );
+}
+```
+
+Then access state with `useCommonDriftStore`:
+
+```tsx
+import { useCommonDriftStore } from "@drift-labs/react";
+
+const driftClient = useCommonDriftStore((s) => s.driftClient.client);
+const isReady = useCommonDriftStore((s) => s.checkIsDriftClientReady());
+const userAccounts = useCommonDriftStore((s) => s.userAccounts);
+```
+
+Or check readiness with a simpler hook:
+
+```tsx
+import { useDriftClientIsReady } from "@drift-labs/react";
+
+const isReady = useDriftClientIsReady();
+```
+
+## Utility modules
+
+`@drift-labs/common` bundles pre-built helpers that the template uses throughout:
+
+| Module | Common functions | Used for |
+|---|---|---|
+| `TRADING_UTILS` | `getMarketTickSizeDecimals()`, `getMarketTickSize()`, `getMarketStepSizeDecimals()`, `isEntirePositionOrder()` | Price/size formatting, decimal precision per market |
+| `COMMON_UI_UTILS` | `getUIOrderTypeFromSdkOrderType()`, `createPlaceholderIWallet()` | Order type labels, pre-connect wallet placeholder |
+| `ENUM_UTILS` | `match()` | Anchor enum variant matching (direction, order type) |
+| `MARKET_UTILS` | Market name resolution, config lookups | Display formatting, market metadata |
+| `ORDER_COMMON_UTILS` | Order parameter building, auction param derivation | Building order params for SDK calls |
+| `USER_UTILS` | User account formatting, position display helpers | Account labels, subaccount display |
+
+Other common imports:
+
+```ts
+import { UIMarket, MarketId, NumLib } from "@drift-labs/common";
+
+UIMarket.createPerpMarket(0).marketName;              // "SOL-PERP"
+MarketId.createPerpMarket(0).key;                     // unique lookup key
+NumLib.formatNum.toDisplayPrice(rawPriceBN);           // locale-formatted price string
+
+import { USDC_SPOT_MARKET_INDEX, SOL_SPOT_MARKET_INDEX, MAIN_POOL_ID } from "@drift-labs/common";
+```
+
+## drift-ui-template: quickstart
+
+[`drift-ui-template`](https://github.com/drift-labs/drift-ui-template) is a Next.js starter that wires together everything above into a working trading UI.
+
+**Stack:** Next.js 15, React 19, TypeScript, Tailwind CSS, Zustand, Solana wallet adapter
+
+**Pre-built pages:** perps trading (orderbook, candle chart, trade form, positions table, open orders), spot trading (balances, deposit/withdraw, swap), market data, user account management.
+
+**Architecture:**
+- `useSetupDrift` hook creates an `AuthorityDrift` instance and syncs its caches into Zustand stores (`useDriftStore`, `useOraclePriceStore`, `useMarkPriceStore`, `useUserAccountDataStore`)
+- Components read from stores and call `AuthorityDrift` methods for actions
+- `UserAccountCache.getUserAccountKey(subAccountId, authority)` maps subaccounts to `EnhancedAccountData` in the lookup
+
+```bash
+git clone https://github.com/drift-labs/drift-ui-template.git
+cd drift-ui-template/ui
+yarn install
+yarn dev
+```
+
+The template defaults to devnet. To switch to mainnet, update the environment in the config map inside `useSetupDrift.ts`.
+
+## Next steps
+
+- [Reading data](/developers/ecosystem-builders/reading-data) -- Account data (positions, orders, balances, collateral), market data (oracle/mark prices, orderbook, candles), and Data API REST endpoints
+- [Sending actions](/developers/ecosystem-builders/sending-actions) -- AuthorityDrift methods (orders, cancel, settle PnL, deposit, withdraw, swap) and SDK instruction builders
+- [Orderbook + DLOB websocket](/developers/ecosystem-builders/orderbook-and-ws) -- L2/L3 REST snapshots and real-time DLOB websocket streaming
+- [SDK Setup](/developers/drift-sdk/setup) -- Manual DriftClient initialization for non-React or server-side apps
+
+## Staying up to date
+
+- [GitHub: protocol-v2](https://github.com/drift-labs/protocol-v2) -- watch releases for SDK breaking changes
+- [GitHub: drift-common](https://github.com/drift-labs/drift-common) -- shared UI packages
+- [GitHub: drift-ui-template](https://github.com/drift-labs/drift-ui-template) -- starter trading UI
+- [Data API playground](/developers/data-api)
