@@ -20,6 +20,13 @@ export const config = {
   // Ranger Earn (Voltr)
   rangerApiUrl: process.env.RANGER_API_URL || "https://api.voltr.xyz",
   vaultPubkey: process.env.VAULT_PUBKEY || "",
+  strategyPubkey: process.env.STRATEGY_PUBKEY || "",
+  heliusApiKey: process.env.HELIUS_API_KEY || "",
+  webhookUrl: process.env.WEBHOOK_URL || "",
+  webhookPort: parseInt(process.env.PORT || process.env.WEBHOOK_PORT || "3000"),
+  webhookPath: process.env.WEBHOOK_PATH || "/webhook",
+  indexerStorePath:
+    process.env.INDEXER_STORE_PATH || ".ranger-state/indexer-state.json",
 
   // Drift
   driftEnv: (process.env.DRIFT_ENV || "mainnet-beta") as
@@ -68,7 +75,7 @@ export const config = {
 
   // AI / LLM
   openRouterApiKey: process.env.OPENROUTER_API_KEY || "",
-  llmModel: process.env.LLM_MODEL || "anthropic/claude-sonnet-4",
+  llmModel: process.env.LLM_MODEL || "anthropic/claude-3-sonnet-20240229",
 
   /** Relax delta-neutrality checks for devnet (spot oracles are stale) */
   relaxDeltaChecks: process.env.RELAX_DELTA_CHECKS === "true",

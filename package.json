@@ -17,6 +17,8 @@
     "export-trades": "ts-node scripts/export-trades.ts",
     "simulate": "ts-node scripts/simulate.ts",
     "dashboard": "ts-node scripts/dashboard.ts",
+    "indexer": "ts-node src/indexer/server.ts",
+    "indexer:webhook:create": "ts-node scripts/create-helius-webhook.ts",
     "preflight": "ts-node scripts/preflight.ts",
     "devnet:setup": "ts-node scripts/devnet-setup.ts",
     "devnet:dry-run": "ts-node scripts/devnet-dry-run.ts",

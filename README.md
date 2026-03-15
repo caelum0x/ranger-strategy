@@ -2,212 +2,169 @@
 
 AI-powered USDC delta-neutral funding harvester on Solana.
 
-**Ranger Build-A-Bear Hackathon** (Mar 9 – Apr 6, 2026)
+**Ranger Build-A-Bear Hackathon** (Mar 9 - Apr 6, 2026)
 
 ---
 
 ## Overview
 
-Ranger Delta-Neutral Vault accepts USDC deposits into a Ranger Earn vault and deploys capital into a fully on-chain, AI-managed delta-neutral strategy on Drift. It simultaneously holds spot assets (or LSTs) and short perpetual positions to harvest funding payments in both directions — targeting **17–27% APY** with tightly controlled risk.
+Ranger Delta-Neutral Vault accepts USDC deposits into a Ranger Earn vault and deploys capital into a Drift-first, AI-managed delta-neutral strategy. It supports fully on-chain execution, LST yield stacking, and a new self-indexing webhook service that refreshes Voltr vault state after Helius events and stores local snapshots for the bot.
 
-**Drift Side Track eligible** — Drift is the primary execution venue for all spot and perp legs.
+**Drift Side Track eligible**: Drift is the primary execution venue for spot and perp legs in `drift-only` mode.
 
 ### Yield Stack
 
 | Source | Expected APY |
 |--------|-------------|
-| Drift perp funding (bi-directional) | 8–15% |
-| Drift spot lending yield | 2–5% |
-| JitoSOL/mSOL staking yield (LST stacking) | ~7% |
-| AI alpha (timing + rotation + momentum) | 2–5% |
-| **Total** | **17–27%** |
+| Drift perp funding | 8-15% |
+| Drift spot lending yield | 2-5% |
+| JitoSOL/mSOL staking yield | ~7% |
+| AI timing and rotation | 2-5% |
+| **Total target** | **17-27%** |
 
 ## Architecture
 
-```
-                       USDC Deposit
-                            │
-                   ┌────────▼────────┐
-                   │ Ranger Earn Vault│
-                   │  (Voltr / USDC) │
-                   └────────┬────────┘
-                            │ manager deposits
-                            ▼
-               ┌────────────────────────┐
-               │   Drift Strategy       │
-               │  (vault delegate acct) │
-               └──────────┬─────────────┘
-                           │
-            ┌──────────────▼──────────────┐
-            │       AI Strategy Agent      │
-            │                              │
-            │  ┌─────────────────────────┐ │
-            │  │  DriftFundingAnalyzer   │ │
-            │  │  (mark-oracle premium,  │ │
-            │  │   imbalance, momentum)  │ │
-            │  └──────────┬──────────────┘ │
-            │             │                │
-            │  ┌──────────▼──────────────┐ │
-            │  │  LLM Strategy Advisor   │ │
-            │  │  (Claude — regime,      │ │
-            │  │   predictions, sizing)  │ │
-            │  └──────────┬──────────────┘ │
-            │             │                │
-            │  ┌──────────▼──────────────┐ │
-            │  │  StrategyEngine         │ │
-            │  │  - Bi-directional entry │ │
-            │  │  - LST yield stacking   │ │
-            │  │  - Asset rotation       │ │
-            │  └──────────┬──────────────┘ │
-            │             │                │
-            │  ┌──────────▼──────────────┐ │
-            │  │  RiskManager            │ │
-            │  │  - Health ≥ 1.10        │ │
-            │  │  - Drawdown ≤ 3%        │ │
-            │  │  - Leverage ≤ 2x        │ │
-            │  │  - Delta ±5%            │ │
-            │  └──────────┬──────────────┘ │
-            │             │                │
-            │  ┌──────────▼──────────────┐ │
-            │  │  DriftExecutor          │ │
-            │  │  - Atomic cancel+entry  │ │
-            │  │  - LST swap + short     │ │
-            │  │  - Versioned txs + LUT  │ │
-            │  └─────────────────────────┘ │
-            └──────────────────────────────┘
+```text
+                     Helius Webhook
+                            |
+                   +--------v--------+
+                   | Indexer Service |
+                   | Voltr parser    |
+                   | JSON state DB   |
+                   | AI decision log |
+                   +--------+--------+
+                            |
+                   +--------v--------+
+                   | Ranger Earn Vault|
+                   | (Voltr / USDC)   |
+                   +--------+--------+
+                            |
+              +-------------v--------------+
+              |     AI Strategy Agent      |
+              |  DriftFundingAnalyzer      |
+              |  LLM Strategy Advisor      |
+              |  StrategyEngine            |
+              |  RiskManager               |
+              +-------------+--------------+
+                            |
+                       +----v----+
+                       | Drift   |
+                       | spot +  |
+                       | perps   |
+                       +---------+
 ```
 
-**Key components:**
+## Key Components
 
-- **RangerVaultManager** — Ranger Earn (Voltr) vault lifecycle: create, strategy init, deposit/withdraw capital, fee harvest, withdrawal liquidity monitoring.
-- **StrategyEngine** — bi-directional signal generation, LST yield stacking, Kelly-inspired position sizing, dynamic asset rotation.
-- **DriftFundingAnalyzer** — on-chain PerpMarketAccount parsing: mark-oracle premium, long/short imbalance, momentum scoring.
-- **LLM Strategy Advisor** — Claude-powered regime classification, funding predictions, trade decisions with audit trail reasoning.
-- **RiskManager** — real-time health ratio, drawdown, leverage, delta-neutrality, and oracle staleness checks.
-- **DriftExecutor** — atomic cancel-and-enter transactions, LST swap + short in single tx, versioned transactions with address lookup tables.
-- **TelegramAlerter** — real-time cycle summaries, emergency alerts, health warnings.
+- **RangerVaultManager**: Ranger Earn vault lifecycle, deposits, withdrawals, and fee tracking.
+- **DriftFundingAnalyzer**: funding, premium, and market-structure analysis for asset selection.
+- **LLM Strategy Advisor**: regime classification and trade reasoning through OpenRouter.
+- **StrategyEngine**: bi-directional funding capture, LST stacking, and rotation logic.
+- **RiskManager**: health ratio, drawdown, leverage, and delta-neutrality controls.
+- **Indexer Service**: Helius-triggered vault refreshes persisted to `.ranger-state/indexer-state.json`.
 
-## LST Yield Stacking
+## Key Features
 
-For SOL short-perp entries, instead of holding raw SOL as spot collateral the strategy swaps USDC → JitoSOL (or best available LST) atomically. This adds ~7% staking APY on top of the funding harvest with **no additional risk**:
-
-```
-Standard:  short SOL-PERP + long SOL spot    → funding + lending
-LST Stack: short SOL-PERP + long JitoSOL     → funding + lending + staking (~7%)
-```
-
-The LST earns staking yield while serving as collateral for the perp short, and the perp short hedges the SOL price exposure — maintaining delta neutrality.
-
-## Risk Management
-
-| Control | Setting |
-|---------|---------|
-| Health ratio floor | 1.10 (emergency unwind at 1.05) |
-| Max drawdown | 3% (circuit breaker) |
-| Max leverage | 2x |
-| Delta neutrality band | ±5% |
-| Oracle staleness guard | 60s staleness threshold |
-| Withdrawal liquidity | Auto-pulls from Drift when idle < pending redemptions |
-| Min funding APY | 10% (skip trade if expected yield below threshold) |
-
-## Hackathon Eligibility
-
-| Requirement | Status |
-|-------------|--------|
-| Min APY 10% | ✅ Target 17–27% (funding + lending + staking) |
-| Base asset USDC | ✅ USDC only |
-| No ponzi stables | ✅ Pure funding arbitrage |
-| No junior tranches | ✅ No insurance pool exposure |
-| No DEX LP (JLP/HLP) | ✅ Spot + perp only, no AMM LP |
-| Health rate > 1.05 | ✅ Floor 1.10, emergency at 1.05 |
+- **Bi-directional delta-neutral execution**: can collect positive or negative funding depending on market regime.
+- **LST yield stacking**: replace raw SOL spot exposure with JitoSOL/mSOL where appropriate.
+- **Self-indexing vault telemetry**: refresh vault state locally without depending on partner-side indexing.
+- **Drift-first deployment path**: supports a fully on-chain setup for seedable Ranger vault capital.
+- **Backtesting and monitoring**: existing strategy scripts remain available for simulation and ops.
 
 ## Quick Start
 
 ```bash
 npm install
 
-# 1. Configure environment
+# Configure environment
 cp .env.mainnet .env
-# Fill: HELIUS_RPC_URL, ANCHOR_WALLET, OPENROUTER_API_KEY
+# Fill in wallet, vault, RPC, and API keys
 
-# 2. Preflight check
-npx ts-node scripts/mainnet-launch.ts
+# Build
+npm run build
 
-# 3. One-time vault setup
-npx ts-node scripts/init-vault.ts          # → add VAULT_PUBKEY to .env
-npx ts-node scripts/init-strategy.ts       # → add STRATEGY_PUBKEY to .env
-npx ts-node scripts/deposit-ranger-strategy.ts --amount 20
-
-# 4. Start agent
+# Start the live agent
 npm run agent
-# Monitor: http://localhost:3000/status
+
+# Start the self-indexing webhook server
+npm run indexer
 ```
+
+## Self-Indexing Flow
+
+Set these variables in `.env`:
+
+```bash
+HELIUS_API_KEY=...
+WEBHOOK_URL=https://your-public-url/webhook
+VAULT_PUBKEY=...
+PORT=3000
+```
+
+Then:
+
+```bash
+npm run indexer
+npm run indexer:webhook:create
+```
+
+The indexer listens on `POST /webhook`, exposes `GET /health`, and writes snapshots plus rebalance recommendations to `.ranger-state/indexer-state.json`.
 
 ## Scripts Reference
 
-| Command | Description |
-|---------|-------------|
-| `npm run agent` | Start the live AI strategy agent |
-| `npx ts-node scripts/mainnet-launch.ts` | Preflight checklist before going live |
-| `npx ts-node scripts/init-vault.ts` | Create Ranger Earn vault (one-time) |
-| `npx ts-node scripts/init-strategy.ts` | Initialize Drift strategy on vault (one-time) |
-| `npx ts-node scripts/deposit-ranger-strategy.ts` | Move idle USDC to Drift strategy |
-| `npx ts-node scripts/withdraw-ranger-strategy.ts` | Pull USDC back to vault idle |
-| `npx ts-node scripts/vault-status.ts` | Current vault TVL, share price, fees |
-| `npx ts-node scripts/drift-status.ts` | Drift positions and health |
-| `npx ts-node scripts/simulate.ts` | Simulate strategy on historical data |
-| `npx ts-node scripts/export-trades.ts` | Export trade history CSV for submission |
+| Script | Command | Description |
+|--------|---------|-------------|
+| `build` | `tsc` | Compile TypeScript to JavaScript |
+| `agent` | `ts-node src/agent/index.ts` | Start the live AI strategy agent |
+| `backtest` | `ts-node src/backtest/run.ts` | Run backtesting against historical data |
+| `vault:init` | `ts-node scripts/init-vault.ts` | Initialize the Ranger Earn vault |
+| `vault:deposit` | `ts-node scripts/deposit-strategy.ts` | Deposit USDC into the strategy vault |
+| `vault:withdraw` | `ts-node scripts/withdraw-strategy.ts` | Withdraw USDC from the strategy vault |
+| `vault:status` | `ts-node scripts/vault-status.ts` | Display current vault status and balances |
+| `drift:status` | `ts-node scripts/drift-status.ts` | Display Drift positions and health |
+| `drift:init-vault` | `ts-node scripts/init-drift-vault.ts` | Initialize the Drift vault for delegate trading |
+| `indexer` | `ts-node src/indexer/server.ts` | Start the Helius webhook listener and local indexer |
+| `indexer:webhook:create` | `ts-node scripts/create-helius-webhook.ts` | Register a Helius webhook for the configured vault |
+| `export-trades` | `ts-node scripts/export-trades.ts` | Export trade history for submission |
 
 ## Strategy Parameters
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `MIN_FUNDING_APY` | `0.10` | Minimum annualized funding rate to open a position |
+| `MIN_FUNDING_APY` | `0.05` | Minimum annualized funding rate to open a position |
 | `MAX_LEVERAGE` | `2.0` | Maximum portfolio leverage |
-| `HEALTH_RATIO_FLOOR` | `1.10` | Minimum health ratio (emergency unwind at 1.05) |
+| `HEALTH_RATIO_FLOOR` | `1.10` | Minimum health ratio |
 | `MAX_DRAWDOWN_PCT` | `3.0` | Circuit-breaker drawdown threshold (%) |
-| `REBALANCE_INTERVAL_MS` | `28800000` | Rebalance interval — 8h, aligned with Drift funding |
+| `REBALANCE_INTERVAL_MS` | `28800000` | Rebalance interval in ms |
 | `TARGET_ASSETS` | `SOL,BTC,ETH` | Assets to trade |
-| `STRATEGY_MODE` | `drift-only` | `drift-only` (on-chain) or `cross-venue` (+ Binance) |
+| `STRATEGY_MODE` | `drift-only` | `drift-only` or `cross-venue` |
 
 ## Project Structure
 
-```
+```text
 src/
-  agent/      — AI strategy agent main loop, cron scheduler, monitor server
-  ai/         — LLM strategy advisor (OpenRouter/Claude), funding predictor
-  alerts/     — Telegram alerter
-  binance/    — Binance perp integration (cross-venue mode)
-  config/     — Environment configuration
-  drift/      — Drift SDK: manager, executor, vault, funding analyzer, data API
-  ranger/     — Ranger Earn (Voltr) vault management
-  risk/       — Risk manager, oracle guard
-  strategy/   — Strategy engine, EMA predictor, LST helpers, types
-  utils/      — Logger, state store, yield analytics, trade logger, solana helpers
-  vault/      — Vault performance tracker
-  monitor/    — HTTP monitoring server
-
-scripts/
-  init-vault.ts                — Create Ranger Earn vault
-  init-strategy.ts             — Initialize Drift strategy
-  deposit-ranger-strategy.ts   — Fund strategy with vault USDC
-  withdraw-ranger-strategy.ts  — Return USDC from strategy to vault
-  vault-status.ts              — Vault monitoring
-  drift-status.ts              — Drift positions
-  mainnet-launch.ts            — Pre-launch preflight
-  simulate.ts                  — Historical simulation
-  export-trades.ts             — CSV trade export for submission
+  agent/       live strategy loop and scheduling
+  ai/          OpenRouter integration and reasoning
+  backtest/    historical simulation
+  binance/     cross-venue Binance integration
+  config/      environment and runtime configuration
+  drift/       Drift SDK wrappers and execution
+  indexer/     webhook listener, parser, store, decision engine
+  ranger/      Ranger Earn / Voltr integration
+  risk/        health and drawdown controls
+  strategy/    portfolio construction and rebalance logic
+  utils/       logging and shared helpers
 ```
 
 ## Tech Stack
 
-- **Drift SDK** (`@drift-labs/sdk`, `@drift-labs/vaults-sdk`) — DEX integration and vault delegation
-- **Voltr SDK** (`@voltr/vault-sdk`) — Ranger Earn vault deposits, withdrawals, fee management
-- **Solana web3.js** / **SPL Token** — RPC and token operations
-- **Anchor** (`@coral-xyz/anchor`) — CPI / PDA derivation
-- **Claude / OpenRouter** — LLM strategy reasoning
-- **Winston** — structured logging
+- **Drift SDK** (`@drift-labs/sdk`, `@drift-labs/vaults-sdk`)
+- **Voltr SDK** (`@voltr/vault-sdk`)
+- **Solana web3.js** / **SPL Token**
+- **Anchor** (`@coral-xyz/anchor`)
+- **OpenRouter**
+- **TypeScript**
 
 ---
 
-Built for the **Ranger Build-A-Bear Hackathon** (Main Track + Drift Side Track).
+Built for the Ranger Build-A-Bear Hackathon.
