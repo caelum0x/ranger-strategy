@@ -1,0 +1,7 @@
+/Users/arhansubasi/ranger/driftbear-adaptor/target/sbf-solana-solana/release/deps/libsolana_instructions_sysvar-6ae9c346bfc94013.rmeta: /Users/arhansubasi/.cargo/registry/src/index.crates.io-6f17d22bba15001f/solana-instructions-sysvar-2.2.2/src/lib.rs
+
+/Users/arhansubasi/ranger/driftbear-adaptor/target/sbf-solana-solana/release/deps/libsolana_instructions_sysvar-6ae9c346bfc94013.rlib: /Users/arhansubasi/.cargo/registry/src/index.crates.io-6f17d22bba15001f/solana-instructions-sysvar-2.2.2/src/lib.rs
+
+/Users/arhansubasi/ranger/driftbear-adaptor/target/sbf-solana-solana/release/deps/solana_instructions_sysvar-6ae9c346bfc94013.d: /Users/arhansubasi/.cargo/registry/src/index.crates.io-6f17d22bba15001f/solana-instructions-sysvar-2.2.2/src/lib.rs
+
+/Users/arhansubasi/.cargo/registry/src/index.crates.io-6f17d22bba15001f/solana-instructions-sysvar-2.2.2/src/lib.rs:

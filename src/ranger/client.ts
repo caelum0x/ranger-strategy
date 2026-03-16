@@ -8,9 +8,9 @@ import {
   sendAndConfirmTransaction,
   TransactionInstruction,
 } from "@solana/web3.js";
-import { TOKEN_PROGRAM_ID } from "@solana/spl-token";
+import { AccountLayout, TOKEN_PROGRAM_ID } from "@solana/spl-token";
 import { DriftClient, Wallet } from "@drift-labs/sdk";
-import { BN } from "@coral-xyz/anchor";
+import { BN, Program } from "@coral-xyz/anchor";
 import Decimal from "decimal.js";
 import { config } from "../config";
 import { logger } from "../utils/logger";
@@ -25,6 +25,8 @@ import {
   buildDriftBearWithdrawRemainingAccounts,
   deriveDriftBearStrategy,
 } from "./driftbear-adaptor";
+
+const vaultIdl = require("@voltr/vault-sdk/dist/idl/voltr_vault.json");
 
 // ── Drift constants ───────────────────────────────────────────────────────────
 const DRIFT_PROGRAM_ID   = "dRiftyHA39MWEi3m9aunc5MzRF1JYuBsbn6VPcn33UH";
@@ -111,10 +113,70 @@ export class RangerVaultManager {
 
   async initialize(): Promise<void> {
     this.client = new VoltrClient(this.connection);
+    if (config.programs.driftVaults) {
+      const programId = new PublicKey(config.programs.driftVaults);
+      const provider = (this.client as any).provider;
+      const idlWithAddress = {
+        ...vaultIdl,
+        address: programId.toBase58(),
+      };
+      (this.client as any).vaultProgram = new Program(idlWithAddress, provider);
+    }
     if (config.vaultPubkey) {
       this.vaultPubkey = new PublicKey(config.vaultPubkey);
     }
     logger.info("Ranger vault manager initialized");
+  }
+
+  private async resolveVaultAsset(): Promise<{
+    mint: PublicKey;
+    tokenProgram: PublicKey;
+  }> {
+    if (!this.vaultPubkey) {
+      throw new Error("Vault not initialized");
+    }
+    const vaultInfo = await this.connection.getAccountInfo(this.vaultPubkey);
+    if (!vaultInfo) {
+      throw new Error(`Vault account not found: ${this.vaultPubkey.toBase58()}`);
+    }
+
+    // Drift vault layout: discriminator(8) + name(32) + pubkey(32) + manager(32) + token_account(32)
+    const tokenAccountOffset = 8 + 32 + 32 + 32;
+    const tokenAccountBytes = vaultInfo.data.slice(
+      tokenAccountOffset,
+      tokenAccountOffset + 32
+    );
+    const tokenAccount = new PublicKey(tokenAccountBytes);
+    const tokenAccountInfo = await this.connection.getAccountInfo(tokenAccount);
+    if (!tokenAccountInfo) {
+      throw new Error(
+        `Vault token account not found on-chain: ${tokenAccount.toBase58()}`
+      );
+    }
+
+    const decoded = AccountLayout.decode(tokenAccountInfo.data);
+    const mint = new PublicKey(decoded.mint);
+    return { mint, tokenProgram: tokenAccountInfo.owner };
+  }
+
+  private async resolveSpotMarketOracle(
+    marketIndex: number
+  ): Promise<PublicKey> {
+    const driftClient = new DriftClient({
+      connection: this.connection as any,
+      wallet: new Wallet(this.managerKp as any) as any,
+      env: config.driftEnv,
+      skipLoadUsers: true,
+    });
+    await driftClient.subscribe();
+    const spotMarket = driftClient.getSpotMarketAccount(marketIndex);
+    if (!spotMarket) {
+      await driftClient.unsubscribe();
+      throw new Error(`Spot market ${marketIndex} not found on ${config.driftEnv}`);
+    }
+    const oracle = spotMarket.oracle;
+    await driftClient.unsubscribe();
+    return oracle;
   }
 
   async createVault(): Promise<PublicKey> {
@@ -381,14 +443,15 @@ export class RangerVaultManager {
       strategy
     );
 
+    const { mint: assetMint, tokenProgram } = await this.resolveVaultAsset();
     const transactionIxs: TransactionInstruction[] = [];
     await setupTokenAccount(
       this.connection,
       this.adminKp.publicKey,
-      new PublicKey(USDC_MINT),
+      assetMint,
       vaultStrategyAuth,
       transactionIxs,
-      TOKEN_PROGRAM_ID
+      tokenProgram
     );
 
     const additionalArgs = Buffer.from(
@@ -674,15 +737,17 @@ export class RangerVaultManager {
       strategy
     );
     const depositAmount = new BN(amount.mul(new Decimal(1e6)).toFixed(0));
+    const { mint: assetMint, tokenProgram } = await this.resolveVaultAsset();
+    const spotMarketOracle = await this.resolveSpotMarketOracle(marketIndex);
 
     const transactionIxs: TransactionInstruction[] = [];
     await setupTokenAccount(
       this.connection,
       this.managerKp.publicKey,
-      new PublicKey(USDC_MINT),
+      assetMint,
       vaultStrategyAuth,
       transactionIxs,
-      TOKEN_PROGRAM_ID
+      tokenProgram
     );
 
     transactionIxs.push(
@@ -697,9 +762,9 @@ export class RangerVaultManager {
         {
           manager: this.managerKp.publicKey,
           vault: this.vaultPubkey,
-          vaultAssetMint: new PublicKey(USDC_MINT),
+          vaultAssetMint: assetMint,
           strategy,
-          assetTokenProgram: TOKEN_PROGRAM_ID,
+          assetTokenProgram: tokenProgram,
           adaptorProgram,
           remainingAccounts: buildDriftBearDepositRemainingAccounts({
             adaptorProgram,
@@ -707,6 +772,7 @@ export class RangerVaultManager {
             vaultStrategyAuth,
             marketIndex,
             subAccountId: SUB_ACCOUNT_ID,
+            spotMarketOracle,
           }),
         }
       )
@@ -743,15 +809,17 @@ export class RangerVaultManager {
       strategy
     );
     const withdrawAmount = new BN(amount.mul(new Decimal(1e6)).toFixed(0));
+    const { mint: assetMint, tokenProgram } = await this.resolveVaultAsset();
+    const spotMarketOracle = await this.resolveSpotMarketOracle(marketIndex);
 
     const transactionIxs: TransactionInstruction[] = [];
     await setupTokenAccount(
       this.connection,
       this.managerKp.publicKey,
-      new PublicKey(USDC_MINT),
+      assetMint,
       vaultStrategyAuth,
       transactionIxs,
-      TOKEN_PROGRAM_ID
+      tokenProgram
     );
 
     transactionIxs.push(
@@ -766,9 +834,9 @@ export class RangerVaultManager {
         {
           manager: this.managerKp.publicKey,
           vault: this.vaultPubkey,
-          vaultAssetMint: new PublicKey(USDC_MINT),
+          vaultAssetMint: assetMint,
           strategy,
-          assetTokenProgram: TOKEN_PROGRAM_ID,
+          assetTokenProgram: tokenProgram,
           adaptorProgram,
           remainingAccounts: buildDriftBearWithdrawRemainingAccounts({
             adaptorProgram,
@@ -776,6 +844,7 @@ export class RangerVaultManager {
             vaultStrategyAuth,
             marketIndex,
             subAccountId: SUB_ACCOUNT_ID,
+            spotMarketOracle,
           }),
         }
       )

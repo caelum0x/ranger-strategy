@@ -139,6 +139,35 @@ export class DriftExecutor {
     }
   }
 
+  private getOracleSlippageInputs(asset: string): {
+    oracleConfidenceBps?: number;
+    oracleSpreadBps?: number;
+  } {
+    const perpIdx = PERP_INDEX[asset];
+    if (perpIdx === undefined) {
+      return {};
+    }
+
+    const perpMarket = this.client.getPerpMarketAccount(perpIdx);
+    if (!perpMarket) {
+      return {};
+    }
+
+    const confPct = convertToNumber(
+      perpMarket.amm.lastOracleConfPct,
+      new BN(1_000_000)
+    );
+    const spreadPct = convertToNumber(
+      perpMarket.amm.lastOracleReservePriceSpreadPct,
+      new BN(1_000_000)
+    );
+
+    return {
+      oracleConfidenceBps: Math.abs(confPct) * 10_000,
+      oracleSpreadBps: Math.abs(spreadPct) * 10_000,
+    };
+  }
+
   /**
    * Atomically cancel all orders on a market and place new ones.
    * Prevents stale fills between cancel and re-quote.
@@ -358,17 +387,20 @@ export class DriftExecutor {
       baseAmount,
       usdcAmount
     );
+    const oracleSlippageInputs = this.getOracleSlippageInputs(asset);
 
     const spotPlan = deriveExecutionPricingPlan({
       side: spotSide,
       oraclePrice: new Decimal(price),
       fallbackSlippageBps: DEFAULT_SLIPPAGE_BPS,
       quotedPrice: quotedSpotPrice,
+      ...oracleSlippageInputs,
     });
     const perpPlan = deriveExecutionPricingPlan({
       side: perpDirection,
       oraclePrice: new Decimal(price),
       fallbackSlippageBps: DEFAULT_SLIPPAGE_BPS,
+      ...oracleSlippageInputs,
     });
 
     // Cancel all existing orders
@@ -405,6 +437,12 @@ export class DriftExecutor {
         `oracle=$${price.toFixed(2)} | spotSlip=${spotPlan.slippageBps}bps | perpSlip=${perpPlan.slippageBps}bps` +
         (spotPlan.quotedPrice
           ? ` | sor=$${spotPlan.quotedPrice.toFixed(4)}`
+          : "")
+        + (spotPlan.oracleConfidenceBps !== undefined
+          ? ` | conf=${spotPlan.oracleConfidenceBps.toFixed(1)}bps`
+          : "")
+        + (spotPlan.oracleSpreadBps !== undefined
+          ? ` | spread=${spotPlan.oracleSpreadBps.toFixed(1)}bps`
           : "")
     );
 

@@ -73,3 +73,28 @@ This means the configured wallet currently has a live Drift spot deposit worth `
 ## Next Step
 
 The main remaining gap is executing the actual Ranger `initialize/deposit/withdraw` flow through the custom adaptor path, not just deriving and valuing it.
+
+## Direct Adaptor Run (Devnet)
+
+Executed the adaptor end-to-end against devnet Drift (subaccount `1`) using the direct workflow path:
+
+Initial run (initialize + deposit + withdraw):
+
+- Initialize tx: `3o8rLDXGQUyyyqLYJuMwAKaw6XE85wKk3DwcS5shDFH9BJP7s63L7HMjFGA2ajgWpq65H1AtUu1E6eDyFBaTDfTn`
+- Deposit tx (1 USDC): `2FP3yhRCbP44rv5Qc3BL2ZuCGcQbfRtzW1ByvceGkJLksjoEfjn6zg7Mx663qdFuGnF655PVWzDPY9LJsWnGAf9c`
+- Withdraw tx (0.5 USDC): `x4cW1c5UwgfFxQE9dyojSVmC79WQFZSQsP5dHZSgbMt4o2PQUmePkjcG68L3kZoR9cZKeMoU7s3bdaCSLukFLfY`
+
+Re-run after wiring spot-market oracle into the remaining accounts:
+
+- Deposit tx (1 USDC): `59zUbTtN7Cw9Zxec57px32Caw81NaQvEjinsNAiiCBzqf1sgXmsbmisbLKPS4vLM4kCgLon2QpjZ42jeWx2tSB8M`
+- Withdraw tx (0.5 USDC): `5d1oGMU97cK2GHg8cVop4R1LEzNikPMZZZA1MPSDLDB8Q3tT1o9wmVq9HFpAsVM1YJvTEtUCBcH3k4KZmRsuqBor`
+
+Re-run after adding subaccount locking + position migration (subaccount `1`):
+
+- Position migrate (realloc + subaccount lock): `3drRLrfRD6XG81Sos8C49DveZMG9hFnFRuS5L8XUoLvRgsS16pMZ3tidudmYGUrKNwEcgcEWzTD7m3zp9dLq7HJP`
+- Deposit tx (1 USDC): `5C1eN2yctzq4B2th7j3eszZ3ymy5kbGYGr8hmcUKY3CqEbpNpnKMTZDH4haCX3F7Y4dYXFVXG1M7VjemspLxYBjv`
+- Withdraw tx (0.5 USDC): `vp7hBrvnCqL5QVU4YWFanaE2huRRpm9Nri9pb9FM3RRM61ECZdg68HAFbbXQLnce1yaTpeHoiei1xrzuaAbXJXc`
+
+Note: subaccount `0` currently has perp exposure on this wallet, so the invariant checks require using a clean subaccount (e.g., `1`) for the custom adaptor flow.
+
+This confirms the custom adaptor CPI flow against Drift works on devnet when driven directly. The remaining blocker for the full Ranger vault path is that the Voltr vault program (`vVoLTR...`) is not deployed on devnet.

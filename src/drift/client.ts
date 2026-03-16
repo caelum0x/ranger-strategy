@@ -30,6 +30,13 @@ const MARKET_INDEX: Record<string, { perp: number; spot: number }> = {
   ETH: { perp: 2, spot: 3 },
 };
 
+export interface OracleMetrics {
+  oraclePrice: Decimal;
+  markPrice: Decimal;
+  confidenceBps: Decimal;
+  spreadBps: Decimal;
+}
+
 export interface DriftManagerConfig {
   /** Path to keypair JSON file, or raw Uint8Array */
   keypair: string | Uint8Array;
@@ -247,6 +254,40 @@ export class DriftManager {
 
     const oracleData = this.client.getOracleDataForPerpMarket(indices.perp);
     return new Decimal(convertToNumber(oracleData.price, PRICE_PRECISION));
+  }
+
+  getOracleMetrics(asset: string): OracleMetrics | null {
+    const indices = MARKET_INDEX[asset];
+    if (!indices) return null;
+
+    const perpMarket = this.client.getPerpMarketAccount(indices.perp);
+    if (!perpMarket) return null;
+
+    const oracleData = this.client.getOracleDataForPerpMarket(indices.perp);
+    const oraclePrice = new Decimal(
+      convertToNumber(oracleData.price, PRICE_PRECISION)
+    );
+
+    const markTwap = perpMarket.amm.lastMarkPriceTwap5Min.gt(new BN(0))
+      ? perpMarket.amm.lastMarkPriceTwap5Min
+      : perpMarket.amm.lastMarkPriceTwap;
+    const markPrice = new Decimal(convertToNumber(markTwap, PRICE_PRECISION));
+
+    const confPct = convertToNumber(
+      perpMarket.amm.lastOracleConfPct,
+      new BN(1_000_000)
+    );
+    const spreadPct = convertToNumber(
+      perpMarket.amm.lastOracleReservePriceSpreadPct,
+      new BN(1_000_000)
+    );
+
+    return {
+      oraclePrice,
+      markPrice,
+      confidenceBps: new Decimal(Math.abs(confPct) * 10_000),
+      spreadBps: new Decimal(Math.abs(spreadPct) * 10_000),
+    };
   }
 
   // ── Spot Trading ───────────────────────────────────────────────────

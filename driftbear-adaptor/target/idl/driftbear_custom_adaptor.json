@@ -1,0 +1,522 @@
+{
+  "address": "4JW3mvrVGXpZZ3jxjw16o4REHnWuEGkbvLkPBg1RbFbQ",
+  "metadata": {
+    "name": "driftbear_custom_adaptor",
+    "version": "0.1.0",
+    "spec": "0.1.0",
+    "description": "Custom adaptor scaffold for the DriftBear Ranger vault flow"
+  },
+  "instructions": [
+    {
+      "name": "deposit",
+      "discriminator": [
+        242,
+        35,
+        198,
+        137,
+        82,
+        225,
+        242,
+        182
+      ],
+      "accounts": [
+        {
+          "name": "strategy_authority",
+          "signer": true
+        },
+        {
+          "name": "strategy",
+          "relations": [
+            "position"
+          ]
+        },
+        {
+          "name": "vault_asset_mint"
+        },
+        {
+          "name": "strategy_token_ata",
+          "writable": true
+        },
+        {
+          "name": "token_program",
+          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
+        },
+        {
+          "name": "position",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  100,
+                  114,
+                  105,
+                  102,
+                  116,
+                  98,
+                  101,
+                  97,
+                  114,
+                  45,
+                  112,
+                  111,
+                  115,
+                  105,
+                  116,
+                  105,
+                  111,
+                  110
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "strategy"
+              }
+            ]
+          }
+        },
+        {
+          "name": "drift_state"
+        },
+        {
+          "name": "drift_user",
+          "writable": true
+        },
+        {
+          "name": "drift_user_stats",
+          "writable": true
+        },
+        {
+          "name": "spot_market",
+          "writable": true
+        },
+        {
+          "name": "spot_market_vault",
+          "writable": true
+        },
+        {
+          "name": "spot_market_oracle"
+        },
+        {
+          "name": "drift_program"
+        }
+      ],
+      "args": [
+        {
+          "name": "amount",
+          "type": "u64"
+        }
+      ],
+      "returns": "u64"
+    },
+    {
+      "name": "initialize",
+      "discriminator": [
+        175,
+        175,
+        109,
+        31,
+        13,
+        152,
+        155,
+        237
+      ],
+      "accounts": [
+        {
+          "name": "payer",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "authority",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "strategy"
+        },
+        {
+          "name": "position",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  100,
+                  114,
+                  105,
+                  102,
+                  116,
+                  98,
+                  101,
+                  97,
+                  114,
+                  45,
+                  112,
+                  111,
+                  115,
+                  105,
+                  116,
+                  105,
+                  111,
+                  110
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "strategy"
+              }
+            ]
+          }
+        },
+        {
+          "name": "drift_state"
+        },
+        {
+          "name": "drift_user",
+          "writable": true
+        },
+        {
+          "name": "drift_user_stats",
+          "writable": true
+        },
+        {
+          "name": "drift_program"
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "market_index",
+          "type": "u16"
+        }
+      ]
+    },
+    {
+      "name": "migrate_position",
+      "discriminator": [
+        15,
+        132,
+        59,
+        50,
+        199,
+        6,
+        251,
+        46
+      ],
+      "accounts": [
+        {
+          "name": "payer",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "authority",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "strategy"
+        },
+        {
+          "name": "position",
+          "writable": true
+        },
+        {
+          "name": "drift_user"
+        },
+        {
+          "name": "drift_user_stats"
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "withdraw",
+      "discriminator": [
+        183,
+        18,
+        70,
+        156,
+        148,
+        109,
+        161,
+        34
+      ],
+      "accounts": [
+        {
+          "name": "strategy_authority",
+          "signer": true
+        },
+        {
+          "name": "strategy",
+          "relations": [
+            "position"
+          ]
+        },
+        {
+          "name": "vault_asset_mint"
+        },
+        {
+          "name": "strategy_token_ata",
+          "writable": true
+        },
+        {
+          "name": "token_program",
+          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
+        },
+        {
+          "name": "position",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  100,
+                  114,
+                  105,
+                  102,
+                  116,
+                  98,
+                  101,
+                  97,
+                  114,
+                  45,
+                  112,
+                  111,
+                  115,
+                  105,
+                  116,
+                  105,
+                  111,
+                  110
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "strategy"
+              }
+            ]
+          }
+        },
+        {
+          "name": "drift_state"
+        },
+        {
+          "name": "drift_user",
+          "writable": true
+        },
+        {
+          "name": "drift_user_stats",
+          "writable": true
+        },
+        {
+          "name": "spot_market",
+          "writable": true
+        },
+        {
+          "name": "spot_market_vault",
+          "writable": true
+        },
+        {
+          "name": "spot_market_oracle"
+        },
+        {
+          "name": "drift_signer"
+        },
+        {
+          "name": "drift_program"
+        }
+      ],
+      "args": [
+        {
+          "name": "amount",
+          "type": "u64"
+        }
+      ],
+      "returns": "u64"
+    }
+  ],
+  "accounts": [
+    {
+      "name": "AdaptorPosition",
+      "discriminator": [
+        184,
+        51,
+        135,
+        207,
+        169,
+        196,
+        10,
+        34
+      ]
+    }
+  ],
+  "errors": [
+    {
+      "code": 6000,
+      "name": "InvalidDriftProgram",
+      "msg": "The provided Drift program does not match mainnet Drift."
+    },
+    {
+      "code": 6001,
+      "name": "InvalidDriftUser",
+      "msg": "The provided Drift user account could not be decoded."
+    },
+    {
+      "code": 6002,
+      "name": "InvalidSpotMarket",
+      "msg": "The provided Drift spot market account could not be decoded."
+    },
+    {
+      "code": 6003,
+      "name": "InvalidSpotBalanceType",
+      "msg": "The Drift spot balance type is invalid."
+    },
+    {
+      "code": 6004,
+      "name": "TokenAmountOverflow",
+      "msg": "The computed token amount exceeds the u64 range."
+    },
+    {
+      "code": 6005,
+      "name": "InvalidDriftUserAuthority",
+      "msg": "The Drift user authority does not match the strategy authority."
+    },
+    {
+      "code": 6006,
+      "name": "InvalidDriftUserStatsAuthority",
+      "msg": "The Drift user stats authority does not match the strategy authority."
+    },
+    {
+      "code": 6007,
+      "name": "InvalidDriftUserPda",
+      "msg": "The Drift user PDA does not match the expected subaccount PDA."
+    },
+    {
+      "code": 6008,
+      "name": "InvalidDriftUserStatsPda",
+      "msg": "The Drift user stats PDA does not match the expected PDA."
+    },
+    {
+      "code": 6009,
+      "name": "InvalidDriftSubAccountId",
+      "msg": "The Drift user subaccount does not match the initialized subaccount id."
+    },
+    {
+      "code": 6010,
+      "name": "InvalidPositionPda",
+      "msg": "The driftbear position PDA does not match the expected address."
+    },
+    {
+      "code": 6011,
+      "name": "InvalidPositionOwner",
+      "msg": "The driftbear position account is not owned by this program."
+    },
+    {
+      "code": 6012,
+      "name": "InvalidPositionLayout",
+      "msg": "The driftbear position account layout is invalid."
+    },
+    {
+      "code": 6013,
+      "name": "InvalidPositionStrategy",
+      "msg": "The driftbear position strategy does not match the expected address."
+    },
+    {
+      "code": 6014,
+      "name": "InvalidDriftUserStatus",
+      "msg": "The Drift user is in liquidation or bankrupt status."
+    },
+    {
+      "code": 6015,
+      "name": "UnexpectedOpenOrders",
+      "msg": "The Drift user has open orders that are unsupported by this strategy."
+    },
+    {
+      "code": 6016,
+      "name": "UnexpectedPerpPosition",
+      "msg": "The Drift user has perp exposure that is unsupported by this strategy."
+    },
+    {
+      "code": 6017,
+      "name": "UnexpectedSpotPosition",
+      "msg": "The Drift user has spot exposure outside the configured market."
+    },
+    {
+      "code": 6018,
+      "name": "InvalidSpotMarketIndex",
+      "msg": "The Drift spot market does not match the configured market index."
+    },
+    {
+      "code": 6019,
+      "name": "InvalidSpotMarketVault",
+      "msg": "The Drift spot market vault does not match the provided vault account."
+    },
+    {
+      "code": 6020,
+      "name": "InvalidSpotMarketMint",
+      "msg": "The Drift spot market mint does not match the vault asset mint."
+    },
+    {
+      "code": 6021,
+      "name": "InvalidStrategyTokenOwner",
+      "msg": "The strategy token account does not belong to the strategy authority."
+    },
+    {
+      "code": 6022,
+      "name": "InvalidStrategyTokenMint",
+      "msg": "The strategy token account mint does not match the vault asset mint."
+    },
+    {
+      "code": 6023,
+      "name": "UnsupportedBorrowPosition",
+      "msg": "This adaptor does not support borrow positions."
+    },
+    {
+      "code": 6024,
+      "name": "UnexpectedSpotOrders",
+      "msg": "This adaptor does not support open spot orders on the managed subaccount."
+    }
+  ],
+  "types": [
+    {
+      "name": "AdaptorPosition",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "strategy",
+            "type": "pubkey"
+          },
+          {
+            "name": "market_index",
+            "type": "u16"
+          },
+          {
+            "name": "sub_account_id",
+            "type": "u16"
+          },
+          {
+            "name": "bump",
+            "type": "u8"
+          },
+          {
+            "name": "tracked_balance",
+            "type": "u64"
+          }
+        ]
+      }
+    }
+  ]
+}

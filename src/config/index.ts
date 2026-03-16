@@ -45,6 +45,13 @@ export const config = {
     process.env.HELIUS_RPC_URL ||
     process.env.SOLANA_RPC_URL ||
     "https://api.mainnet-beta.solana.com",
+  /** Websocket endpoint for account subscriptions */
+  heliusWssUrl:
+    process.env.HELIUS_WSS_URL ||
+    process.env.SOLANA_WSS_URL ||
+    (process.env.HELIUS_RPC_URL ||
+      process.env.SOLANA_RPC_URL ||
+      "https://api.mainnet-beta.solana.com").replace(/^http/, "ws"),
   /** Path to keypair JSON file (preferred, matches ANCHOR_WALLET convention) */
   keypairPath: process.env.ANCHOR_WALLET || process.env.KEYPAIR_PATH || "",
   /** Base58-encoded private key (fallback if no keypair file) */
@@ -104,6 +111,14 @@ export const config = {
     process.env.JUPITER_SWAP_SLIPPAGE_BPS || "100"
   ),
   targetAssets: (process.env.TARGET_ASSETS || "SOL,BTC,ETH").split(","),
+  oracleMaxConfidenceBps: parseInt(
+    process.env.ORACLE_MAX_CONFIDENCE_BPS || "50"
+  ),
+  oracleMaxSpreadBps: parseInt(process.env.ORACLE_MAX_SPREAD_BPS || "50"),
+  oracleSizeFloor: new Decimal(process.env.ORACLE_SIZE_FLOOR || "0.4"),
+  oracleSkipMultiplier: new Decimal(
+    process.env.ORACLE_SKIP_MULTIPLIER || "2.5"
+  ),
   liquidationScanIntervalMs: parseInt(
     process.env.LIQUIDATION_SCAN_INTERVAL_MS || "5000"
   ),
@@ -157,7 +172,7 @@ export const config = {
     driftAdaptor: "EBN93eXs5fHGBABuajQqdsKRkCgaqtJa8vEFD6vKXiP",
     driftbearCustomAdaptor:
       process.env.DRIFTBEAR_CUSTOM_ADAPTOR_PROGRAM ||
-      "G5RgbPTWyYePXebLMsP6sZTQKkKZhwP3Zn1CnSGhPnPi",
+      "4JW3mvrVGXpZZ3jxjw16o4REHnWuEGkbvLkPBg1RbFbQ",
     lendingAdaptor: "aVoLTRCRt3NnnchvLYH6rMYehJHwM5m45RmLBZq7PGz",
     trustfulAdaptor: "3pnpK9nrs1R65eMV1wqCXkDkhSgN18xb1G5pgYPwoZjJ",
   },

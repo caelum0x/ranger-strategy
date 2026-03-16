@@ -1,5 +1,5 @@
 import Decimal from "decimal.js";
-import { DriftManager } from "../drift/client";
+import { DriftManager, OracleMetrics } from "../drift/client";
 import { DriftFundingAnalyzer, FundingAnalysis } from "../drift/funding";
 import { DriftExecutor } from "../drift/executor";
 import { DriftDataAPI } from "../drift/data-api";
@@ -33,7 +33,7 @@ export class StrategyEngine {
   private dataApi: DriftDataAPI = new DriftDataAPI();
   private state: StrategyState;
   private predictor: FundingPredictor = new FundingPredictor();
-  private oracleGuard: OracleGuard = new OracleGuard();
+  private oracleGuard: OracleGuard;
   private advisor: StrategyAdvisor | null = null;
   private lastLLMAdvice: LLMStrategyAdvice | null = null;
   private tradeLogger: TradeLogger = new TradeLogger();
@@ -59,6 +59,7 @@ export class StrategyEngine {
     this.drift = drift;
     this.binance = binance;
     this.riskManager = new RiskManager(initialCapital);
+    this.oracleGuard = new OracleGuard(new Decimal(config.oracleMaxSpreadBps));
 
     this.state = {
       totalCapital: initialCapital,
@@ -519,6 +520,14 @@ export class StrategyEngine {
     const isDriftBear = this.isDriftBearMode();
     const indexerDecision = this.state.indexerDecision;
 
+    const oracleMetricsByAsset = new Map<string, OracleMetrics>();
+    for (const asset of config.targetAssets) {
+      const metrics = this.drift.getOracleMetrics(asset);
+      if (metrics) {
+        oracleMetricsByAsset.set(asset, metrics);
+      }
+    }
+
     // Use on-chain funding analysis if available
     const onChainAnalyses = this.fundingAnalyzer
       ? this.fundingAnalyzer.analyzeAllAssets()
@@ -577,6 +586,16 @@ export class StrategyEngine {
           }
         }
 
+        const oracleMetrics = oracleMetricsByAsset.get(asset);
+        const oracleRisk = this.evaluateOracleRisk(asset, oracleMetrics);
+        if (oracleRisk.skip && oracleRisk.reason) {
+          logger.warn(`Oracle guard skip: ${asset}`, {
+            reason: oracleRisk.reason,
+            confBps: oracleMetrics?.confidenceBps?.toFixed(1) || null,
+            spreadBps: oracleMetrics?.spreadBps?.toFixed(1) || null,
+          });
+        }
+
         return {
           asset,
           primaryRate,
@@ -591,10 +610,17 @@ export class StrategyEngine {
           momentumBonus,
           driftFunding: driftRate?.annualizedRate || new Decimal(0),
           binanceFunding: binanceRate?.annualizedRate || new Decimal(0),
+          oracleMetrics,
+          oracleRisk,
         };
       })
       // Filter by net yield (after borrow costs) instead of just gross yield
-      .filter((a) => a.isAttractive && a.netYield.gt(config.minFundingAPY))
+      .filter(
+        (a) =>
+          a.isAttractive &&
+          a.netYield.gt(config.minFundingAPY) &&
+          !a.oracleRisk.skip
+      )
       .sort((a, b) => {
         // Sort by momentum-adjusted yield: absYield * (1 + momentum bonus)
         const aScore = a.absYield.mul(new Decimal(1).add(a.momentumBonus.mul("0.3")));
@@ -618,6 +644,9 @@ export class StrategyEngine {
         perpSide: a.perpSide,
         momentum: a.momentum,
         confidence: a.confidence.toFixed(2),
+        oracleConfBps: a.oracleMetrics?.confidenceBps.toFixed(1) || null,
+        oracleSpreadBps: a.oracleMetrics?.spreadBps.toFixed(1) || null,
+        oracleSizeMultiplier: a.oracleRisk.sizeMultiplier.toFixed(2),
       })),
     });
 
@@ -769,6 +798,11 @@ export class StrategyEngine {
           positionSize = positionSize.mul(momentumScale);
         }
 
+        const oracleSizeMultiplier = ranked.oracleRisk.sizeMultiplier;
+        if (oracleSizeMultiplier.lt(1)) {
+          positionSize = positionSize.mul(oracleSizeMultiplier);
+        }
+
         if (positionSize.gte(new Decimal(5))) {
           const premium = ranked.onChainAnalysis
             ? ` | premium: ${ranked.onChainAnalysis.premium.mul(100).toFixed(3)}%`
@@ -776,6 +810,10 @@ export class StrategyEngine {
           const momentumStr = ranked.momentum !== "flat"
             ? ` | momentum: ${ranked.momentum}`
             : "";
+          const oracleStr =
+            ranked.oracleRisk.sizeMultiplier.lt(1)
+              ? ` | oracleSize=${ranked.oracleRisk.sizeMultiplier.toFixed(2)}`
+              : "";
 
           signals.push({
             asset: ranked.asset,
@@ -787,7 +825,7 @@ export class StrategyEngine {
             spotSize: positionSize,
             perpSize: positionSize,
             confidence: ranked.confidence,
-            reason: `${ranked.perpSide} perp: ${ranked.primaryRate.toFixed(4)} annualized${premium}${momentumStr}`,
+            reason: `${ranked.perpSide} perp: ${ranked.primaryRate.toFixed(4)} annualized${premium}${momentumStr}${oracleStr}`,
             predictedFundingRate: ranked.primaryRate,
           });
         }
@@ -1321,5 +1359,60 @@ export class StrategyEngine {
 
   private isDriftBearMode(): boolean {
     return (this.state.strategyProfile || config.strategyProfile) === "driftbear-neutral-farmer";
+  }
+
+  private evaluateOracleRisk(
+    asset: string,
+    metrics?: OracleMetrics
+  ): {
+    skip: boolean;
+    sizeMultiplier: Decimal;
+    reason?: string;
+  } {
+    if (!metrics) {
+      return { skip: false, sizeMultiplier: new Decimal(1) };
+    }
+
+    const oracleCheck = this.oracleGuard.check(
+      asset,
+      metrics.oraclePrice,
+      metrics.markPrice
+    );
+    if (!oracleCheck.safe) {
+      return {
+        skip: true,
+        sizeMultiplier: new Decimal(0),
+        reason: oracleCheck.reason,
+      };
+    }
+
+    const maxSpread = new Decimal(config.oracleMaxSpreadBps);
+    const maxConf = new Decimal(config.oracleMaxConfidenceBps);
+    const spreadRatio = maxSpread.gt(0)
+      ? metrics.spreadBps.div(maxSpread)
+      : new Decimal(0);
+    const confRatio = maxConf.gt(0)
+      ? metrics.confidenceBps.div(maxConf)
+      : new Decimal(0);
+
+    const worstRatio = Decimal.max(spreadRatio, confRatio);
+    if (worstRatio.gte(config.oracleSkipMultiplier)) {
+      return {
+        skip: true,
+        sizeMultiplier: new Decimal(0),
+        reason: `oracle risk too high (spread ${metrics.spreadBps.toFixed(1)}bps, conf ${metrics.confidenceBps.toFixed(1)}bps)`,
+      };
+    }
+
+    const penalty = Decimal.min(
+      new Decimal(1),
+      spreadRatio.add(confRatio).div(2)
+    );
+    const sizeMultiplier = Decimal.max(
+      config.oracleSizeFloor,
+      new Decimal(1).sub(penalty)
+    );
+
+    return { skip: false, sizeMultiplier };
   }
 }

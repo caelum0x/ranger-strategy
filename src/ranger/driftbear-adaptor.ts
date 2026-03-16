@@ -117,8 +117,16 @@ export function buildDriftBearDepositRemainingAccounts(params: {
   vaultStrategyAuth: PublicKey;
   marketIndex: number;
   subAccountId: number;
+  spotMarketOracle: PublicKey;
 }): AccountMeta[] {
-  const { adaptorProgram, strategy, vaultStrategyAuth, marketIndex, subAccountId } =
+  const {
+    adaptorProgram,
+    strategy,
+    vaultStrategyAuth,
+    marketIndex,
+    subAccountId,
+    spotMarketOracle,
+  } =
     params;
   const position = deriveDriftBearPosition(adaptorProgram, strategy);
   const { user, userStats } = deriveDriftUserAccounts(
@@ -132,8 +140,9 @@ export function buildDriftBearDepositRemainingAccounts(params: {
     { pubkey: DRIFT_STATE, isSigner: false, isWritable: false },
     { pubkey: user, isSigner: false, isWritable: true },
     { pubkey: userStats, isSigner: false, isWritable: true },
-    { pubkey: spotMarket, isSigner: false, isWritable: false },
+    { pubkey: spotMarket, isSigner: false, isWritable: true },
     { pubkey: spotMarketVault, isSigner: false, isWritable: true },
+    { pubkey: spotMarketOracle, isSigner: false, isWritable: false },
     { pubkey: DRIFT_PROGRAM_ID, isSigner: false, isWritable: false },
   ];
 }
@@ -144,13 +153,14 @@ export function buildDriftBearWithdrawRemainingAccounts(params: {
   vaultStrategyAuth: PublicKey;
   marketIndex: number;
   subAccountId: number;
+  spotMarketOracle: PublicKey;
 }): AccountMeta[] {
   const base = buildDriftBearDepositRemainingAccounts(params);
   const { driftSigner } = deriveDriftSpotAccounts(params.marketIndex);
+  const driftProgram = base[base.length - 1];
   return [
-    ...base.slice(0, 6),
+    ...base.slice(0, base.length - 1),
     { pubkey: driftSigner, isSigner: false, isWritable: false },
-    base[6],
+    driftProgram,
   ];
 }
-

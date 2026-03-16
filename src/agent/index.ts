@@ -279,7 +279,7 @@ class StrategyAgent {
       name: "Ranger Delta-Neutral Vault Agent",
       version: "0.1.0",
       uptime: Math.round((Date.now() - this.startTime) / 1000),
-      endpoints: ["/status", "/positions", "/yield", "/predictions", "/reasoning", "/trades", "/vault", "/health", "/indexer", "/sor"],
+      endpoints: ["/status", "/positions", "/yield", "/predictions", "/reasoning", "/trades", "/vault", "/health", "/indexer", "/indexer/history", "/sor"],
     }));
 
     this.monitor.route("/status", () => this.getStatus());
@@ -403,8 +403,21 @@ class StrategyAgent {
     this.monitor.route("/indexer", () => {
       if (!this.engine) return { snapshot: null, decision: null };
       const state = this.engine.getState();
+      const storeUpdatedAt = this.indexerStore.getUpdatedAt();
+      const latestSnapshot = this.indexerStore.getLatestSnapshot();
+      const latestDecision = this.indexerStore.getLatestDecision();
+      const now = Date.now();
+      const snapshotAgeSec = latestSnapshot
+        ? Math.max(0, Math.round((now - latestSnapshot.timestamp) / 1000))
+        : null;
+      const decisionAgeSec = latestDecision
+        ? Math.max(0, Math.round((now - latestDecision.createdAt) / 1000))
+        : null;
       return {
         strategyProfile: state.strategyProfile || config.strategyProfile,
+        storeUpdatedAt,
+        snapshotAgeSec,
+        decisionAgeSec,
         snapshot: state.indexerSnapshot
           ? {
               vault: state.indexerSnapshot.vault,
@@ -421,8 +434,33 @@ class StrategyAgent {
               rationale: state.indexerDecision.rationale,
               targetAllocation:
                 state.indexerDecision.targetAllocation?.toFixed(2) || null,
+              targetLeverage:
+                state.indexerDecision.targetLeverage?.toFixed(2) || null,
             }
           : null,
+      };
+    });
+
+    this.monitor.route("/indexer/history", () => {
+      const snapshots = this.indexerStore.getRecentSnapshots(15);
+      const decisions = this.indexerStore.getRecentDecisions(15);
+      return {
+        snapshots: snapshots.map((s) => ({
+          vault: s.vault,
+          aum: s.aum,
+          sharePrice: s.sharePrice || null,
+          strategyCount: s.strategyPositions.length,
+          timestamp: s.timestamp,
+          source: s.sourceEvent?.type || null,
+          signature: s.sourceEvent?.signature || null,
+        })),
+        decisions: decisions.map((d) => ({
+          action: d.action,
+          confidence: d.confidence,
+          targetAllocation: d.targetAllocation ?? null,
+          targetLeverage: d.targetLeverage ?? null,
+          createdAt: d.createdAt,
+        })),
       };
     });
 

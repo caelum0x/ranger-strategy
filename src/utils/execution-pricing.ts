@@ -6,6 +6,8 @@ export interface ExecutionPricingInput {
   oraclePrice: Decimal;
   fallbackSlippageBps: number;
   quotedPrice?: Decimal;
+  oracleConfidenceBps?: number;
+  oracleSpreadBps?: number;
   maxSlippageBps?: number;
 }
 
@@ -14,6 +16,7 @@ export interface ExecutionPricingPlan {
   slippageBps: number;
   quotedPrice?: Decimal;
   oracleSpreadBps?: number;
+  oracleConfidenceBps?: number;
 }
 
 const PROTOCOL_V2_AUCTION_BUFFER_BPS = 50;
@@ -29,6 +32,7 @@ export function deriveExecutionPricingPlan(
   }
 
   let oracleSpreadBps: number | undefined;
+  let oracleConfidenceBps: number | undefined;
   let slippageBps = input.fallbackSlippageBps;
 
   if (input.quotedPrice && input.quotedPrice.gt(0)) {
@@ -50,6 +54,25 @@ export function deriveExecutionPricingPlan(
     );
   }
 
+  if (input.oracleSpreadBps !== undefined) {
+    oracleSpreadBps = input.oracleSpreadBps;
+    slippageBps = Math.min(
+      maxSlippageBps,
+      Math.max(slippageBps, oracleSpreadBps + PROTOCOL_V2_AUCTION_BUFFER_BPS)
+    );
+  }
+
+  if (input.oracleConfidenceBps !== undefined) {
+    oracleConfidenceBps = input.oracleConfidenceBps;
+    slippageBps = Math.min(
+      maxSlippageBps,
+      Math.max(
+        slippageBps,
+        oracleConfidenceBps + PROTOCOL_V2_AUCTION_BUFFER_BPS
+      )
+    );
+  }
+
   const oracleAdjustedPrice =
     input.side === "long"
       ? input.oraclePrice.mul(10_000 + slippageBps).div(10_000)
@@ -66,6 +89,7 @@ export function deriveExecutionPricingPlan(
     slippageBps,
     quotedPrice: input.quotedPrice,
     oracleSpreadBps,
+    oracleConfidenceBps,
   };
 }
 

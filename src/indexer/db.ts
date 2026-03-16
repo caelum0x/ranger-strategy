@@ -71,6 +71,11 @@ export class IndexerStore {
     return store.snapshots.slice(-limit);
   }
 
+  getRecentDecisions(limit = 20): RebalanceDecisionRecord[] {
+    const store = this.read();
+    return store.decisions.slice(-limit);
+  }
+
   async saveDecision(decision: RebalanceDecisionRecord): Promise<void> {
     const store = this.read();
     store.decisions.push(decision);
@@ -82,6 +87,11 @@ export class IndexerStore {
   getLatestDecision(): RebalanceDecisionRecord | null {
     const store = this.read();
     return store.decisions.at(-1) || null;
+  }
+
+  getUpdatedAt(): number {
+    const store = this.read();
+    return store.updatedAt || 0;
   }
 
   private read(): IndexerStoreFile {

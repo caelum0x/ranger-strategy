@@ -1,5 +1,6 @@
 import http from "http";
 import { URL } from "url";
+import { Connection, PublicKey } from "@solana/web3.js";
 import { config } from "../config";
 import { logger } from "../utils/logger";
 import { IndexerStore } from "./db";
@@ -43,6 +44,7 @@ async function main(): Promise<void> {
   const store = new IndexerStore();
   const parser = new VoltrVaultParser();
   const decisionEngine = new IndexerDecisionEngine(store);
+  const vaultPubkey = new PublicKey(config.vaultPubkey);
 
   const indexVault = async (sourceEvent: {
     type: string;
@@ -140,6 +142,43 @@ async function main(): Promise<void> {
       vault: config.vaultPubkey,
     });
   });
+
+  // Websocket fallback: subscribe directly to vault account changes
+  try {
+    const wsConnection = new Connection(config.heliusRpcUrl, {
+      commitment: "confirmed",
+      wsEndpoint: config.heliusWssUrl,
+    });
+    let lastIndexedSlot = 0;
+    let lastIndexedAt = 0;
+    const minIntervalMs = 2_000;
+
+    const subscriptionId = wsConnection.onAccountChange(
+      vaultPubkey,
+      async (_, context) => {
+        const now = Date.now();
+        if (context.slot <= lastIndexedSlot || now - lastIndexedAt < minIntervalMs) {
+          return;
+        }
+        lastIndexedSlot = context.slot;
+        lastIndexedAt = now;
+        try {
+          await indexVault({ type: "ws-account-change", slot: context.slot });
+        } catch (error) {
+          logger.warn("WS indexer update failed", { error });
+        }
+      },
+      "confirmed"
+    );
+
+    logger.info("Websocket fallback enabled", {
+      vault: config.vaultPubkey,
+      ws: config.heliusWssUrl,
+      subscriptionId,
+    });
+  } catch (error) {
+    logger.warn("Failed to start websocket fallback", { error });
+  }
 }
 
 main().catch((error) => {

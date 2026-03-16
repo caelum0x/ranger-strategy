@@ -4,6 +4,12 @@ members = [
 ]
 resolver = "2"
 
+[patch.crates-io]
+constant_time_eq = { path = "vendor/constant_time_eq" }
+blake3 = { path = "vendor/blake3" }
+indexmap = { path = "vendor/indexmap-2.11.4" }
+proc-macro-crate = { path = "vendor/proc-macro-crate" }
+
 [profile.release]
 overflow-checks = true
 lto = "fat"

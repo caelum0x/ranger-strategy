@@ -12,7 +12,7 @@ The repo now has a local self-indexing path for Ranger/Voltr vault telemetry:
 
 ## Remaining Code Gaps
 
-1. Execute the actual Ranger `initialize/deposit/withdraw` flow through the custom adaptor path, not just the account derivation and valuation helpers.
+1. Execute the full Ranger vault `initialize/deposit/withdraw` flow through the Voltr vault program (direct adaptor CPI on devnet is done; see `docs/DRIFTBEAR_CUSTOM_ADAPTOR_DEVNET.md`).
 2. Feed the latest indexed snapshot and decision into the live agent before each rebalance cycle.
 3. Extend the decision engine with funding, volatility, and health-factor inputs from the existing Drift strategy modules.
 4. Add a dashboard view for the indexed vault snapshots and rebalance recommendations.

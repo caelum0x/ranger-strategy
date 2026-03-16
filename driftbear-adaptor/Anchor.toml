@@ -7,12 +7,12 @@ resolution = true
 skip-lint = false
 
 [programs.localnet]
-mock_ctoken_market = "DPk5Ptke7pfV64sn3RtqQjYGCNYwtA6vmENxXakVfwpJ"
-driftbear_custom_adaptor = "G5RgbPTWyYePXebLMsP6sZTQKkKZhwP3Zn1CnSGhPnPi"
+mock_ctoken_market = "8t9bJVFynWNTpfvcJ32qLfP6vKKjzk6jMLP5wd6ckhBj"
+driftbear_custom_adaptor = "4JW3mvrVGXpZZ3jxjw16o4REHnWuEGkbvLkPBg1RbFbQ"
 
 [programs.devnet]
-mock_ctoken_market = "DPk5Ptke7pfV64sn3RtqQjYGCNYwtA6vmENxXakVfwpJ"
-driftbear_custom_adaptor = "G5RgbPTWyYePXebLMsP6sZTQKkKZhwP3Zn1CnSGhPnPi"
+mock_ctoken_market = "8t9bJVFynWNTpfvcJ32qLfP6vKKjzk6jMLP5wd6ckhBj"
+driftbear_custom_adaptor = "4JW3mvrVGXpZZ3jxjw16o4REHnWuEGkbvLkPBg1RbFbQ"
 
 [provider]
 cluster = "devnet"
