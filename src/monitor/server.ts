@@ -7,6 +7,7 @@
 import http from "http";
 import Decimal from "decimal.js";
 import { logger } from "../utils/logger";
+import { getDashboardHTML } from "./dashboard";
 
 type RouteHandler = (
   req: http.IncomingMessage
@@ -27,9 +28,19 @@ export class MonitorServer {
     this.server = http.createServer(async (req, res) => {
       // CORS headers for dashboard access
       res.setHeader("Access-Control-Allow-Origin", "*");
-      res.setHeader("Content-Type", "application/json");
 
       const url = new URL(req.url || "/", `http://localhost:${this.port}`);
+
+      // Serve the HTML dashboard at /dashboard
+      if (url.pathname === "/dashboard") {
+        res.setHeader("Content-Type", "text/html; charset=utf-8");
+        res.writeHead(200);
+        res.end(getDashboardHTML());
+        return;
+      }
+
+      res.setHeader("Content-Type", "application/json");
+
       const handler = this.routes.get(url.pathname);
 
       if (!handler) {

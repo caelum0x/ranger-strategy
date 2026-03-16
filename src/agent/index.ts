@@ -47,6 +47,7 @@ class StrategyAgent {
   private telegram: TelegramAlerter = new TelegramAlerter();
   private indexerStore: IndexerStore = new IndexerStore();
   private sorClient: RangerSorClient = new RangerSorClient();
+  private consecutiveHealthCheckFailures = 0;
   private running = false;
 
   async start(): Promise<void> {
@@ -255,8 +256,17 @@ class StrategyAgent {
         } else if (health.lt(new Decimal("1.20"))) {
           logger.warn(`Health ratio warning: ${health.toFixed(4)}`);
         }
+        this.consecutiveHealthCheckFailures = 0;
       } catch {
-        // Non-critical — health check failure shouldn't crash the agent
+        this.consecutiveHealthCheckFailures++;
+        if (this.consecutiveHealthCheckFailures >= 5) {
+          logger.error(`Health monitoring unavailable — ${this.consecutiveHealthCheckFailures} consecutive RPC failures`);
+          this.telegram
+            .emergencyAlert(`Health monitoring down: ${this.consecutiveHealthCheckFailures} consecutive RPC failures (~${this.consecutiveHealthCheckFailures * 2}min)`)
+            .catch(() => {});
+          // Reset counter to avoid spamming alerts every 2 minutes
+          this.consecutiveHealthCheckFailures = 0;
+        }
       }
     }, 120_000); // every 2 minutes
 
@@ -353,6 +363,7 @@ class StrategyAgent {
 
     this.monitor.route("/trades", () => ({
       summary: this.tradeLogger.getSummary(),
+      winLoss: this.tradeLogger.getWinLossRecord(),
       recentEvents: this.tradeLogger.readRecent(20),
     }));
 

@@ -233,6 +233,16 @@ ${positionsTable.length > 0 ? JSON.stringify(positionsTable, null, 2) : "None"}
 **On-Chain Analysis:**
 ${onChainTable.length > 0 ? JSON.stringify(onChainTable, null, 2) : "Not available"}
 
+**Vault Snapshot (from indexer):**
+${ctx.state.indexerSnapshot ? JSON.stringify({
+  aum: `$${ctx.state.indexerSnapshot.aum.toFixed(0)}`,
+  sharePrice: ctx.state.indexerSnapshot.sharePrice?.toFixed(6) || "N/A",
+  highWaterMark: ctx.state.indexerSnapshot.highWaterMark?.toFixed(6) || "N/A",
+  strategyCount: ctx.state.indexerSnapshot.strategyCount,
+  snapshotAge: `${Math.round((Date.now() - ctx.state.indexerSnapshot.timestamp) / 60000)}m ago`,
+}, null, 2) : "No vault snapshot available"}
+${ctx.state.indexerDecision ? `\n**Indexer Decision:** ${ctx.state.indexerDecision.action} (confidence: ${ctx.state.indexerDecision.confidence.toFixed(2)}) — ${ctx.state.indexerDecision.rationale}` : ""}
+
 **Target Assets:** ${ctx.targetAssets.join(", ")}
 
 Respond with this exact JSON schema:

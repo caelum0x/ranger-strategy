@@ -23,6 +23,9 @@ import { FundingPredictor } from "./predictor";
 import { OracleGuard } from "../risk/oracle-guard";
 import { StrategyAdvisor, LLMStrategyAdvice } from "../ai/strategy-advisor";
 import { selectBestLST, calculateLSTYieldBoost, supportsLST } from "./lst";
+import { CircuitBreaker } from "./circuit-breaker";
+import { FloatingPerpMaker } from "./floating-maker";
+import { CrossVenueExecutor } from "./cross-venue";
 
 export class StrategyEngine {
   private drift: DriftManager;
@@ -36,6 +39,8 @@ export class StrategyEngine {
   private oracleGuard: OracleGuard;
   private advisor: StrategyAdvisor | null = null;
   private lastLLMAdvice: LLMStrategyAdvice | null = null;
+  private consecutiveLLMFailures: number = 0;
+  private llmCircuitBreakerUntil: number = 0;
   private tradeLogger: TradeLogger = new TradeLogger();
   private vaultPerf: VaultPerformanceTracker = new VaultPerformanceTracker();
   /** Pending vault withdrawals — reserve this amount as idle liquidity */
@@ -48,8 +53,37 @@ export class StrategyEngine {
   private lastFlipTime: Map<string, number> = new Map();
   /** Tracks which assets currently have LST-based positions (JitoSOL/mSOL/bSOL as collateral) */
   private lstPositions: Set<string> = new Set();
-  /** Minimum time between direction flips per asset (24 hours) */
-  private readonly MIN_FLIP_INTERVAL_MS = 24 * 3600 * 1000;
+  /** Minimum time between direction flips per asset (48 hours — calibrated from 3-year backtest) */
+  private readonly MIN_FLIP_INTERVAL_MS = 48 * 3600 * 1000;
+  /** Per-asset allocation weights from backtest-optimized portfolio */
+  private readonly ASSET_WEIGHTS: Record<string, number> = {
+    SOL: 0.22,
+    BTC: 0.20,
+    ETH: 0.13,
+    JTO: 0.23,
+    INJ: 0.22,
+  };
+  /** Previous snapshot AUM for detecting vault-level changes */
+  private prevSnapshotAum: Decimal | null = null;
+  /** Previous share price for detecting drawdowns at vault level */
+  private prevSnapshotSharePrice: Decimal | null = null;
+  /** Vault-level size multiplier (reduced when snapshot signals risk) */
+  private vaultRiskMultiplier: Decimal = new Decimal(1);
+  /** Production circuit breaker — monitors daily loss, health, drawdown, flips, oracle */
+  private circuitBreaker: CircuitBreaker = new CircuitBreaker({
+    maxDailyLossPct: 0.02,
+    maxFlipsPerDay: 1,
+    oracleStaleSeconds: 60,
+    healthRatioFloor: config.healthRatioFloor.toNumber(),
+    maxDrawdownPct: config.maxDrawdownPct.toNumber() / 100,
+    maxConsecutiveLLMFailures: 3,
+    cooldownMs: 6 * 3600 * 1000,
+    minFlipIntervalMs: 48 * 3600 * 1000,
+  });
+  /** FloatingPerpMaker for passive DLOB market making (optional, alongside delta-neutral) */
+  private floatingMaker: FloatingPerpMaker | null = null;
+  /** Cross-venue executor for Drift+Binance arbitrage */
+  private crossVenueExecutor: CrossVenueExecutor | null = null;
 
   constructor(
     drift: DriftManager,
@@ -110,6 +144,45 @@ export class StrategyEngine {
     this.advisor = advisor;
   }
 
+  /**
+   * Start the FloatingPerpMaker for passive DLOB market making.
+   * Runs alongside the main delta-neutral strategy.
+   */
+  startFloatingMaker(markets: number[] = [0, 1]): void {
+    if (!this.drift?.getClient() || this.floatingMaker) return;
+    this.floatingMaker = new FloatingPerpMaker(this.drift.getClient(), {
+      marketIndices: markets,
+    });
+    this.floatingMaker.start();
+  }
+
+  stopFloatingMaker(): void {
+    this.floatingMaker?.stop();
+    this.floatingMaker = null;
+  }
+
+  /**
+   * Initialize cross-venue executor (requires Binance manager).
+   */
+  initCrossVenue(): void {
+    if (!this.binance || !this.executor) return;
+    this.crossVenueExecutor = new CrossVenueExecutor(
+      this.drift,
+      this.executor,
+      this.binance
+    );
+    logger.info("Cross-venue executor initialized");
+  }
+
+  /** Get circuit breaker state for monitoring */
+  getCircuitBreakerState() {
+    return {
+      state: this.circuitBreaker.getState(),
+      lastTrip: this.circuitBreaker.getLastTrip(),
+      tradingAllowed: this.circuitBreaker.isTradingAllowed(),
+    };
+  }
+
   setIndexerContext(context: {
     snapshot?: IndexerSnapshotSummary;
     decision?: IndexerDecisionSummary;
@@ -148,6 +221,30 @@ export class StrategyEngine {
       return;
     }
 
+    // 3.5. Circuit breaker check
+    const breakerCheck = this.circuitBreaker.check({
+      equity: this.state.totalCapital.add(this.state.totalPnl).toNumber(),
+      dailyPnL: this.state.totalPnl.toNumber(),
+      healthRatio: this.state.healthRatio.toNumber(),
+      drawdownPct: this.state.currentDrawdown.toNumber() / 100,
+      llmFailed: this.consecutiveLLMFailures > 0 ? true : undefined,
+    });
+    if (!breakerCheck.allowed) {
+      logger.warn("Circuit breaker active — skipping cycle", {
+        state: this.circuitBreaker.getState(),
+        violations: breakerCheck.violations,
+      });
+      this.tradeLogger.logCycleComplete({
+        type: "circuit_breaker",
+        state: this.circuitBreaker.getState(),
+        violations: breakerCheck.violations,
+      });
+      return;
+    }
+
+    // 3.6. React to indexed vault snapshots (AUM drops, share price drawdowns)
+    this.evaluateVaultSnapshot();
+
     // 4. Get funding rates
     const driftRates = await this.drift.getFundingRates();
     const binanceRates =
@@ -159,7 +256,8 @@ export class StrategyEngine {
     const allRates = [...driftRates, ...binanceRates];
 
     // 4.6. LLM Strategy Advisor (replaces EMA predictor when available)
-    if (this.advisor) {
+    const llmCircuitOpen = Date.now() < this.llmCircuitBreakerUntil;
+    if (this.advisor && !llmCircuitOpen) {
       try {
         const onChainAnalyses = this.fundingAnalyzer
           ? this.fundingAnalyzer.analyzeAllAssets()
@@ -172,6 +270,8 @@ export class StrategyEngine {
           onChainAnalyses,
           targetAssets: config.targetAssets,
         });
+
+        this.consecutiveLLMFailures = 0;
 
         // Use LLM regime classification
         const prevRegime = this.state.regime;
@@ -200,12 +300,24 @@ export class StrategyEngine {
           logger.info("LLM trade reasoning:\n" + reasoning);
         }
       } catch (err: any) {
+        this.consecutiveLLMFailures++;
+        if (this.consecutiveLLMFailures >= 3) {
+          // Skip LLM for next 6 cycles (at 8h intervals = 48h cooldown, at 1h = 6h cooldown)
+          this.llmCircuitBreakerUntil = Date.now() + 6 * config.rebalanceIntervalMs;
+          logger.warn(`LLM circuit breaker tripped after ${this.consecutiveLLMFailures} consecutive failures — skipping LLM for 6 cycles`);
+        }
         logger.warn(`LLM advisor failed, falling back to EMA predictor: ${err.message}`);
         this.state.regime = this.detectRegime(allRates);
         this.predictor.update(driftRates);
         if (binanceRates.length > 0) this.predictor.update(binanceRates);
         this.latestPredictions = this.predictor.predictAll(config.targetAssets);
       }
+    } else if (this.advisor && llmCircuitOpen) {
+      logger.warn("LLM circuit breaker active — skipping LLM, using EMA predictor");
+      this.state.regime = this.detectRegime(allRates);
+      this.predictor.update(driftRates);
+      if (binanceRates.length > 0) this.predictor.update(binanceRates);
+      this.latestPredictions = this.predictor.predictAll(config.targetAssets);
     } else {
       // No LLM advisor — use heuristic regime detection + EMA predictor
       this.state.regime = this.detectRegime(allRates);
@@ -676,20 +788,22 @@ export class StrategyEngine {
       // e.g., we're short perp but funding went negative → should be long perp now
       const currentPerpSide = pos.side === "long" ? "short" : "long"; // infer perp side from spot side
       if (currentPerpSide !== ranked.perpSide) {
-        // Circuit breaker: prevent rapid flipping (min 24h between flips per asset)
-        const lastFlip = this.lastFlipTime.get(pos.asset) || 0;
-        const timeSinceFlip = Date.now() - lastFlip;
-        if (timeSinceFlip < this.MIN_FLIP_INTERVAL_MS) {
+        // Circuit breaker: prevent rapid flipping (48h cooldown + 1 flip/day/asset)
+        if (!this.circuitBreaker.canFlip(pos.asset)) {
           logger.info(
-            `${pos.asset} direction flip suppressed — last flip ${(timeSinceFlip / 3600000).toFixed(1)}h ago (min 24h)`
+            `${pos.asset} direction flip suppressed by circuit breaker`
           );
+          continue;
+        }
+
+        // Record the flip (returns false if blocked)
+        if (!this.circuitBreaker.recordFlip(pos.asset)) {
           continue;
         }
 
         logger.info(
           `${pos.asset} funding direction flipped: ${currentPerpSide} → ${ranked.perpSide}`
         );
-        this.lastFlipTime.set(pos.asset, Date.now());
         signals.push({
           asset: pos.asset,
           action: "rebalance",
@@ -769,14 +883,20 @@ export class StrategyEngine {
             ranked.spotSide = llmDecision.perpSide === "short" ? "long" : "short";
           }
         } else {
-          // Fallback: risk-manager-driven sizing (respects withdrawal-reserved liquidity)
-          const baseSize = this.riskManager.calculatePositionSize(
-            positionBudget,
-            ranked.asset,
-            ranked.absYield,
-            ranked.confidence
-          );
-          positionSize = baseSize.mul(regimeMultiplier);
+          // Fallback: weight-based sizing calibrated from 3-year backtest
+          const assetWeight = this.ASSET_WEIGHTS[ranked.asset];
+          if (assetWeight) {
+            positionSize = positionBudget.mul(assetWeight).mul(regimeMultiplier);
+          } else {
+            // Unknown asset — fall back to risk-manager sizing
+            const baseSize = this.riskManager.calculatePositionSize(
+              positionBudget,
+              ranked.asset,
+              ranked.absYield,
+              ranked.confidence
+            );
+            positionSize = baseSize.mul(regimeMultiplier);
+          }
         }
 
         if (isDriftBear) {
@@ -803,6 +923,11 @@ export class StrategyEngine {
           positionSize = positionSize.mul(oracleSizeMultiplier);
         }
 
+        // Vault-level risk adjustment from indexed snapshots
+        if (this.vaultRiskMultiplier.lt(1)) {
+          positionSize = positionSize.mul(this.vaultRiskMultiplier);
+        }
+
         if (positionSize.gte(new Decimal(5))) {
           const premium = ranked.onChainAnalysis
             ? ` | premium: ${ranked.onChainAnalysis.premium.mul(100).toFixed(3)}%`
@@ -813,6 +938,10 @@ export class StrategyEngine {
           const oracleStr =
             ranked.oracleRisk.sizeMultiplier.lt(1)
               ? ` | oracleSize=${ranked.oracleRisk.sizeMultiplier.toFixed(2)}`
+              : "";
+          const vaultStr =
+            this.vaultRiskMultiplier.lt(1)
+              ? ` | vaultRisk=${this.vaultRiskMultiplier.toFixed(2)}`
               : "";
 
           signals.push({
@@ -825,7 +954,7 @@ export class StrategyEngine {
             spotSize: positionSize,
             perpSize: positionSize,
             confidence: ranked.confidence,
-            reason: `${ranked.perpSide} perp: ${ranked.primaryRate.toFixed(4)} annualized${premium}${momentumStr}${oracleStr}`,
+            reason: `${ranked.perpSide} perp: ${ranked.primaryRate.toFixed(4)} annualized${premium}${momentumStr}${oracleStr}${vaultStr}`,
             predictedFundingRate: ranked.primaryRate,
           });
         }
@@ -871,6 +1000,31 @@ export class StrategyEngine {
             2
           );
           this.tradeLogger.logClose(signal.asset, signal.reason);
+          break;
+
+        case "increase":
+          // Add to an existing position (same direction)
+          await withRetry(
+            () => this.executeOpen(signal),
+            `increase ${signal.asset}`,
+            2
+          );
+          this.tradeLogger.logExecution(signal.asset, "increase", {
+            perpSide: signal.perpSide,
+            spotSide: signal.spotSide,
+            size: signal.spotSize.toFixed(4),
+            reason: signal.reason,
+          });
+          break;
+
+        case "decrease":
+          // Partially close a position (reduce size, keep direction)
+          await withRetry(
+            () => this.executeClose(signal),
+            `decrease ${signal.asset}`,
+            2
+          );
+          this.tradeLogger.logClose(signal.asset, `Partial close: ${signal.reason}`);
           break;
 
         case "rebalance":
@@ -1130,83 +1284,149 @@ export class StrategyEngine {
       `Health: ${this.state.healthRatio.toFixed(4)}, Drawdown: ${this.state.currentDrawdown.toFixed(2)}%`
     );
 
+    const closedAssets: string[] = [];
+    const failedAssets: string[] = [];
+    const PER_ASSET_TIMEOUT_MS = 15_000; // 15s max per asset
+
     for (const asset of config.targetAssets) {
       try {
-        // Close Binance perps if in cross-venue mode
-        if (this.binance && config.strategyMode === "cross-venue") {
-          await withRetry(
-            () => this.binance!.closePerp(asset),
-            `emergency-close-binance ${asset}`,
-            3
-          );
-        }
-
-        // Close Drift positions — use atomic exit if executor available
-        // For LST positions, swap LST back to USDC; otherwise standard exit
-        if (this.executor) {
-          if (this.lstPositions.has(asset)) {
-            const lst = selectBestLST(asset);
-            if (lst) {
-              await withRetry(
-                () => this.executor!.atomicLSTExit(lst.spotIndex, asset),
-                `emergency-exit-lst ${asset}`,
-                3
-              );
-              this.lstPositions.delete(asset);
-            } else {
-              await withRetry(
-                () => this.executor!.atomicDeltaNeutralExit(asset),
-                `emergency-exit-drift ${asset}`,
-                3
-              );
-            }
-          } else {
-            await withRetry(
-              () => this.executor!.atomicDeltaNeutralExit(asset),
-              `emergency-exit-drift ${asset}`,
-              3
-            );
-          }
-        } else {
-          // Manual close: perp first, then spot
-          await withRetry(
-            () => this.drift.closePerp(asset),
-            `emergency-close-perp ${asset}`,
-            3
-          );
-          // Close spot leg — determine direction from current positions
-          const spotPos = this.state.positions.find(
-            (p) => p.asset === asset && p.venue === "drift"
-          );
-          if (spotPos) {
-            if (spotPos.side === "long") {
-              await withRetry(
-                () => this.drift.sellSpot(asset, spotPos.notionalValue),
-                `emergency-sell-spot ${asset}`,
-                3
-              );
-            } else {
-              await withRetry(
-                () => this.drift.buySpot(asset, spotPos.notionalValue),
-                `emergency-buy-spot ${asset}`,
-                3
-              );
-            }
-          }
-        }
+        // Wrap each asset close in a timeout to prevent hanging
+        await Promise.race([
+          this.closeAssetPositions(asset),
+          new Promise<never>((_, reject) =>
+            setTimeout(() => reject(new Error(`Timeout closing ${asset} after ${PER_ASSET_TIMEOUT_MS}ms`)), PER_ASSET_TIMEOUT_MS)
+          ),
+        ]);
+        closedAssets.push(asset);
       } catch (err) {
+        failedAssets.push(asset);
         logger.error(`Failed to close ${asset} positions`, { error: err });
       }
     }
 
-    this.state.deployedCapital = new Decimal(0);
-    this.state.idleCapital = this.state.totalCapital.add(this.state.totalPnl);
+    // Update state — only zero out if all assets closed
+    if (failedAssets.length === 0) {
+      this.state.deployedCapital = new Decimal(0);
+      this.state.idleCapital = this.state.totalCapital.add(this.state.totalPnl);
+    } else {
+      // Partial unwind — estimate remaining deployed capital
+      const remainingPositions = this.state.positions.filter(
+        (p) => failedAssets.includes(p.asset)
+      );
+      const remainingDeployed = remainingPositions.reduce(
+        (sum, p) => sum.add(p.notionalValue),
+        new Decimal(0)
+      );
+      this.state.deployedCapital = remainingDeployed;
+      this.state.idleCapital = this.state.totalCapital.add(this.state.totalPnl).sub(remainingDeployed);
+      logger.error(`Partial emergency unwind: ${closedAssets.length} closed, ${failedAssets.length} failed`, {
+        closed: closedAssets,
+        failed: failedAssets,
+        remainingDeployed: remainingDeployed.toFixed(2),
+      });
+    }
+
+    logger.info(`Emergency unwind complete: ${closedAssets.length}/${config.targetAssets.length} assets closed`);
+  }
+
+  /** Close all positions for a single asset (used by emergencyUnwind) */
+  private async closeAssetPositions(asset: string): Promise<void> {
+    // Close Binance perps if in cross-venue mode
+    if (this.binance && config.strategyMode === "cross-venue") {
+      await withRetry(
+        () => this.binance!.closePerp(asset),
+        `emergency-close-binance ${asset}`,
+        3
+      );
+    }
+
+    // Close Drift positions — use atomic exit if executor available
+    if (this.executor) {
+      if (this.lstPositions.has(asset)) {
+        const lst = selectBestLST(asset);
+        if (lst) {
+          await withRetry(
+            () => this.executor!.atomicLSTExit(lst.spotIndex, asset),
+            `emergency-exit-lst ${asset}`,
+            3
+          );
+          this.lstPositions.delete(asset);
+        } else {
+          logger.warn(`LST position tracked for ${asset} but no LST found — using standard exit`);
+          await withRetry(
+            () => this.executor!.atomicDeltaNeutralExit(asset),
+            `emergency-exit-drift ${asset}`,
+            3
+          );
+          this.lstPositions.delete(asset);
+        }
+      } else {
+        await withRetry(
+          () => this.executor!.atomicDeltaNeutralExit(asset),
+          `emergency-exit-drift ${asset}`,
+          3
+        );
+      }
+    } else {
+      // Manual close: perp first, then spot
+      await withRetry(
+        () => this.drift.closePerp(asset),
+        `emergency-close-perp ${asset}`,
+        3
+      );
+      const spotPos = this.state.positions.find(
+        (p) => p.asset === asset && p.venue === "drift"
+      );
+      if (spotPos) {
+        if (spotPos.side === "long") {
+          await withRetry(
+            () => this.drift.sellSpot(asset, spotPos.notionalValue),
+            `emergency-sell-spot ${asset}`,
+            3
+          );
+        } else {
+          await withRetry(
+            () => this.drift.buySpot(asset, spotPos.notionalValue),
+            `emergency-buy-spot ${asset}`,
+            3
+          );
+        }
+      } else {
+        logger.warn(`No spot position found for ${asset} during emergency unwind`);
+      }
+    }
   }
 
   async reducePositions(): Promise<void> {
-    logger.warn("Reducing all positions by 50%");
-    // With small hackathon capital, full unwind is the safest approach
-    await this.emergencyUnwind();
+    if (this.state.positions.length === 0) return;
+
+    // Sort positions by PnL (worst first) and close the worst half
+    const sorted = [...this.state.positions].sort((a, b) =>
+      a.unrealizedPnl.minus(b.unrealizedPnl).toNumber()
+    );
+    const toClose = sorted.slice(0, Math.max(1, Math.ceil(sorted.length / 2)));
+
+    logger.warn(`Reducing positions: closing ${toClose.length}/${sorted.length} worst performers`, {
+      closing: toClose.map((p) => `${p.asset} (PnL: ${p.unrealizedPnl.toFixed(4)})`),
+    });
+
+    const isDriftOnly = config.strategyMode === "drift-only";
+    for (const pos of toClose) {
+      const signal: TradeSignal = {
+        asset: pos.asset,
+        action: "close",
+        spotVenue: "drift",
+        perpVenue: isDriftOnly ? "drift" : "binance",
+        spotSide: pos.side,
+        perpSide: pos.side === "long" ? "short" : "long",
+        spotSize: pos.notionalValue,
+        perpSize: pos.notionalValue,
+        confidence: new Decimal(1),
+        reason: `Risk reduction: closing worst performer (PnL: ${pos.unrealizedPnl.toFixed(4)})`,
+        predictedFundingRate: new Decimal(0),
+      };
+      await this.executeSignal(signal);
+    }
   }
 
   getState(): StrategyState {
@@ -1233,6 +1453,106 @@ export class StrategyEngine {
    */
   setPendingWithdrawals(amount: Decimal): void {
     this.pendingWithdrawals = amount;
+  }
+
+  /**
+   * Evaluate vault-level snapshot data and adjust risk posture.
+   *
+   * Reacts to:
+   * 1. AUM drops >10% since last snapshot → reduce positions by 30%
+   * 2. Share price below high water mark → tighten position sizing by 20%
+   * 3. Indexer decision "reduce-risk" with high confidence → halve new entries
+   * 4. AUM recovery → gradually restore normal sizing
+   */
+  private evaluateVaultSnapshot(): void {
+    const snap = this.state.indexerSnapshot;
+    const decision = this.state.indexerDecision;
+
+    if (!snap) {
+      // No snapshot data — use normal sizing
+      this.vaultRiskMultiplier = new Decimal(1);
+      return;
+    }
+
+    let multiplier = new Decimal(1);
+    const currentAum = snap.aum;
+
+    // 1. AUM drop detection: compare to previous snapshot
+    if (this.prevSnapshotAum && this.prevSnapshotAum.gt(0)) {
+      const aumChange = currentAum.sub(this.prevSnapshotAum).div(this.prevSnapshotAum);
+
+      if (aumChange.lt("-0.10")) {
+        // AUM dropped >10% — significant withdrawal or loss event
+        logger.warn("Vault AUM dropped >10% since last snapshot — reducing position sizes", {
+          prevAum: this.prevSnapshotAum.toFixed(0),
+          currentAum: currentAum.toFixed(0),
+          changePct: `${aumChange.mul(100).toFixed(2)}%`,
+        });
+        multiplier = multiplier.mul("0.7"); // 30% size reduction
+      } else if (aumChange.lt("-0.05")) {
+        // AUM dropped 5-10% — moderate concern
+        logger.info("Vault AUM dropped 5-10% — slightly reducing position sizes", {
+          changePct: `${aumChange.mul(100).toFixed(2)}%`,
+        });
+        multiplier = multiplier.mul("0.85"); // 15% size reduction
+      }
+    }
+
+    // 2. Share price below high water mark — vault is in drawdown
+    if (snap.sharePrice && snap.highWaterMark) {
+      const sharePriceDrawdown = snap.highWaterMark.gt(0)
+        ? snap.highWaterMark.sub(snap.sharePrice).div(snap.highWaterMark)
+        : new Decimal(0);
+
+      if (sharePriceDrawdown.gt("0.02")) {
+        // Share price >2% below HWM — vault is underperforming
+        logger.warn("Vault share price below high water mark — tightening sizing", {
+          sharePrice: snap.sharePrice.toFixed(6),
+          hwm: snap.highWaterMark.toFixed(6),
+          drawdownPct: `${sharePriceDrawdown.mul(100).toFixed(2)}%`,
+        });
+        multiplier = multiplier.mul("0.8"); // 20% tighter
+      }
+    }
+
+    // 3. Indexer decision: react to high-confidence "reduce-risk" signals
+    if (decision && decision.action === "reduce-risk" && decision.confidence.gte("0.7")) {
+      logger.info("Indexer decision: reduce-risk (high confidence) — halving new entry sizes", {
+        confidence: decision.confidence.toFixed(2),
+        rationale: decision.rationale,
+      });
+      multiplier = multiplier.mul("0.5");
+    }
+
+    // 4. Stale snapshot check: if snapshot is >1 hour old, don't trust it
+    const snapshotAge = Date.now() - snap.timestamp;
+    if (snapshotAge > 3600_000) {
+      logger.info("Vault snapshot is stale (>1h) — using default sizing", {
+        ageMinutes: Math.round(snapshotAge / 60_000),
+      });
+      multiplier = new Decimal(1); // Reset to default
+    }
+
+    // Clamp multiplier to [0.3, 1.0] — never go below 30% or above 100%
+    this.vaultRiskMultiplier = Decimal.max("0.3", Decimal.min("1.0", multiplier));
+
+    if (this.vaultRiskMultiplier.lt(1)) {
+      logger.info(`Vault risk multiplier: ${this.vaultRiskMultiplier.toFixed(2)}`);
+    }
+
+    // Update previous values for next cycle
+    this.prevSnapshotAum = currentAum;
+    if (snap.sharePrice) {
+      this.prevSnapshotSharePrice = snap.sharePrice;
+    }
+  }
+
+  /**
+   * Get the vault risk multiplier for use in position sizing.
+   * External callers (e.g., tests) can read this.
+   */
+  getVaultRiskMultiplier(): Decimal {
+    return this.vaultRiskMultiplier;
   }
 
   /**

@@ -21,6 +21,20 @@ import dotenv from "dotenv";
 
 dotenv.config();
 
+/** RFC 4180 CSV field escaping — wraps in quotes if field contains comma, quote, or newline */
+function csvEscape(value: unknown): string {
+  const s = String(value ?? "");
+  if (s.includes(",") || s.includes('"') || s.includes("\n") || s.includes("\r")) {
+    return '"' + s.replace(/"/g, '""') + '"';
+  }
+  return s;
+}
+
+/** Join row values with proper CSV escaping */
+function csvRow(values: unknown[]): string {
+  return values.map(csvEscape).join(",");
+}
+
 async function main() {
   const args = process.argv.slice(2);
   const getArg = (flag: string, defaultVal: string): string => {
@@ -76,7 +90,7 @@ async function main() {
         t.timestamp || "",
       ]);
 
-      const csv = [headers.join(","), ...rows.map((r) => r.join(","))].join(
+      const csv = [csvRow(headers), ...rows.map((r) => csvRow(r))].join(
         "\n"
       );
 
@@ -148,7 +162,7 @@ async function main() {
         ];
       });
 
-      const csv = [headers.join(","), ...rows.map((r) => r.join(","))].join(
+      const csv = [csvRow(headers), ...rows.map((r) => csvRow(r))].join(
         "\n"
       );
 
@@ -216,7 +230,7 @@ async function main() {
         t.actionExplanation,
       ]);
 
-      const csv = [headers.join(","), ...rows.map((r) => r.join(","))].join(
+      const csv = [csvRow(headers), ...rows.map((r) => csvRow(r))].join(
         "\n"
       );
 
@@ -248,7 +262,7 @@ async function main() {
         (r.rate * 100).toFixed(4) + "%",
       ]);
 
-      const csv = [headers.join(","), ...rows.map((r) => r.join(","))].join(
+      const csv = [csvRow(headers), ...rows.map((r) => csvRow(r))].join(
         "\n"
       );
 

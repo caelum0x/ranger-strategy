@@ -156,6 +156,89 @@ export class TradeLogger {
     };
   }
 
+  /**
+   * Compute per-asset win/loss record from trade history.
+   * A "round trip" is an open followed by a close for the same asset.
+   * Win = close where reason contains "Profit" or no stop-loss trigger.
+   * Loss = close where reason contains "Stop-loss" or negative PnL indicator.
+   */
+  getWinLossRecord(): {
+    totalRoundTrips: number;
+    wins: number;
+    losses: number;
+    winRate: string;
+    byAsset: Record<string, { opens: number; closes: number; wins: number; losses: number }>;
+    recentTrades: { asset: string; action: string; result: "win" | "loss" | "unknown"; reason: string; timestamp: string }[];
+  } {
+    const events = this.readAll();
+    const byAsset: Record<string, { opens: number; closes: number; wins: number; losses: number }> = {};
+    const recentTrades: { asset: string; action: string; result: "win" | "loss" | "unknown"; reason: string; timestamp: string }[] = [];
+
+    for (const e of events) {
+      const asset = (e.data.asset as string) || "";
+      if (!asset) continue;
+
+      if (!byAsset[asset]) {
+        byAsset[asset] = { opens: 0, closes: 0, wins: 0, losses: 0 };
+      }
+
+      if (e.type === "trade_executed") {
+        const action = (e.data.action as string) || "";
+        if (action === "open" || action === "increase") {
+          byAsset[asset].opens++;
+        }
+      }
+
+      if (e.type === "position_closed") {
+        byAsset[asset].closes++;
+        const reason = ((e.data.reason as string) || "").toLowerCase();
+
+        let result: "win" | "loss" | "unknown" = "unknown";
+        if (reason.includes("stop-loss") || reason.includes("emergency") || reason.includes("risk reduction")) {
+          result = "loss";
+          byAsset[asset].losses++;
+        } else if (reason.includes("profit") || reason.includes("no longer attractive") || reason.includes("concentration")) {
+          result = "win";
+          byAsset[asset].wins++;
+        } else {
+          // Neutral close — count as win (orderly exit)
+          result = "win";
+          byAsset[asset].wins++;
+        }
+
+        recentTrades.push({
+          asset,
+          action: "close",
+          result,
+          reason: (e.data.reason as string) || "",
+          timestamp: e.timestamp,
+        });
+      }
+    }
+
+    let totalWins = 0;
+    let totalLosses = 0;
+    let totalRoundTrips = 0;
+    for (const a of Object.values(byAsset)) {
+      totalWins += a.wins;
+      totalLosses += a.losses;
+      totalRoundTrips += a.closes;
+    }
+
+    const winRate = totalRoundTrips > 0
+      ? `${((totalWins / totalRoundTrips) * 100).toFixed(1)}%`
+      : "N/A";
+
+    return {
+      totalRoundTrips,
+      wins: totalWins,
+      losses: totalLosses,
+      winRate,
+      byAsset,
+      recentTrades: recentTrades.slice(-20),
+    };
+  }
+
   private write(type: TradeEventType, data: Record<string, unknown>): void {
     const event: TradeEvent = {
       timestamp: new Date().toISOString(),

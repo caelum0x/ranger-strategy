@@ -1,6 +1,9 @@
 node_modules/
 dist/
 .env
+.env.mainnet
+.env.devnet
+.env.local
 *.log
 .DS_Store
 coverage/
@@ -9,7 +12,9 @@ coverage/
 *.key
 *.pem
 devnet-keypair.json
-.env.devnet
+mainnet-keypair.json
+*-keypair.json
+test-keypair.json
 
 # Agent state (crash recovery)
 .ranger-state/

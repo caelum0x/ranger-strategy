@@ -2,7 +2,7 @@ import Decimal from "decimal.js";
 import * as fs from "fs";
 import { DriftDataAPI, FundingRateEntry, BorrowRateEntry } from "../drift/data-api";
 import { BinanceManager } from "../binance/client";
-import { BacktestResult, FundingRate } from "../strategy/types";
+import { AssetBacktestStats, BacktestResult, FundingRate } from "../strategy/types";
 import { config } from "../config";
 import { logger } from "../utils/logger";
 
@@ -16,6 +16,8 @@ interface BacktestConfig {
   rebalanceHours: number;
   /** "drift-only" uses Drift Data API rates; "cross-venue" uses Binance */
   mode: "drift-only" | "cross-venue";
+  /** Override the global MIN_FUNDING_APY for backtesting (default: use config) */
+  minFundingAPY?: Decimal;
 }
 
 interface PeriodResult {
@@ -97,6 +99,7 @@ export async function runBacktest(
 
   const api = new DriftDataAPI();
   const isDriftOnly = cfg.mode === "drift-only";
+  const minAPYThreshold = cfg.minFundingAPY ?? config.minFundingAPY;
 
   // Fetch historical funding rates
   const allRates: Record<string, FundingRateEntry[]> = {};
@@ -149,6 +152,25 @@ export async function runBacktest(
     }
   }
 
+  // Per-asset performance tracking
+  const assetStats: Record<
+    string,
+    {
+      fundingCollected: Decimal;
+      lendingCollected: Decimal;
+      periodsActive: number;
+      periodsPositive: number;
+    }
+  > = {};
+  for (const asset of cfg.assets) {
+    assetStats[asset] = {
+      fundingCollected: new Decimal(0),
+      lendingCollected: new Decimal(0),
+      periodsActive: 0,
+      periodsPositive: 0,
+    };
+  }
+
   // Simulate strategy
   let equity = cfg.initialCapital;
   let peakEquity = equity;
@@ -158,6 +180,7 @@ export async function runBacktest(
   let totalTrades = 0;
   let wins = 0;
   let directionFlips = 0;
+  let skippedBelowThreshold = 0;
   const dailyReturns: { date: Date; return: Decimal }[] = [];
   const periodResults: PeriodResult[] = [];
 
@@ -205,7 +228,10 @@ export async function runBacktest(
       const annualizedAbs = absRate * 24 * 365.25;
 
       // Skip if below min threshold
-      if (annualizedAbs < config.minFundingAPY.toNumber()) continue;
+      if (annualizedAbs < minAPYThreshold.toNumber()) {
+        skippedBelowThreshold++;
+        continue;
+      }
 
       // Bi-directional: determine which side to take
       // Positive funding → short perp (shorts collect from longs)
@@ -214,6 +240,12 @@ export async function runBacktest(
       const fundingPayment = positionSize.mul(absRate);
       periodFunding = periodFunding.add(fundingPayment);
       activeAssets.push(asset);
+
+      // Track per-asset stats
+      assetStats[asset].fundingCollected =
+        assetStats[asset].fundingCollected.add(fundingPayment);
+      assetStats[asset].periodsActive++;
+      if (fundingPayment.gt(0)) assetStats[asset].periodsPositive++;
 
       // Add lending yield on spot leg (only in drift-only mode)
       // Long spot earns lending yield; short spot incurs borrow cost
@@ -232,6 +264,8 @@ export async function runBacktest(
             // Positive funding → long spot → earns lending yield
             const lendingIncome = positionSize.mul(Math.abs(hourlyLendRate));
             periodLending = periodLending.add(lendingIncome);
+            assetStats[asset].lendingCollected =
+              assetStats[asset].lendingCollected.add(lendingIncome);
           } else {
             // Negative funding → short spot (borrowed) → pays borrow cost
             // Borrow rate is typically ~2-3x the deposit rate
@@ -239,6 +273,8 @@ export async function runBacktest(
             const hourlyBorrowRate = Math.abs(hourlyLendRate) * borrowMultiplier;
             const borrowCost = positionSize.mul(hourlyBorrowRate);
             periodLending = periodLending.sub(borrowCost);
+            assetStats[asset].lendingCollected =
+              assetStats[asset].lendingCollected.sub(borrowCost);
           }
         }
       }
@@ -364,10 +400,13 @@ export async function runBacktest(
       totalTrades > 0 ? new Decimal(wins).div(totalTrades) : new Decimal(0),
     directionFlips,
     dailyReturns,
+    assetBreakdown: assetStats,
   };
 
   logger.info("Backtest complete", {
     mode: cfg.mode,
+    minFundingAPY: `${minAPYThreshold.mul(100).toFixed(1)}%`,
+    skippedBelowThreshold,
     totalReturn: `${totalReturn.mul(100).toFixed(2)}%`,
     annualizedReturn: `${annualizedReturn.mul(100).toFixed(2)}%`,
     maxDrawdown: `${maxDrawdown.toFixed(2)}%`,
@@ -398,6 +437,7 @@ async function main() {
 
   console.log("\n=== BACKTEST RESULTS ===");
   console.log(`Mode: ${mode}`);
+  console.log(`Min Funding APY: ${config.minFundingAPY.mul(100).toFixed(1)}%`);
   console.log(
     `Period: ${result.startDate.toDateString()} → ${result.endDate.toDateString()}`
   );
@@ -417,10 +457,35 @@ async function main() {
   console.log(`Total Periods: ${result.totalTrades}`);
   console.log(`Direction Flips: ${result.directionFlips}`);
 
+  // Print per-asset breakdown
+  console.log("\n=== PER-ASSET BREAKDOWN ===");
+  const perAssetCapital = new Decimal(10000).div(config.targetAssets.length);
+  for (const asset of config.targetAssets) {
+    const s = result.assetBreakdown?.[asset];
+    if (!s) continue;
+    const assetAPY =
+      s.periodsActive > 0
+        ? s.fundingCollected
+            .div(perAssetCapital)
+            .mul(24 * 365.25)
+            .div(s.periodsActive)
+            .mul(100)
+        : new Decimal(0);
+    console.log(
+      `  ${asset}: funding=$${s.fundingCollected.toFixed(2)}, lending=$${s.lendingCollected.toFixed(2)}, periods=${s.periodsActive}, winRate=${s.periodsActive > 0 ? ((s.periodsPositive / s.periodsActive) * 100).toFixed(1) : 0}%, estAPY=${assetAPY.toFixed(1)}%`
+    );
+  }
+
   // Save results to JSON for submission
   const output = {
     strategy: "USDC Delta-Neutral Funding Harvester",
     mode,
+    config: {
+      minFundingAPY: `${config.minFundingAPY.mul(100).toFixed(1)}%`,
+      maxLeverage: config.maxLeverage.toFixed(1),
+      rebalanceHours: config.rebalanceIntervalMs / 3600000,
+      assets: config.targetAssets,
+    },
     period: {
       start: result.startDate.toISOString(),
       end: result.endDate.toISOString(),
@@ -436,6 +501,22 @@ async function main() {
       totalPeriods: result.totalTrades,
       directionFlips: result.directionFlips,
     },
+    assetBreakdown: Object.fromEntries(
+      config.targetAssets.map((asset) => {
+        const s = result.assetBreakdown?.[asset];
+        return [
+          asset,
+          {
+            fundingCollected: s ? `$${s.fundingCollected.toFixed(2)}` : "$0.00",
+            lendingCollected: s ? `$${s.lendingCollected.toFixed(2)}` : "$0.00",
+            periodsActive: s?.periodsActive ?? 0,
+            winRate: s && s.periodsActive > 0
+              ? `${((s.periodsPositive / s.periodsActive) * 100).toFixed(1)}%`
+              : "0.0%",
+          },
+        ];
+      })
+    ),
     equityCurve: result.dailyReturns.map((d) => ({
       date: d.date.toISOString().split("T")[0],
       return: d.return.toFixed(6),

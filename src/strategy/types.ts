@@ -89,6 +89,13 @@ export interface RiskCheck {
   violations: string[];
 }
 
+export interface AssetBacktestStats {
+  fundingCollected: Decimal;
+  lendingCollected: Decimal;
+  periodsActive: number;
+  periodsPositive: number;
+}
+
 export interface BacktestResult {
   startDate: Date;
   endDate: Date;
@@ -102,4 +109,5 @@ export interface BacktestResult {
   winRate: Decimal;
   directionFlips: number;
   dailyReturns: { date: Date; return: Decimal }[];
+  assetBreakdown?: Record<string, AssetBacktestStats>;
 }

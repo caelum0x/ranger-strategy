@@ -1,9 +1,0 @@
-/Users/arhansubasi/ranger/driftbear-adaptor/target/sbf-solana-solana/release/deps/libsolana_loader_v3_interface-2f4d81524b739b16.rmeta: /Users/arhansubasi/.cargo/registry/src/index.crates.io-6f17d22bba15001f/solana-loader-v3-interface-5.0.0/src/lib.rs /Users/arhansubasi/.cargo/registry/src/index.crates.io-6f17d22bba15001f/solana-loader-v3-interface-5.0.0/src/instruction.rs /Users/arhansubasi/.cargo/registry/src/index.crates.io-6f17d22bba15001f/solana-loader-v3-interface-5.0.0/src/state.rs
-
-/Users/arhansubasi/ranger/driftbear-adaptor/target/sbf-solana-solana/release/deps/libsolana_loader_v3_interface-2f4d81524b739b16.rlib: /Users/arhansubasi/.cargo/registry/src/index.crates.io-6f17d22bba15001f/solana-loader-v3-interface-5.0.0/src/lib.rs /Users/arhansubasi/.cargo/registry/src/index.crates.io-6f17d22bba15001f/solana-loader-v3-interface-5.0.0/src/instruction.rs /Users/arhansubasi/.cargo/registry/src/index.crates.io-6f17d22bba15001f/solana-loader-v3-interface-5.0.0/src/state.rs
-
-/Users/arhansubasi/ranger/driftbear-adaptor/target/sbf-solana-solana/release/deps/solana_loader_v3_interface-2f4d81524b739b16.d: /Users/arhansubasi/.cargo/registry/src/index.crates.io-6f17d22bba15001f/solana-loader-v3-interface-5.0.0/src/lib.rs /Users/arhansubasi/.cargo/registry/src/index.crates.io-6f17d22bba15001f/solana-loader-v3-interface-5.0.0/src/instruction.rs /Users/arhansubasi/.cargo/registry/src/index.crates.io-6f17d22bba15001f/solana-loader-v3-interface-5.0.0/src/state.rs
-
-/Users/arhansubasi/.cargo/registry/src/index.crates.io-6f17d22bba15001f/solana-loader-v3-interface-5.0.0/src/lib.rs:
-/Users/arhansubasi/.cargo/registry/src/index.crates.io-6f17d22bba15001f/solana-loader-v3-interface-5.0.0/src/instruction.rs:
-/Users/arhansubasi/.cargo/registry/src/index.crates.io-6f17d22bba15001f/solana-loader-v3-interface-5.0.0/src/state.rs:

@@ -156,6 +156,13 @@ export const config = {
     process.env.LIQUIDATION_COMPUTE_UNITS || "1400000"
   ),
 
+  // Jito MEV Protection
+  jitoBlockEngineUrl: process.env.JITO_BLOCK_ENGINE_URL || "",
+
+  // Yellowstone gRPC
+  yellowstoneGrpcEndpoint: process.env.YELLOWSTONE_GRPC_ENDPOINT || "",
+  yellowstoneGrpcToken: process.env.YELLOWSTONE_GRPC_TOKEN || "",
+
   // AI Agent
   fundingPredictionLookbackHours: parseInt(
     process.env.FUNDING_PREDICTION_LOOKBACK_HOURS || "168"

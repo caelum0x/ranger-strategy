@@ -156,6 +156,8 @@ This is the recommended real test path for end-to-end vault operations. In paral
 | `indexer:webhook:create` | `ts-node scripts/create-helius-webhook.ts` | Register a Helius webhook for the configured vault |
 | `indexer:backfill` | `ts-node scripts/indexer-backfill.ts` | Manually index the configured vault immediately |
 | `export-trades` | `ts-node scripts/export-trades.ts` | Export trade history for submission |
+| `emergency-stop` | `ts-node scripts/emergency-stop.ts` | Cancel all orders and close all perp positions |
+| `dashboard` | Start agent, then visit `http://localhost:3000/dashboard` | Live monitoring dashboard |
 
 ## Strategy Parameters
 

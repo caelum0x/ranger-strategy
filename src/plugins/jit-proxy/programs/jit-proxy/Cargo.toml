@@ -1,0 +1,23 @@
+[package]
+name = "jit-proxy"
+version = "0.21.0"
+description = "Created with Anchor"
+edition = "2021"
+
+[lib]
+crate-type = ["cdylib", "lib"]
+name = "jit_proxy"
+
+[features]
+no-entrypoint = []
+cpi = ["no-entrypoint"]
+default = []
+
+[dependencies]
+anchor-lang = "0.29.0"
+anchor-spl = "0.29.0"
+bytemuck = { version = "1.4.0" }
+drift = { git = "https://github.com/drift-labs/protocol-v2.git", tag = "v2.140.0", features = ["cpi", "mainnet-beta"]}
+static_assertions = "1.1.0"
+solana-program = "1.16"
+ahash = "=0.8.6"

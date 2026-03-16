@@ -1,0 +1,45 @@
+{
+	"name": "@drift-labs/vaults-sdk",
+	"version": "0.10.1",
+	"main": "lib/index.js",
+	"types": "lib/index.d.ts",
+	"directories": {
+		"lib": "lib"
+	},
+	"dependencies": {
+		"@drift-labs/sdk": "2.158.0-beta.3",
+		"@metaplex-foundation/js": "0.20.1",
+		"commander": "11.1.0",
+		"dotenv": "16.4.5",
+		"strict-event-emitter-types": "2.0.0",
+		"ts-node": "10.9.2",
+		"typescript": "5.6.3"
+	},
+	"peerDependencies": {
+		"@coral-xyz/anchor": "0.29.0",
+		"@solana/web3.js": "1.98.0"
+	},
+	"optionalDependencies": {
+		"@ledgerhq/hw-app-solana": "7.2.4",
+		"@ledgerhq/hw-transport": "6.31.4",
+		"@ledgerhq/hw-transport-node-hid": "6.29.5",
+		"@solana/wallet-adapter-ledger": "0.9.25"
+	},
+	"devDependencies": {
+		"@coral-xyz/anchor": "0.29.0",
+		"@types/bn.js": "5.1.6"
+	},
+	"engines": {
+		"node": "^24.0.0"
+	},
+	"scripts": {
+		"cli": "ts-node cli/cli.ts",
+		"clean": "rm -rf lib",
+		"build": "yarn clean && tsc"
+	},
+	"resolutions": {
+		"@types/bn.js": "5.1.6",
+		"rpc-websockets": "10.0.0",
+		"@solana/web3.js": "1.98.0"
+	}
+}
