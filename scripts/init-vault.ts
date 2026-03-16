@@ -82,7 +82,7 @@ async function main() {
     adminManagementFee: 0,
     redemptionFee: 0,
     issuanceFee: 0,
-    withdrawalWaitingPeriod: new BN(3600),  // 1h waiting period
+    withdrawalWaitingPeriod: new BN(7776000), // 90-day lock (3 months, rolling)
   };
 
   // Both fields have hard on-chain limits — exceeding them fails the tx
