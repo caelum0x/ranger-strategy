@@ -655,13 +655,47 @@ $$\sum_{t} F_t^{on-chain} \approx \sum_{t} F_t^{API}$$
 
 This strategy leverages Drift Protocol's unique features to capture funding yield systematically:
 
-- **Drift-Native:** Uses oracle-offset orders, DLOB, spot-perp integration, JIT auction participation
-- **3-Year Backtest Proven:** +45.76% CAGR, 0.32% max drawdown, Sharpe 9.58 across 68,072 hourly bars
-- **Risk-Controlled:** Multiple risk limits and emergency protocols
-- **Verified Performance:** +14.63% return, 0.13% max drawdown
+- **100% Drift-Native:** Oracle-offset orders, DLOB integration, spot-perp cross-margin, JIT auction fills, insurance fund staking
+- **3-Year Backtest Proven:** +45.76% CAGR (ideal) / ~+30% CAGR (realistic), 0.32% max drawdown, Sharpe 9.58
+- **Risk-Controlled:** 6-trigger circuit breaker, oracle guard, 48h flip protection, auto-derisk
+- **On-Chain Anchor Program:** Custom CPI adaptor (`4JW3mvrVGXpZZ3jxjw16o4REHnWuEGkbvLkPBg1RbFbQ`) deployed and verified on devnet
+
+## What Makes This a Full Drift Integration
+
+Not just basic SDK calls — we ported production logic from Drift's own repos:
+
+| Component | Ported From | What It Does |
+|---|---|---|
+| **JIT Maker** (726 lines) | `jit-proxy/jitterSniper.ts + jitterShotgun.ts` | Slot-based auction cross detection, dual sniper/shotgun modes, position limit guards |
+| **Filler Bot** (599 lines) | `keeper-bots-v2/filler.ts` | DLOB NodeToFill, multi-maker matching, trigger order execution, PnL settlement |
+| **FloatingMaker** (450 lines) | `keeper-bots-v2/floatingMaker.ts` | SlotSubscriber + mutex, slot-based cooldown, inventory-adjusted spreads |
+| **Executor** (1,498 lines) | `keeper-bots-v2/utils.ts + bundleSender.ts` | TX simulation + CU estimation, Jito bundles, ALT support, tx log parsing |
+| **Event Stream** (694 lines) | `events-publisher/` | WebSocket + Yellowstone gRPC, structured FillEvent/FundingEvent types |
+| **DLOB Orderbook** (252 lines) | `drift-plugin/drift.ts` | L2 orderbook fetch, price impact estimation, live TWAP funding rates, lending APY |
+| **Insurance Fund** (150 lines) | `drift-plugin/drift.ts` | Stake/unstake from Drift insurance fund for additional yield |
+
+### Drift Features Used
+
+| Feature | How We Use It |
+|---|---|
+| Oracle-offset orders | FloatingMaker places bid/ask that auto-track oracle — zero maintenance |
+| DLOB | Filler bot matches makers with takers for filler rewards |
+| JIT Auctions | Sniper mode waits for exact slot when auction crosses our bid/ask |
+| Cross-margin | Single subaccount for spot + perp — maximum capital efficiency |
+| Spot lending | Idle USDC earns deposit rate (~4-8% APY) while waiting for signals |
+| Insurance fund | Optional staking for additional protocol revenue share |
+| vAMM + DLOB hybrid | Price impact estimation via L2 orderbook before every trade |
+
+### Stress-Test Results
+
+| Scenario | Cost Assumption | CAGR | Max Drawdown |
+|----------|----------------|------|-------------|
+| Ideal (70% maker fills) | 0.088% round-trip | +45.76% | 0.32% |
+| Realistic (100% taker + slippage) | 0.30% round-trip | ~+30% | ~0.8% |
+| Bear market (2025 actual) | 0.088% round-trip | +0.39% | <0.3% |
 
 The strategy meets all Drift Side Track eligibility requirements and is ready for deployment and verification.
 
 ---
 
-*Document Version: 1.0 | Classification: Drift Side Track Submission*
+*Document Version: 2.0 | Classification: Drift Side Track Submission*

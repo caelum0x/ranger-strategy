@@ -70,8 +70,46 @@ export interface ClosePositionRequest {
   fee_payer: string;
   symbol: string;
   side: "Long" | "Short";
-  adjustment_type: "CloseDrift" | "CloseFlash" | "CloseJupiter";
+  adjustment_type: "CloseDrift" | "CloseFlash" | "CloseJupiter" | "CloseAdrena" | "CloseAll";
 }
+
+/** Withdraw available balance from a venue account (from ranger-plugin) */
+export interface WithdrawBalanceRequest {
+  fee_payer: string;
+  symbol: string;
+  amount: number;
+  adjustment_type: "WithdrawBalanceDrift" | "WithdrawBalanceFlash";
+}
+
+/** Withdraw collateral from an existing position (from ranger-plugin) */
+export interface WithdrawCollateralRequest {
+  fee_payer: string;
+  symbol: string;
+  side: "Long" | "Short";
+  collateral: number;
+  collateral_denomination: string;
+  adjustment_type: "WithdrawCollateralFlash" | "WithdrawCollateralDrift";
+}
+
+/** Full adjustment types supported by the SOR API (from sor-sdk types) */
+export type AdjustmentType =
+  | "Quote"
+  | "Increase"
+  | "DecreaseFlash"
+  | "DecreaseJupiter"
+  | "DecreaseDrift"
+  | "DecreaseAdrena"
+  | "CloseFlash"
+  | "CloseJupiter"
+  | "CloseDrift"
+  | "CloseAdrena"
+  | "CloseAll"
+  | "WithdrawBalanceDrift"
+  | "WithdrawBalanceFlash"
+  | "WithdrawCollateralFlash"
+  | "WithdrawCollateralDrift"
+  | "DepositCollateralFlash"
+  | "DepositCollateralDrift";
 
 // ── Transaction helpers (from sor-ts-demo) ──────────────────────
 
@@ -180,7 +218,7 @@ export class RangerSorClient {
     collateral: number;
     size_denomination: string;
     collateral_denomination: string;
-    adjustment_type: "Increase" | "Quote";
+    adjustment_type: AdjustmentType;
   }): Promise<SorOrderMetadataResponse | null> {
     if (!this.apiKey) return null;
     return this.post<SorOrderMetadataResponse>(
@@ -230,6 +268,84 @@ export class RangerSorClient {
       `${this.sorApiBaseUrl}/close_position`,
       request
     );
+  }
+
+  // ── Withdraw Balance (from ranger-plugin/withdrawBalance) ──
+
+  async withdrawBalance(
+    request: WithdrawBalanceRequest
+  ): Promise<SorTransactionResponse> {
+    logger.info("SOR: withdraw balance", {
+      symbol: request.symbol,
+      amount: request.amount,
+    });
+    return this.post<SorTransactionResponse>(
+      `${this.sorApiBaseUrl}/withdraw_balance`,
+      request
+    );
+  }
+
+  // ── Withdraw Collateral (from ranger-plugin/withdrawCollateral) ──
+
+  async withdrawCollateral(
+    request: WithdrawCollateralRequest
+  ): Promise<SorTransactionResponse> {
+    logger.info("SOR: withdraw collateral", {
+      symbol: request.symbol,
+      side: request.side,
+      collateral: request.collateral,
+    });
+    return this.post<SorTransactionResponse>(
+      `${this.sorApiBaseUrl}/withdraw_collateral`,
+      request
+    );
+  }
+
+  // ── Deposit Collateral (from ranger-plugin) ──
+
+  async depositCollateral(request: {
+    fee_payer: string;
+    symbol: string;
+    side: "Long" | "Short";
+    collateral: number;
+    collateral_denomination: string;
+    adjustment_type: "DepositCollateralFlash" | "DepositCollateralDrift";
+  }): Promise<SorTransactionResponse> {
+    logger.info("SOR: deposit collateral", {
+      symbol: request.symbol,
+      side: request.side,
+      collateral: request.collateral,
+    });
+    return this.post<SorTransactionResponse>(
+      `${this.sorApiBaseUrl}/deposit_collateral`,
+      request
+    );
+  }
+
+  // ── Get Quote (from ranger-plugin/getQuote) ──
+
+  /**
+   * Get a trade quote showing venue breakdown, price impact, and fees
+   * without executing. Use for pre-trade analysis.
+   */
+  async getQuote(params: {
+    fee_payer: string;
+    symbol: string;
+    side: "Long" | "Short";
+    size: number;
+    collateral: number;
+    adjustment_type?: AdjustmentType;
+  }): Promise<SorOrderMetadataResponse | null> {
+    return this.getOrderMetadata({
+      fee_payer: params.fee_payer,
+      symbol: params.symbol,
+      side: params.side,
+      size: params.size,
+      collateral: params.collateral,
+      size_denomination: params.symbol,
+      collateral_denomination: "USDC",
+      adjustment_type: params.adjustment_type || "Quote",
+    });
   }
 
   // ── Transaction Execution ───────────────────────────────────

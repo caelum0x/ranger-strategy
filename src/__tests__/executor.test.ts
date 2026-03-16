@@ -47,6 +47,15 @@ function makeDriftClientMock() {
     getOracleDataForPerpMarket: jest.fn(() => ({
       price: mockBN(150 * 1e6), // $150 oracle price in PRICE_PRECISION
     })),
+    getPerpMarketAccount: jest.fn(() => ({
+      amm: {
+        lastOracleConfPct: mockBN(0),
+        lastOracleReservePriceSpreadPct: mockBN(0),
+      },
+    })),
+    getSpotMarketAccount: jest.fn(() => ({
+      orderStepSize: mockBN(1000),
+    })),
     getCancelOrdersIx: jest.fn().mockResolvedValue({ type: "cancel" }),
     getPlaceSpotOrderIx: jest.fn().mockResolvedValue({ type: "spotOrder" }),
     getPlacePerpOrderIx: jest.fn().mockResolvedValue({ type: "perpOrder" }),

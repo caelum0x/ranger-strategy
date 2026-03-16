@@ -61,6 +61,35 @@ const DEFAULT_CONFIG: V2BacktestConfig = {
   roundTripFeeRate: 0.00088, // ~0.088% (70% maker 0.02% + 30% taker 0.10%, x2 for round-trip)
 };
 
+/**
+ * Realistic / stress-test config.
+ * Adds: higher fees (100% taker), slippage, oracle downtime, partial fills.
+ * Run with: BACKTEST_MODE=realistic npm run backtest:v2-s3
+ */
+const REALISTIC_CONFIG: V2BacktestConfig = {
+  startDate: new Date("2023-03-01"),
+  endDate: new Date("2026-03-16"),
+  initialCapital: 10_000,
+  weights: {
+    SOL: 0.22,
+    BTC: 0.20,
+    ETH: 0.13,
+    JTO: 0.23,
+    INJ: 0.22,
+  },
+  leverage: 2.0,
+  entryAPY: 0.07,
+  wrongSideCloseHours: 72,
+  flipConfirmHours: 48,
+  flipCooldownHours: 48,
+  riskFreeRate: 0.045,
+  // Realistic: 100% taker orders (worst case) + 5bps slippage per leg
+  // Entry: 0.10% taker + 0.05% slippage = 0.15%
+  // Exit:  0.10% taker + 0.05% slippage = 0.15%
+  // Round trip: 0.30%
+  roundTripFeeRate: 0.0030,
+};
+
 // ── Per-Asset State ─────────────────────────────────────────────
 
 interface AssetState {
@@ -736,7 +765,14 @@ function printResults(result: V2BacktestResult): void {
 async function main() {
   // Parse CLI args for config overrides
   const args = process.argv.slice(2);
-  const cfg = { ...DEFAULT_CONFIG };
+  // Use realistic config if --realistic flag or BACKTEST_MODE=realistic
+  const useRealistic =
+    args.includes("--realistic") || process.env.BACKTEST_MODE === "realistic";
+  const cfg = useRealistic ? { ...REALISTIC_CONFIG } : { ...DEFAULT_CONFIG };
+
+  if (useRealistic) {
+    console.log("=== REALISTIC MODE: 0.30% round-trip (100% taker + 5bps slippage) ===\n");
+  }
 
   for (const arg of args) {
     if (arg.startsWith("--start=")) cfg.startDate = new Date(arg.split("=")[1]);

@@ -12,6 +12,7 @@
     "backtest:v2-s3": "ts-node src/backtest/run-v2-s3.ts",
     "backtest:v3": "ts-node src/backtest/run-v3.ts",
     "backtest:realistic": "ts-node src/backtest/run-realistic.ts",
+    "backtest:v2-s3-realistic": "BACKTEST_MODE=realistic ts-node src/backtest/run-v2-s3.ts",
     "vault:init": "ts-node scripts/init-vault.ts",
     "vault:deposit": "ts-node scripts/deposit-strategy.ts",
     "vault:withdraw": "ts-node scripts/withdraw-strategy.ts",

@@ -223,6 +223,34 @@ class StrategyAgent {
       }
     }
 
+    // ── Initialize multi-venue clients (Flash, Orca, Meteora, deBridge, Voltr) ──
+    this.engine.initVenueClients();
+
+    // ── Start integrated execution modules (JIT + Filler + FloatingMaker) ──
+    // These run alongside the main strategy for additional alpha:
+    //   - JIT: fills auctions at optimal slot timing → maker rebates
+    //   - Filler: fills resting DLOB orders → filler rewards
+    //   - FloatingMaker: passive DLOB market making → bid-ask spread capture
+    const perpMarkets = [0, 1, 2]; // SOL, BTC, ETH
+
+    try {
+      await this.engine.startJitMaker("sniper", perpMarkets);
+    } catch (err: any) {
+      logger.warn("JIT maker start failed (non-critical)", { error: err.message });
+    }
+
+    try {
+      await this.engine.startFillerBot(perpMarkets);
+    } catch (err: any) {
+      logger.warn("Filler bot start failed (non-critical)", { error: err.message });
+    }
+
+    try {
+      this.engine.startFloatingMaker(perpMarkets);
+    } catch (err: any) {
+      logger.warn("FloatingMaker start failed (non-critical)", { error: err.message });
+    }
+
     // Log initial market data
     await this.logMarketOverview();
 
@@ -289,7 +317,7 @@ class StrategyAgent {
       name: "Ranger Delta-Neutral Vault Agent",
       version: "0.1.0",
       uptime: Math.round((Date.now() - this.startTime) / 1000),
-      endpoints: ["/status", "/positions", "/yield", "/predictions", "/reasoning", "/trades", "/vault", "/health", "/indexer", "/indexer/history", "/sor"],
+      endpoints: ["/status", "/positions", "/yield", "/predictions", "/reasoning", "/trades", "/vault", "/health", "/modules", "/indexer", "/indexer/history", "/sor"],
     }));
 
     this.monitor.route("/status", () => this.getStatus());
@@ -472,6 +500,14 @@ class StrategyAgent {
           targetLeverage: d.targetLeverage ?? null,
           createdAt: d.createdAt,
         })),
+      };
+    });
+
+    this.monitor.route("/modules", () => {
+      if (!this.engine) return { modules: {} };
+      return {
+        modules: this.engine.getModuleStats(),
+        circuitBreaker: this.engine.getCircuitBreakerState(),
       };
     });
 
@@ -757,6 +793,14 @@ class StrategyAgent {
 
     if (this.rebalanceJob) {
       this.rebalanceJob.stop();
+    }
+
+    // Stop all integrated execution modules
+    if (this.engine) {
+      await this.engine.stopJitMaker();
+      await this.engine.stopFillerBot();
+      this.engine.stopFloatingMaker();
+      this.engine.stopRaydiumLP();
     }
 
     // Save final state to disk so next restart can resume

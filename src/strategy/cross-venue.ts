@@ -1,9 +1,10 @@
 /**
- * Cross-venue arbitrage executor (Drift + Binance).
+ * Cross-venue arbitrage executor (Drift + Binance + Flash).
  *
  * Exploits funding rate differentials between venues:
  *   - When Drift funding > Binance → short perp on Drift, long perp on Binance
  *   - When Binance funding > Drift → short perp on Binance, long perp on Drift
+ *   - Flash Trade rates compared for 3-venue optimization
  *   - Spot hedge on Drift for delta-neutrality
  *
  * Also supports the standard delta-neutral mode:
@@ -17,6 +18,7 @@ import { DriftManager } from "../drift/client";
 import { DriftExecutor } from "../drift/executor";
 import { BinanceManager } from "../binance/client";
 import { DriftDataAPI } from "../drift/data-api";
+import { FlashTradeClient } from "../venues/flash";
 import { config } from "../config";
 import { logger } from "../utils/logger";
 import { FundingRate } from "./types";
@@ -27,8 +29,9 @@ export interface VenueRate {
   asset: string;
   driftAPY: number;
   binanceAPY: number;
-  spread: number; // drift - binance
-  bestVenue: "drift" | "binance";
+  flashAPY?: number;
+  spread: number; // max - min across venues
+  bestVenue: "drift" | "binance" | "flash";
   bestAPY: number;
   direction: "short" | "long"; // perp direction that collects on best venue
 }
@@ -37,7 +40,7 @@ export interface CrossVenueSignal {
   asset: string;
   action: "open" | "close" | "flip";
   /** Where to execute the perp leg */
-  perpVenue: "drift" | "binance";
+  perpVenue: "drift" | "binance" | "flash";
   perpDirection: "short" | "long";
   /** Spot hedge always on Drift */
   spotDirection: "long" | "short";
@@ -59,7 +62,7 @@ export class CrossVenueExecutor {
   private positions: Map<
     string,
     {
-      perpVenue: "drift" | "binance";
+      perpVenue: "drift" | "binance" | "flash";
       perpDirection: "short" | "long";
       size: Decimal;
       entryTime: number;
@@ -311,7 +314,7 @@ export class CrossVenueExecutor {
 
   getPositions(): Array<{
     asset: string;
-    perpVenue: "drift" | "binance";
+    perpVenue: "drift" | "binance" | "flash";
     perpDirection: "short" | "long";
     size: number;
     ageHours: number;

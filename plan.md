@@ -272,3 +272,259 @@ npm run devnet:dry-run           # Single cycle test
 npm run devnet:strategy          # Extended test
 npm run devnet:llm-test          # Test LLM advisor
 ```
+
+  ┌────────────────────────────┬───────┬───────────────────────────────────────────────────────────────┐
+  │            File            │ Lines │                         What it does                          │
+  ├────────────────────────────┼───────┼───────────────────────────────────────────────────────────────┤
+  │ drift/jit-maker.ts         │ 726   │ Dual-mode JIT fills (sniper + shotgun) from jit-proxy         │
+  ├────────────────────────────┼───────┼───────────────────────────────────────────────────────────────┤
+  │ drift/filler.ts            │ 599   │ DLOB order filler from keeper-bots-v2                         │
+  ├────────────────────────────┼───────┼───────────────────────────────────────────────────────────────┤
+  │ drift/event-stream.ts      │ 694   │ WebSocket + Yellowstone gRPC event streaming                  │
+  ├────────────────────────────┼───────┼───────────────────────────────────────────────────────────────┤
+  │ strategy/floating-maker.ts │ 450   │ SlotSubscriber + mutex DLOB maker from keeper-bots-v2         │
+  ├────────────────────────────┼───────┼───────────────────────────────────────────────────────────────┤
+  │ strategy/raydium-lp.ts     │ 350   │ Concentrated liquidity LP with IL hedging                     │
+  ├────────────────────────────┼───────┼───────────────────────────────────────────────────────────────┤
+  │ ranger/data-api.ts         │ 321   │ Ranger Data API (funding arbs, liquidations, OI rates)        │
+  ├────────────────────────────┼───────┼───────────────────────────────────────────────────────────────┤
+  │ drift/orderbook.ts         │ 252   │ DLOB L2 orderbook + price impact + funding TWAP + lending APY │
+  ├────────────────────────────┼───────┼───────────────────────────────────────────────────────────────┤
+  │ lending/sanctum.ts         │ 222   │ Sanctum LST swap + APY data for yield stacking                │
+  ├────────────────────────────┼───────┼───────────────────────────────────────────────────────────────┤
+  │ drift/insurance.ts         │ 150   │ Drift insurance fund staking for additional yield             │
+  ├────────────────────────────┼───────┼───────────────────────────────────────────────────────────────┤
+  │ lending/lulo.ts            │ 137   │ Lulo/Flexlend lending aggregator                              │
+  └────────────────────────────┴───────┴───────────────────────────────────────────────────────────────┘
+
+  4 files upgraded (4,787 lines):
+
+  ┌──────────────────────┬───────┬────────────────────────────────────────────────────────────────────────────────────────────────────────┐
+  │         File         │ Lines │                                              What changed                                              │
+  ├──────────────────────┼───────┼────────────────────────────────────────────────────────────────────────────────────────────────────────┤
+  │ strategy/engine.ts   │ 1,946 │ +JIT/Filler/FloatingMaker start/stop, +Data API intelligence, +DLOB price impact, +Sanctum LST APY,    │
+  │                      │       │ +liquidation capitulation risk reduction                                                               │
+  ├──────────────────────┼───────┼────────────────────────────────────────────────────────────────────────────────────────────────────────┤
+  │ agent/index.ts       │ 954   │ +Auto-start JIT+Filler+FloatingMaker, +graceful shutdown, +/modules endpoint                           │
+  ├──────────────────────┼───────┼────────────────────────────────────────────────────────────────────────────────────────────────────────┤
+  │ drift/executor.ts    │ 1,498 │ +TX simulation, +CU estimation, +Jito bundles, +ALT support, +TX log parsing                           │
+  ├──────────────────────┼───────┼────────────────────────────────────────────────────────────────────────────────────────────────────────┤
+  │ ranger/sor-client.ts │ 389   │ +withdrawBalance, +withdrawCollateral, +depositCollateral, +getQuote, +16 AdjustmentTypes              │
+  └──────────────────────┴───────┴────────────────────────────────────────────────────────────────────────────────────────────────────────┘
+
+  Total: 83 core files, 26,128 lines. Zero type errors. 41 plugin directories with reference code.
+
+✻ Crunched for 4m 33s
+
+❯ okey so whats is our ranger straegy what is our drift stregy which files are we using cureenlty                                            
+
+⏺ Let me trace the actual execution flow to give you the honest picture.
+
+⏺ Bash(# What actually gets imported and used when you run `npm run agent`
+      echo "=== Entry point: src/agent/index.ts ===" && echo "" && grep "^import" src/agent/index.…)
+  ⎿  === Entry point: src/agent/index.ts ===
+
+     → "cron";
+     … +64 lines (ctrl+o to expand)
+
+⏺ Here's the honest map of what's actually running and what's reference:
+
+  What Actually Runs (npm run agent)
+
+  src/agent/index.ts (entry point)
+    ├── src/drift/client.ts          ← Drift SDK connection, positions, funding rates
+    ├── src/drift/funding.ts         ← On-chain funding analyzer (TWAP, premium, imbalance)
+    ├── src/drift/executor.ts        ← Atomic tx execution (cancel+place, Jupiter, Jito, simulation)
+    ├── src/drift/vault.ts           ← Drift vault (create, deposit, delegate, withdraw)
+    ├── src/drift/data-api.ts        ← Drift HTTP Data API (borrow rates, historical funding)
+    ├── src/ranger/client.ts         ← Ranger Earn vault manager (deposit/withdraw strategies)
+    ├── src/ranger/sor-client.ts     ← Ranger SOR (cross-venue routing, quotes, positions)
+    ├── src/config/index.ts          ← All config from env vars
+    ├── src/binance/client.ts        ← Binance API (cross-venue mode only)
+    ├── src/ai/strategy-advisor.ts   ← LLM regime detection (Claude via OpenRouter)
+    ├── src/ai/openrouter.ts         ← OpenRouter API client
+    ├── src/alerts/telegram.ts       ← Telegram alerts
+    ├── src/monitor/server.ts        ← HTTP dashboard on :3000
+    ├── src/utils/state-store.ts     ← Crash recovery (persist/restore state)
+    ├── src/indexer/db.ts            ← Helius webhook indexer store
+    │
+    └── src/strategy/engine.ts (CORE — runs every cycle)
+          ├── src/risk/manager.ts         ← Health, drawdown, leverage checks
+          ├── src/risk/oracle-guard.ts    ← Oracle staleness/spread validation
+          ├── src/strategy/circuit-breaker.ts ← 6-trigger emergency stop
+          ├── src/strategy/predictor.ts   ← EMA funding predictor (fallback to LLM)
+          ├── src/strategy/lst.ts         ← LST selection (JitoSOL/mSOL/bSOL)
+          ├── src/strategy/cross-venue.ts ← Drift+Binance arb executor
+          ├── src/vault/performance.ts    ← NAV tracking, share price, fees
+          ├── src/utils/trade-logger.ts   ← JSONL audit trail
+          ├── src/utils/yield-analytics.ts ← Yield breakdown
+          │
+          ├── src/strategy/floating-maker.ts  ← DLOB market making (auto-started)
+          ├── src/drift/jit-maker.ts          ← JIT auction fills (auto-started)
+          ├── src/drift/filler.ts             ← DLOB order filler (auto-started)
+          ├── src/ranger/data-api.ts          ← Funding arbs + liquidation signals (every cycle)
+          ├── src/drift/orderbook.ts          ← L2 orderbook + price impact + lending APY
+          └── src/lending/sanctum.ts          ← LST APY for yield stacking
+
+  Our Strategy (What It Actually Does)
+
+  Core: Delta-Neutral Funding Rate Harvester
+
+  Files: engine.ts + executor.ts + client.ts + funding.ts
+
+  Every cycle (8h default):
+  1. Long spot SOL/BTC/ETH/JTO/INJ on Drift
+  2. Short perp on same assets on Drift
+  3. Collect funding payments (positive or negative — bi-directional)
+  4. 48h flip protection between direction changes
+  5. LLM or EMA predicts funding direction per asset
+
+  Layer 1: LST Yield Stacking
+
+  Files: lst.ts + sanctum.ts + executor.ts
+
+  Use JitoSOL/mSOL/bSOL as collateral instead of raw SOL → earn ~6-7% staking APY on top of funding
+
+  Layer 2: FloatingPerpMaker (DLOB Market Making)
+
+  Files: floating-maker.ts (auto-started)
+
+  Places oracle-offset bid/ask on Drift DLOB → earns spread + 0.02% maker rebates
+
+  Layer 3: JIT Auction Fills
+
+  Files: jit-maker.ts (auto-started)
+
+  Fills taker orders during auction windows at our desired prices → maker rebates
+
+  Layer 4: Order Filler
+
+  Files: filler.ts (auto-started)
+
+  Fills resting DLOB orders → earns filler rewards
+
+  Layer 5: Cross-Venue Arb (optional)
+
+  Files: cross-venue.ts (when STRATEGY_MODE=cross-venue)
+
+  Compare Drift vs Binance funding rates → execute on best venue
+
+  Intelligence Layer
+
+  Files: data-api.ts + orderbook.ts + strategy-advisor.ts
+
+  - Ranger Data API: funding arbs across venues, liquidation capitulation signals
+  - DLOB L2: pre-trade price impact estimation
+  - LLM: regime detection (bullish/bearish/ranging)
+
+  What's NOT Running Yet (Reference Only)
+
+  ┌────────────────────────────┬────────────────────────────┬──────────────────────────────────────────┐
+  │            File            │           Status           │                   Why                    │
+  ├────────────────────────────┼────────────────────────────┼──────────────────────────────────────────┤
+  │ src/strategy/raydium-lp.ts │ Written, not wired         │ Needs Raydium pool address to start      │
+  ├────────────────────────────┼────────────────────────────┼──────────────────────────────────────────┤
+  │ src/drift/insurance.ts     │ Written, not wired         │ Optional yield source, needs manual call │
+  ├────────────────────────────┼────────────────────────────┼──────────────────────────────────────────┤
+  │ src/lending/lulo.ts        │ Written, not wired         │ Optional idle USDC yield                 │
+  ├────────────────────────────┼────────────────────────────┼──────────────────────────────────────────┤
+  │ src/drift/event-stream.ts  │ Written, not wired         │ gRPC needs Yellowstone endpoint          │
+  ├────────────────────────────┼────────────────────────────┼──────────────────────────────────────────┤
+  │ src/liquidation/service.ts │ Written, standalone script │ Run via npm run liquidator               │
+  ├────────────────────────────┼────────────────────────────┼──────────────────────────────────────────┤
+  │ src/plugins/* (975 files)  │ Reference code             │ Not imported, patterns already ported    │
+  └────────────────────────────┴────────────────────────────┴──────────────────────────────────────────┘
+
+  Which Files Matter Most
+
+  The core 15 files that make the strategy work:
+
+  src/strategy/engine.ts         1,946 lines  ← THE BRAIN
+  src/drift/executor.ts          1,498 lines  ← Transaction execution
+  src/agent/index.ts               954 lines  ← Orchestration + lifecycle
+  src/drift/client.ts               680 lines  ← Drift SDK wrapper
+  src/liquidation/service.ts        793 lines  ← Liquidation bot
+  src/drift/jit-maker.ts            726 lines  ← JIT fills
+  src/drift/event-stream.ts         694 lines  ← Event streaming
+  src/drift/filler.ts               599 lines  ← Order filling
+  src/strategy/floating-maker.ts    450 lines  ← DLOB making
+  src/ranger/sor-client.ts          389 lines  ← Cross-venue routing
+  src/strategy/raydium-lp.ts        350 lines  ← LP strategy
+  src/strategy/circuit-breaker.ts   376 lines  ← Risk safety
+  src/strategy/predictor.ts         355 lines  ← Funding prediction
+  src/ranger/data-api.ts            321 lines  ← Market intelligence
+  src/drift/vault.ts                793 lines  ← Vault management
+
+✻ Cogitated for 47s
+
+❯ okey so what are we submitting to ranger track whats are we submitting to drift track also from the chats and workshops I assume we may    
+need to use rust for vault and stregy stuff too and also I am not hundred eprcent confident about our stregy or is stregies worthy of        
+winning hacakthon                                                                                                                            
+
+⏺ Let me check our submission docs and the hackathon requirements first, then give you the honest truth.
+
+⏺ Searched for 2 patterns, read 3 files (ctrl+o to expand)
+
+⏺ OK here's the honest truth:
+
+  What We're Submitting
+
+  Ranger Main Track (up to $500K seeding)
+
+  Strategy: Delta-neutral funding rate capture vault on Ranger Earn
+  - Long spot + short perp across 5 assets (SOL/BTC/ETH/JTO/INJ)
+  - Deployed via Ranger Earn vault with delegate authority
+  - Backtest: +45.76% CAGR, 0.32% max drawdown, Sharpe 9.58
+
+  Drift Side Track (up to $100K seeding)
+
+  Same strategy but emphasized as 100% Drift-native:
+  - Oracle-offset orders, DLOB integration, cross-margin, JIT auctions
+  - All execution on Drift (perps + spot)
+
+  The Honest Problems
+
+  1. No Rust vault/strategy program. You're right to flag this. The submission docs show Rust interfaces (VaultInterface, StrategyInterface,
+  execute_drift_cpi) but we don't actually have a deployed on-chain program. We have:
+  - driftbear-adaptor/ — Anchor program (devnet verified)
+  - vault-cpi/ — reference CPI code
+  - But the actual strategy is a TypeScript off-chain bot, NOT an on-chain program
+
+  2. No live on-chain activity. The backtest is solid but there are no mainnet trades to show judges. The REMAINING.md says this is blocked.
+
+  3. The backtest numbers look too good. Sharpe 9.58 and 0.32% max drawdown over 3 years will raise red flags with experienced quant judges.
+  These numbers are theoretically possible for funding capture but they assume:
+  - Perfect fills at mid-price
+  - No slippage on spot legs
+  - No liquidation risk
+  - Constant oracle availability
+
+  4. The strategy is not novel. Delta-neutral funding capture is the most common DeFi strategy. Every serious Drift trader already does this.
+   What could differentiate us:
+  - LLM regime detection
+  - Multi-asset weighted portfolio (not just SOL)
+  - JIT + Filler + FloatingMaker as additional alpha layers
+  - Production-grade risk management (6-trigger circuit breaker)
+
+  Is It Worthy of Winning?
+
+  Honest assessment: It's competitive but has gaps.
+
+  Strengths:
+  - 83 source files, 26K lines — more code than most submissions
+  - 3-year backtest with real Drift S3 data
+  - Production-grade: Telegram alerts, crash recovery, vault performance tracking
+  - Multi-layer yield: funding + LST staking + DLOB making + JIT fills + filler rewards
+
+  Weaknesses:
+  - No on-chain Rust program (other teams WILL have this)
+  - No live trading history
+  - Strategy is well-known (not novel)
+  - No demo video yet
+
+  What Would Actually Make Us Win
+
+  1. Deploy and trade live on devnet/mainnet — even a few real trades showing the strategy works
+  2. Record the demo video — judges can't score what they can't see
+  3. Emphasize the tech stack — the JIT maker, filler bot, and LLM integration are genuinely impressive
+  4. Be honest about the backtest — present it as "theoretical performance under ideal conditions" not "guaranteed returns"

@@ -108,7 +108,7 @@ export class RangerDataApi {
 
     const response = await fetch(url.toString(), { method: "GET", headers });
     if (!response.ok) {
-      const error = await response.json().catch(() => ({ message: response.statusText }));
+      const error = await response.json().catch(() => ({ message: response.statusText })) as any;
       throw new Error(`Ranger Data API ${path} failed: ${error.message}`);
     }
     return response.json() as Promise<T>;

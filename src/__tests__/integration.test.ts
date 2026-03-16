@@ -17,10 +17,39 @@ jest.mock("../config", () => ({
     maxDrawdownPct: new (require("decimal.js"))("3.0"),
     minFundingAPY: new (require("decimal.js"))("0.05"),
     strategyMode: "drift-only",
+    strategyProfile: "generic",
+    driftBearNeutralAllocation: new (require("decimal.js"))("0.50"),
+    driftBearTopAssetOnly: true,
     targetAssets: ["SOL", "BTC", "ETH"],
     rebalanceIntervalMs: 28800000,
+    oracleMaxSpreadBps: 50,
+    oracleMaxConfidenceBps: 50,
+    oracleSizeFloor: new (require("decimal.js"))("0.4"),
+    oracleSkipMultiplier: new (require("decimal.js"))("2.5"),
+    openRouterApiKey: "",
+    solanaRpcUrl: "https://api.devnet.solana.com",
+    heliusRpcUrl: "",
   },
 }));
+
+// Mock global fetch
+global.fetch = jest.fn().mockResolvedValue({ ok: true, json: async () => ({}) }) as any;
+
+// Mock new integrated modules
+jest.mock("../ranger/data-api", () => ({ RangerDataApi: jest.fn().mockImplementation(() => ({ getFundingRateArbs: jest.fn().mockResolvedValue([]), getLiquidationsCapitulation: jest.fn().mockResolvedValue([]), getBorrowRatesAccumulated: jest.fn().mockResolvedValue([]) })) }));
+jest.mock("../lending/sanctum", () => ({ getBestLSTForYield: jest.fn().mockResolvedValue(null), getLSTAPY: jest.fn().mockResolvedValue({}), LST_MINTS: {} }));
+jest.mock("../utils/pyth-oracle", () => ({ fetchMultiplePrices: jest.fn().mockResolvedValue(new Map()) }));
+jest.mock("../utils/helius-enhanced", () => ({ HeliusClient: jest.fn().mockImplementation(() => ({ getPriorityFeeEstimate: jest.fn().mockResolvedValue(50000) })) }));
+jest.mock("../venues/flash", () => ({ FlashTradeClient: jest.fn().mockImplementation(() => ({ getFundingRate: jest.fn().mockResolvedValue(null) })) }));
+jest.mock("../venues/orca", () => ({ OrcaWhirlpoolClient: jest.fn().mockImplementation(() => ({ getTopPools: jest.fn().mockResolvedValue([]) })) }));
+jest.mock("../venues/meteora", () => ({ MeteoraClient: jest.fn().mockImplementation(() => ({ getTopPools: jest.fn().mockResolvedValue([]) })) }));
+jest.mock("../venues/debridge", () => ({ DeBridgeClient: jest.fn().mockImplementation(() => ({})), CHAIN_IDS: {} }));
+jest.mock("../ranger/voltr-client", () => ({ VoltrClient: jest.fn().mockImplementation(() => ({})) }));
+jest.mock("../drift/insurance", () => ({ stakeToInsuranceFund: jest.fn().mockResolvedValue("") }));
+jest.mock("../drift/adaptor-client", () => ({ DriftBearAdaptorClient: { devnetConfig: jest.fn().mockReturnValue({}) } }));
+jest.mock("../drift/orderbook", () => ({ getL2OrderBook: jest.fn().mockResolvedValue({ bids: [], asks: [] }), getEntryQuoteOfPerpTrade: jest.fn().mockResolvedValue({ entryPrice: 150, priceImpact: 0 }), calculatePerpMarketFundingRate: jest.fn().mockResolvedValue({ longRate: 0, shortRate: 0, friendlyString: "" }), getLendingAndBorrowAPY: jest.fn().mockReturnValue({ lendingAPY: 5, borrowAPY: 8 }) }));
+jest.mock("../lending/lulo", () => ({ luloLend: jest.fn().mockResolvedValue(""), luloWithdraw: jest.fn().mockResolvedValue("") }));
+jest.mock("../strategy/raydium-lp", () => ({ RaydiumLPStrategy: jest.fn().mockImplementation(() => ({ start: jest.fn(), stop: jest.fn(), getStats: jest.fn().mockReturnValue({}) })) }));
 
 // Silence logger
 jest.mock("../utils/logger", () => ({
@@ -85,6 +114,27 @@ function makeDriftMock() {
     longPerp: jest.fn().mockResolvedValue(undefined),
     closePerp: jest.fn().mockResolvedValue(undefined),
     settleFunding: jest.fn().mockResolvedValue(undefined),
+    getOracleMetrics: jest.fn().mockReturnValue({
+      oraclePrice: new Decimal("150"),
+      markPrice: new Decimal("150"),
+      confidenceBps: new Decimal("5"),
+      spreadBps: new Decimal("10"),
+      staleness: 0,
+      stale: false,
+    }),
+    getOraclePrice: jest.fn().mockResolvedValue(new Decimal("150")),
+    getClient: jest.fn().mockReturnValue({
+      connection: { rpcEndpoint: "https://api.devnet.solana.com" },
+      getPerpMarketAccount: jest.fn().mockReturnValue({ amm: {} }),
+      getSpotMarketAccount: jest.fn().mockReturnValue(null),
+      getOracleDataForPerpMarket: jest.fn().mockReturnValue({ price: { toNumber: () => 150000000 } }),
+      getUser: jest.fn().mockReturnValue({ getTokenAmount: jest.fn().mockReturnValue({ isZero: () => true }) }),
+      wallet: { publicKey: { toBase58: () => "mock" } },
+      program: { programId: "mock" },
+    }),
+    getWallet: jest.fn().mockReturnValue({ publicKey: { toBase58: () => "mock" } }),
+    getSpotPosition: jest.fn().mockReturnValue(null),
+    getSpotBalance: jest.fn().mockReturnValue(new Decimal("0")),
   } as any;
 }
 
