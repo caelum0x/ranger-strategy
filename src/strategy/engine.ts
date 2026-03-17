@@ -51,6 +51,14 @@ import { AdrenaClient } from "../venues/adrena";
 import { VoltrClient } from "../ranger/voltr-client";
 import { stakeToInsuranceFund } from "../drift/insurance";
 import { DriftBearAdaptorClient } from "../drift/adaptor-client";
+import {
+  getDriftUserAccountInfo,
+  getAvailableSpotMarkets,
+  getAvailablePerpMarkets,
+  swapSpotToken,
+  depositToDriftAccount,
+  withdrawFromDriftAccount,
+} from "../drift/account-ops";
 import { RaydiumLPStrategy } from "./raydium-lp";
 import { BN } from "@drift-labs/sdk";
 
