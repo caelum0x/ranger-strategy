@@ -62,6 +62,8 @@ import {
   withdrawFromDriftAccount,
 } from "../drift/account-ops";
 import { RaydiumLPStrategy } from "./raydium-lp";
+import { GridOrderStrategy } from "./grid-orders";
+import { OracleArbStrategy } from "./oracle-arb";
 import { BN } from "@drift-labs/sdk";
 
 export class StrategyEngine {
@@ -165,6 +167,10 @@ export class StrategyEngine {
   private bestLendingProtocol: { protocol: string; apy: number } | null = null;
   /** Raydium client for pool creation/management */
   private raydiumClient: RaydiumClient | null = null;
+  /** Grid order strategy — scale orders across price range */
+  private gridStrategy: GridOrderStrategy | null = null;
+  /** Oracle arb strategy — cross-exchange basis arbitrage */
+  private oracleArbStrategy: OracleArbStrategy | null = null;
   /** MCP tool server for AI agent integration */
   private mcpServer: RangerMCPServer = new RangerMCPServer();
 
@@ -374,6 +380,65 @@ export class StrategyEngine {
       await this.fundingUpdater.stop();
       this.fundingUpdater = null;
     }
+  }
+
+  // ── Grid Orders (from Drift Workshop recommendation) ──
+
+  /**
+   * Start grid order strategy — scale orders across price range.
+   * From Drift Workshop: "placing five staggered buy orders across a price range"
+   */
+  startGridOrders(markets: Array<{ marketIndex: number; symbol: string }> = [
+    { marketIndex: 0, symbol: "SOL" },
+  ]): void {
+    if (!this.drift?.getClient() || this.gridStrategy) return;
+    this.gridStrategy = new GridOrderStrategy(
+      this.drift.getClient(),
+      markets.map((m) => ({
+        marketIndex: m.marketIndex,
+        gridLevels: 5,
+        gridSpacing: 50,
+        orderSize: 0.1,
+        maxPosition: 1.0,
+      }))
+    );
+    this.gridStrategy.start();
+    logger.info("Grid order strategy started", { markets });
+  }
+
+  stopGridOrders(): void {
+    this.gridStrategy?.stop();
+    this.gridStrategy = null;
+  }
+
+  // ── Oracle Arb (from Drift Workshop recommendation) ──
+
+  /**
+   * Start oracle arb strategy — cross-exchange basis arbitrage.
+   * From Drift Workshop: "Oracle limit orders for cross-exchange arb"
+   */
+  startOracleArb(markets: Array<{ marketIndex: number; symbol: string }> = [
+    { marketIndex: 0, symbol: "SOL" },
+    { marketIndex: 1, symbol: "BTC" },
+    { marketIndex: 2, symbol: "ETH" },
+  ]): void {
+    if (!this.drift?.getClient() || this.oracleArbStrategy) return;
+    this.oracleArbStrategy = new OracleArbStrategy(
+      this.drift.getClient(),
+      markets.map((m) => ({
+        marketIndex: m.marketIndex,
+        symbol: m.symbol,
+        minBasisSpreadBps: 10,
+        orderSize: 0.5,
+      }))
+    );
+    this.oracleArbStrategy.start();
+    logger.info("Oracle arb strategy started", { markets });
+  }
+
+  stopOracleArb(): void {
+    this.oracleArbStrategy?.stop();
+    this.oracleArbStrategy = null;
   }
 
   // ── Ranger Data API Intelligence ──
@@ -746,6 +811,8 @@ export class StrategyEngine {
       floatingMaker: this.floatingMaker?.getStats() || null,
       pnlSettler: this.pnlSettler?.getStats() || null,
       fundingUpdater: this.fundingUpdater?.getStats() || null,
+      gridOrders: this.gridStrategy?.getStats() || null,
+      oracleArb: this.oracleArbStrategy?.getStats() || null,
       raydiumLP: this.raydiumLP?.getStats() || null,
       fundingArbs: this.latestFundingArbs.length,
       liquidationCapitulation: this.liquidationCapitulationActive,

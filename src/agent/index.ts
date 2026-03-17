@@ -269,6 +269,23 @@ class StrategyAgent {
       logger.warn("Funding updater start failed (non-critical)", { error: err.message });
     }
 
+    // Grid orders + Oracle arb (from Drift Workshop recommendations)
+    try {
+      this.engine.startGridOrders([{ marketIndex: 0, symbol: "SOL" }]);
+    } catch (err: any) {
+      logger.warn("Grid orders start failed (non-critical)", { error: err.message });
+    }
+
+    try {
+      this.engine.startOracleArb([
+        { marketIndex: 0, symbol: "SOL" },
+        { marketIndex: 1, symbol: "BTC" },
+        { marketIndex: 2, symbol: "ETH" },
+      ]);
+    } catch (err: any) {
+      logger.warn("Oracle arb start failed (non-critical)", { error: err.message });
+    }
+
     // Log initial market data
     await this.logMarketOverview();
 
@@ -821,6 +838,8 @@ class StrategyAgent {
       this.engine.stopFloatingMaker();
       await this.engine.stopPnlSettler();
       await this.engine.stopFundingUpdater();
+      this.engine.stopGridOrders();
+      this.engine.stopOracleArb();
       this.engine.stopRaydiumLP();
     }
 

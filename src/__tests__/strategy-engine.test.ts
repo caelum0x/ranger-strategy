@@ -96,6 +96,8 @@ jest.mock("../drift/insurance", () => ({
 jest.mock("../drift/adaptor-client", () => ({
   DriftBearAdaptorClient: { devnetConfig: jest.fn().mockReturnValue({}) },
 }));
+jest.mock("../strategy/grid-orders", () => ({ GridOrderStrategy: jest.fn().mockImplementation(() => ({ start: jest.fn(), stop: jest.fn(), getStats: jest.fn().mockReturnValue({}) })) }));
+jest.mock("../strategy/oracle-arb", () => ({ OracleArbStrategy: jest.fn().mockImplementation(() => ({ start: jest.fn(), stop: jest.fn(), getStats: jest.fn().mockReturnValue({}) })) }));
 jest.mock("../venues/raydium", () => ({ RaydiumClient: jest.fn().mockImplementation(() => ({ getTopPools: jest.fn().mockResolvedValue([]) })) }));
 jest.mock("../mcp/ranger-tools", () => ({ RangerMCPServer: jest.fn().mockImplementation(() => ({ getToolNames: jest.fn().mockReturnValue([]) })) }));
 jest.mock("../drift/spot-filler", () => ({ SpotFillerBot: jest.fn().mockImplementation(() => ({ start: jest.fn(), stop: jest.fn(), getStats: jest.fn().mockReturnValue({}) })) }));
