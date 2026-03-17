@@ -731,6 +731,152 @@ export class DriftVaultManager {
   private bnToUsdc(amount: BN): Decimal {
     return new Decimal(amount.toString()).div(USDC_PRECISION.toNumber());
   }
+
+  // ── Manager Borrow / Repay (from drift-vaults SDK vaultClient.ts) ──
+
+  /**
+   * Manager borrows against vault collateral.
+   * From: drift-vaults/ts/sdk/src/vaultClient.ts → managerBorrow()
+   *
+   * This allows leveraged strategies — borrow SOL against USDC
+   * collateral to short-sell, or borrow USDC to increase position sizes.
+   */
+  async managerBorrow(
+    vaultAddress: PublicKey,
+    amount: Decimal,
+    spotMarketIndex: number = 0
+  ): Promise<string> {
+    const amountBN = this.usdcToLamports(amount);
+
+    const txSig = await (this.vaultClient as any).managerBorrow(
+      vaultAddress,
+      amountBN,
+      spotMarketIndex
+    );
+
+    logger.info("Vault: manager borrowed", {
+      vault: vaultAddress.toBase58().slice(0, 8),
+      amount: amount.toFixed(2),
+      spotMarketIndex,
+      txSig,
+    });
+
+    return typeof txSig === "string" ? txSig : "";
+  }
+
+  /**
+   * Manager repays borrowed amount.
+   * From: drift-vaults/ts/sdk/src/vaultClient.ts → managerRepay()
+   */
+  async managerRepay(
+    vaultAddress: PublicKey,
+    amount: Decimal,
+    spotMarketIndex: number = 0
+  ): Promise<string> {
+    const amountBN = this.usdcToLamports(amount);
+
+    const txSig = await (this.vaultClient as any).managerRepay(
+      vaultAddress,
+      amountBN,
+      spotMarketIndex
+    );
+
+    logger.info("Vault: manager repaid", {
+      vault: vaultAddress.toBase58().slice(0, 8),
+      amount: amount.toFixed(2),
+      spotMarketIndex,
+      txSig,
+    });
+
+    return typeof txSig === "string" ? txSig : "";
+  }
+
+  // ── Force Withdraw (from drift-vaults SDK) ────────────────────
+
+  /**
+   * Force-process a depositor's pending withdrawal.
+   * From: drift-vaults/ts/sdk/src/vaultClient.ts → forceWithdraw()
+   *
+   * Needed when depositors request withdrawal but the manager needs
+   * to proactively process them (e.g., to prevent liquidation takeover).
+   */
+  async forceWithdraw(
+    vaultAddress: PublicKey,
+    vaultDepositorAddress: PublicKey
+  ): Promise<string> {
+    const txSig = await (this.vaultClient as any).forceWithdraw(
+      vaultAddress,
+      vaultDepositorAddress
+    );
+
+    logger.info("Vault: force withdrawal processed", {
+      vault: vaultAddress.toBase58().slice(0, 8),
+      depositor: vaultDepositorAddress.toBase58().slice(0, 8),
+      txSig,
+    });
+
+    return typeof txSig === "string" ? txSig : "";
+  }
+
+  // ── Liquidate (from drift-vaults SDK) ─────────────────────────
+
+  /**
+   * Liquidate an undercollateralized vault depositor.
+   * From: drift-vaults/ts/sdk/src/vaultClient.ts → liquidate()
+   */
+  async liquidateDepositor(
+    vaultAddress: PublicKey,
+    vaultDepositorAddress: PublicKey
+  ): Promise<string> {
+    const txSig = await (this.vaultClient as any).liquidate(
+      vaultAddress,
+      vaultDepositorAddress
+    );
+
+    logger.info("Vault: depositor liquidated", {
+      vault: vaultAddress.toBase58().slice(0, 8),
+      depositor: vaultDepositorAddress.toBase58().slice(0, 8),
+      txSig,
+    });
+
+    return typeof txSig === "string" ? txSig : "";
+  }
+
+  // ── All-Time PnL (from drift-vaults SDK) ──────────────────────
+
+  /**
+   * Calculate vault's all-time notional PnL.
+   * From: drift-vaults/ts/sdk/src/vaultClient.ts → calculateVaultAllTimeNotionalPnl()
+   */
+  async getAllTimePnl(vaultAddress: PublicKey): Promise<Decimal> {
+    try {
+      const pnl = await (this.vaultClient as any).calculateVaultAllTimeNotionalPnl(
+        vaultAddress
+      );
+      return this.bnToUsdc(pnl);
+    } catch {
+      return new Decimal(0);
+    }
+  }
+
+  /**
+   * Calculate what a specific depositor can actually withdraw.
+   * From: drift-vaults/ts/sdk/src/vaultClient.ts → calculateWithdrawableVaultDepositorEquity()
+   */
+  async getWithdrawableEquity(
+    vaultAddress: PublicKey,
+    vaultDepositorAddress: PublicKey
+  ): Promise<Decimal> {
+    try {
+      const equity = await (this.vaultClient as any).calculateWithdrawableVaultDepositorEquity(
+        vaultAddress,
+        vaultDepositorAddress
+      );
+      return this.bnToUsdc(equity);
+    } catch {
+      return new Decimal(0);
+    }
+  }
 }
 
 export { VAULT_PROGRAM_ID, WithdrawUnit, encodeName, decodeName };
