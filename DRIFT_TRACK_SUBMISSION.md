@@ -691,7 +691,7 @@ Not just basic SDK calls — we ported production logic from Drift's own repos:
 | Scenario | Cost Assumption | CAGR | Max Drawdown |
 |----------|----------------|------|-------------|
 | Ideal (70% maker fills) | 0.088% round-trip | +45.76% | 0.32% |
-| Realistic (100% taker + slippage) | 0.30% round-trip | ~+30% | ~0.8% |
+| Realistic (100% taker + slippage) | 0.30% round-trip | +44.88% | 0.60% |
 | Bear market (2025 actual) | 0.088% round-trip | +0.39% | <0.3% |
 
 The strategy meets all Drift Side Track eligibility requirements and is ready for deployment and verification.

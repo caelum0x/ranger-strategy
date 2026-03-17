@@ -551,7 +551,7 @@ pub fn execute_drift_cpi(
 
 This vault provides institutional-grade yield generation through systematic funding capture, with:
 
-- **3-Year Proven Edge:** +45.76% CAGR (ideal) / ~+30% CAGR (realistic with 3.4x higher costs)
+- **3-Year Proven Edge:** +45.76% CAGR (ideal) / +44.88% CAGR (realistic with 3.4x higher costs)
 - **Risk-Adjusted Returns:** Sharpe 9.58, Sortino 121.54, 0.32% max drawdown
 - **Ultra-Low Costs:** 0.9% cost/income ratio — 99.1% of gross funding flows to vault equity
 - **Production Ready:** 83 source files, 32 scripts, crash recovery, Telegram alerts, Helius webhooks
@@ -575,7 +575,7 @@ Delta-neutral funding capture is a known strategy. Our differentiation is the **
 | Scenario | Cost Assumption | CAGR | Max Drawdown |
 |----------|----------------|------|-------------|
 | Ideal (70% maker fills) | 0.088% round-trip | +45.76% | 0.32% |
-| Realistic (100% taker + slippage) | 0.30% round-trip | ~+30% | ~0.8% |
+| Realistic (100% taker + slippage) | 0.30% round-trip | +44.88% | 0.60% |
 | Bear market (2025 actual) | 0.088% round-trip | +0.39% | <0.3% |
 
 The strategy exceeds the 10% minimum APY requirement even under worst-case cost assumptions and is ready for vault seeding and deployment.

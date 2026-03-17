@@ -143,9 +143,11 @@ The reference programs show we understand the full stack.
 - V2-S3 backtest: 68,072 hourly bars, 3 years, real Drift S3 data
 - Result: +45.76% CAGR, 0.32% max DD, Sharpe 9.58
 
-### Need to run:
-- `npm run backtest:v2-s3-realistic` (0.30% round-trip costs = worst case)
-- Expected: ~30% CAGR (still above 10% threshold)
+### Realistic backtest (completed):
+- 0.30% round-trip costs (3.4x higher than ideal)
+- Result: **+44.88% CAGR**, 0.60% max DD, Sharpe 9.37
+- Total return: +208.87% ($10K → $30.9K)
+- Cost/income: 2.3% (vs 0.9% ideal)
 
 ### What the backtest tests:
 - 5 assets (SOL 22%, BTC 20%, ETH 13%, JTO 23%, INJ 22%)
@@ -191,8 +193,8 @@ Withdraw tx:   vp7hBrvnCqL5QV...
 
 | # | Task | Time | Status |
 |---|---|---|---|
-| 1 | Run realistic backtest | 10 min | NOT DONE |
-| 2 | Run devnet dry run and capture output for demo | 30 min | NOT DONE |
+| 1 | Run realistic backtest | 10 min | DONE (+44.88% CAGR) |
+| 2 | Run devnet dry run and capture output for demo | 30 min | DONE (tx: 2cGsXk3t...) |
 | 3 | Record 3-min demo video | 1-2 hours | NOT DONE |
 | 4 | Submit on Superteam Earn (both tracks) | 30 min | NOT DONE |
 | 5 | Add @jakeyvee on GitHub (if private) | 2 min | NOT DONE |
