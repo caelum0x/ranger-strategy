@@ -1,0 +1,31 @@
+{
+  "strategies": [
+    {
+      "id": "driftLend",
+      "type": "driftEarn",
+      "marketIndex": 0,
+      "description": "Drift USDC spot lending — earn deposit APY (~4-8%)"
+    },
+    {
+      "id": "jupiterLend",
+      "type": "jupiterLend",
+      "description": "Jupiter Lend USDC — earn lending APY"
+    },
+    {
+      "id": "deltaNeutralSOL",
+      "type": "driftEarn",
+      "marketIndex": 1,
+      "description": "Delta-neutral SOL — long SOL spot + short SOL perp for funding capture"
+    }
+  ],
+  "allocation": {
+    "mode": "custom",
+    "weights": {
+      "driftLend": 0.40,
+      "jupiterLend": 0.10,
+      "deltaNeutralSOL": 0.50
+    }
+  },
+  "rebalanceIntervalMs": 1800000,
+  "depositMinAmountUsdc": 1
+}

@@ -26,6 +26,7 @@
     "indexer": "ts-node src/indexer/server.ts",
     "indexer:webhook:create": "ts-node scripts/create-helius-webhook.ts",
     "indexer:backfill": "ts-node scripts/indexer-backfill.ts",
+    "rebalance-bot": "ts-node scripts/rebalance-bot/rebalance_loop.ts",
     "preflight": "ts-node scripts/preflight.ts",
     "devnet:setup": "ts-node scripts/devnet-setup.ts",
     "devnet:dry-run": "ts-node scripts/devnet-dry-run.ts",
