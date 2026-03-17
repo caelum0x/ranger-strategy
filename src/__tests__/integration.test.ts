@@ -48,6 +48,9 @@ jest.mock("../venues/debridge", () => ({ DeBridgeClient: jest.fn().mockImplement
 jest.mock("../ranger/voltr-client", () => ({ VoltrClient: jest.fn().mockImplementation(() => ({})) }));
 jest.mock("../drift/insurance", () => ({ stakeToInsuranceFund: jest.fn().mockResolvedValue("") }));
 jest.mock("../drift/adaptor-client", () => ({ DriftBearAdaptorClient: { devnetConfig: jest.fn().mockReturnValue({}) } }));
+jest.mock("../drift/spot-filler", () => ({ SpotFillerBot: jest.fn().mockImplementation(() => ({ start: jest.fn(), stop: jest.fn(), getStats: jest.fn().mockReturnValue({}) })) }));
+jest.mock("../drift/pnl-settler", () => ({ PnlSettler: jest.fn().mockImplementation(() => ({ start: jest.fn(), stop: jest.fn(), getStats: jest.fn().mockReturnValue({}) })) }));
+jest.mock("../drift/funding-updater", () => ({ FundingRateUpdater: jest.fn().mockImplementation(() => ({ start: jest.fn(), stop: jest.fn(), getStats: jest.fn().mockReturnValue({}) })) }));
 jest.mock("../drift/orderbook", () => ({ getL2OrderBook: jest.fn().mockResolvedValue({ bids: [], asks: [] }), getEntryQuoteOfPerpTrade: jest.fn().mockResolvedValue({ entryPrice: 150, priceImpact: 0 }), calculatePerpMarketFundingRate: jest.fn().mockResolvedValue({ longRate: 0, shortRate: 0, friendlyString: "" }), getLendingAndBorrowAPY: jest.fn().mockReturnValue({ lendingAPY: 5, borrowAPY: 8 }) }));
 jest.mock("../lending/lulo", () => ({ luloLend: jest.fn().mockResolvedValue(""), luloWithdraw: jest.fn().mockResolvedValue("") }));
 jest.mock("../strategy/raydium-lp", () => ({ RaydiumLPStrategy: jest.fn().mockImplementation(() => ({ start: jest.fn(), stop: jest.fn(), getStats: jest.fn().mockReturnValue({}) })) }));

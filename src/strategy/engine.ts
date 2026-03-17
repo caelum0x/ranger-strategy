@@ -28,6 +28,9 @@ import { FloatingPerpMaker } from "./floating-maker";
 import { CrossVenueExecutor } from "./cross-venue";
 import { JitMaker, JitParams } from "../drift/jit-maker";
 import { FillerBot } from "../drift/filler";
+import { SpotFillerBot } from "../drift/spot-filler";
+import { PnlSettler } from "../drift/pnl-settler";
+import { FundingRateUpdater } from "../drift/funding-updater";
 import { RangerDataApi, FundingRateArb } from "../ranger/data-api";
 import {
   getL2OrderBook,
@@ -113,8 +116,14 @@ export class StrategyEngine {
 
   /** JIT Maker — fills auctions at optimal slot timing (sniper or shotgun mode) */
   private jitMaker: JitMaker | null = null;
-  /** Filler Bot — fills resting DLOB orders for filler rewards */
+  /** Filler Bot — fills resting DLOB perp orders for filler rewards */
   private fillerBot: FillerBot | null = null;
+  /** Spot Filler Bot — fills resting DLOB spot orders */
+  private spotFillerBot: SpotFillerBot | null = null;
+  /** PnL Settler — settles unrealized PnL for capital efficiency */
+  private pnlSettler: PnlSettler | null = null;
+  /** Funding Rate Updater — cranks funding rate updates for freshness */
+  private fundingUpdater: FundingRateUpdater | null = null;
   /** Ranger Data API — funding arbs, liquidation signals, OI-weighted rates */
   private rangerDataApi: RangerDataApi = new RangerDataApi();
   /** Latest funding arbitrage opportunities from Ranger Data API */
@@ -296,6 +305,60 @@ export class StrategyEngine {
       await this.fillerBot.stop();
       logger.info("Filler bot stopped", { stats: this.fillerBot.getStats() });
       this.fillerBot = null;
+    }
+  }
+
+  // ── Spot Filler (ported from keeper-bots-v2/spotFiller.ts) ──
+
+  async startSpotFillerBot(markets: number[] = [0, 1, 2, 3]): Promise<void> {
+    if (!this.drift?.getClient() || this.spotFillerBot) return;
+    this.spotFillerBot = new SpotFillerBot(this.drift.getClient(), {
+      spotMarketIndices: markets,
+    });
+    await this.spotFillerBot.start();
+    logger.info("Spot filler bot started", { markets });
+  }
+
+  async stopSpotFillerBot(): Promise<void> {
+    if (this.spotFillerBot) {
+      await this.spotFillerBot.stop();
+      this.spotFillerBot = null;
+    }
+  }
+
+  // ── PnL Settler (ported from keeper-bots-v2/userPnlSettler.ts) ──
+
+  async startPnlSettler(markets: number[] = [0, 1, 2]): Promise<void> {
+    if (!this.drift?.getClient() || this.pnlSettler) return;
+    this.pnlSettler = new PnlSettler(this.drift.getClient(), {
+      perpMarketIndices: markets,
+    });
+    await this.pnlSettler.start();
+    logger.info("PnL settler started", { markets });
+  }
+
+  async stopPnlSettler(): Promise<void> {
+    if (this.pnlSettler) {
+      await this.pnlSettler.stop();
+      this.pnlSettler = null;
+    }
+  }
+
+  // ── Funding Rate Updater (ported from keeper-bots-v2/fundingRateUpdater.ts) ──
+
+  async startFundingUpdater(markets: number[] = [0, 1, 2]): Promise<void> {
+    if (!this.drift?.getClient() || this.fundingUpdater) return;
+    this.fundingUpdater = new FundingRateUpdater(this.drift.getClient(), {
+      perpMarketIndices: markets,
+    });
+    await this.fundingUpdater.start();
+    logger.info("Funding rate updater started", { markets });
+  }
+
+  async stopFundingUpdater(): Promise<void> {
+    if (this.fundingUpdater) {
+      await this.fundingUpdater.stop();
+      this.fundingUpdater = null;
     }
   }
 
@@ -664,7 +727,10 @@ export class StrategyEngine {
     return {
       jitMaker: this.jitMaker?.getStats() || null,
       fillerBot: this.fillerBot?.getStats() || null,
+      spotFillerBot: this.spotFillerBot?.getStats() || null,
       floatingMaker: this.floatingMaker?.getStats() || null,
+      pnlSettler: this.pnlSettler?.getStats() || null,
+      fundingUpdater: this.fundingUpdater?.getStats() || null,
       raydiumLP: this.raydiumLP?.getStats() || null,
       fundingArbs: this.latestFundingArbs.length,
       liquidationCapitulation: this.liquidationCapitulationActive,

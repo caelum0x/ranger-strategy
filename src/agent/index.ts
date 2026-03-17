@@ -251,6 +251,24 @@ class StrategyAgent {
       logger.warn("FloatingMaker start failed (non-critical)", { error: err.message });
     }
 
+    try {
+      await this.engine.startSpotFillerBot([0, 1, 2, 3]);
+    } catch (err: any) {
+      logger.warn("Spot filler start failed (non-critical)", { error: err.message });
+    }
+
+    try {
+      await this.engine.startPnlSettler(perpMarkets);
+    } catch (err: any) {
+      logger.warn("PnL settler start failed (non-critical)", { error: err.message });
+    }
+
+    try {
+      await this.engine.startFundingUpdater(perpMarkets);
+    } catch (err: any) {
+      logger.warn("Funding updater start failed (non-critical)", { error: err.message });
+    }
+
     // Log initial market data
     await this.logMarketOverview();
 
@@ -799,7 +817,10 @@ class StrategyAgent {
     if (this.engine) {
       await this.engine.stopJitMaker();
       await this.engine.stopFillerBot();
+      await this.engine.stopSpotFillerBot();
       this.engine.stopFloatingMaker();
+      await this.engine.stopPnlSettler();
+      await this.engine.stopFundingUpdater();
       this.engine.stopRaydiumLP();
     }
 

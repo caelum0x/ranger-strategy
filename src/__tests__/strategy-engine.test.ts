@@ -96,6 +96,9 @@ jest.mock("../drift/insurance", () => ({
 jest.mock("../drift/adaptor-client", () => ({
   DriftBearAdaptorClient: { devnetConfig: jest.fn().mockReturnValue({}) },
 }));
+jest.mock("../drift/spot-filler", () => ({ SpotFillerBot: jest.fn().mockImplementation(() => ({ start: jest.fn(), stop: jest.fn(), getStats: jest.fn().mockReturnValue({}) })) }));
+jest.mock("../drift/pnl-settler", () => ({ PnlSettler: jest.fn().mockImplementation(() => ({ start: jest.fn(), stop: jest.fn(), getStats: jest.fn().mockReturnValue({}) })) }));
+jest.mock("../drift/funding-updater", () => ({ FundingRateUpdater: jest.fn().mockImplementation(() => ({ start: jest.fn(), stop: jest.fn(), getStats: jest.fn().mockReturnValue({}) })) }));
 jest.mock("../drift/orderbook", () => ({
   getL2OrderBook: jest.fn().mockResolvedValue({ bids: [], asks: [] }),
   getEntryQuoteOfPerpTrade: jest.fn().mockResolvedValue({ entryPrice: 150, priceImpact: 0 }),
