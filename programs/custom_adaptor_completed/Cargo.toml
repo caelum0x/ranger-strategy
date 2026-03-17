@@ -1,0 +1,22 @@
+[package]
+name = "custom-adaptor-completed"
+version = "0.1.0"
+description = "Completed custom adaptor for Ranger Earn vaults (Workshop 2)"
+edition = "2021"
+
+[lib]
+crate-type = ["cdylib", "lib"]
+name = "custom_adaptor_program"
+
+[features]
+default = []
+cpi = ["no-entrypoint"]
+no-entrypoint = []
+no-idl = []
+no-log-ix-name = []
+idl-build = ["anchor-lang/idl-build", "anchor-spl/idl-build"]
+
+[dependencies]
+anchor-lang = { version = "0.31.1", features = ["init-if-needed"] }
+anchor-spl = "0.31.1"
+ctoken-market-program = { path = "../ctoken_market_program", features = ["cpi"] }
