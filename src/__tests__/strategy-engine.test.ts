@@ -67,6 +67,12 @@ jest.mock("../venues/flash", () => ({
     getMarkets: jest.fn().mockResolvedValue([]),
   })),
 }));
+jest.mock("../venues/adrena", () => ({
+  AdrenaClient: jest.fn().mockImplementation(() => ({
+    getFundingRate: jest.fn().mockResolvedValue(null),
+    getMarkets: jest.fn().mockResolvedValue([]),
+  })),
+}));
 jest.mock("../venues/orca", () => ({
   OrcaWhirlpoolClient: jest.fn().mockImplementation(() => ({
     getTopPools: jest.fn().mockResolvedValue([]),

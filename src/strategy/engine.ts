@@ -44,6 +44,7 @@ import { FlashTradeClient } from "../venues/flash";
 import { OrcaWhirlpoolClient } from "../venues/orca";
 import { MeteoraClient } from "../venues/meteora";
 import { DeBridgeClient, CHAIN_IDS } from "../venues/debridge";
+import { AdrenaClient } from "../venues/adrena";
 import { VoltrClient } from "../ranger/voltr-client";
 import { stakeToInsuranceFund } from "../drift/insurance";
 import { DriftBearAdaptorClient } from "../drift/adaptor-client";
@@ -127,6 +128,8 @@ export class StrategyEngine {
   private helius: HeliusClient = new HeliusClient();
   /** Flash Trade client — additional perp venue for cross-venue arb */
   private flashClient: FlashTradeClient | null = null;
+  /** Adrena client — another perp venue for cross-venue intelligence */
+  private adrenaClient: AdrenaClient | null = null;
   /** Orca Whirlpool client — concentrated LP yield */
   private orcaClient: OrcaWhirlpoolClient | null = null;
   /** Meteora DLMM client — dynamic LP yield */
@@ -355,11 +358,12 @@ export class StrategyEngine {
     if (this.drift?.getClient()) {
       const connection = this.drift.getClient().connection;
       this.flashClient = new FlashTradeClient(connection);
+      this.adrenaClient = new AdrenaClient(connection);
       this.orcaClient = new OrcaWhirlpoolClient(connection);
       this.meteoraClient = new MeteoraClient(connection);
       this.voltrClient = new VoltrClient(connection);
       logger.info("Multi-venue clients initialized", {
-        venues: ["Flash", "Orca", "Meteora", "deBridge", "Voltr"],
+        venues: ["Flash", "Adrena", "Orca", "Meteora", "deBridge", "Voltr"],
       });
     }
   }
@@ -433,26 +437,44 @@ export class StrategyEngine {
    * Uses: venues/flash.ts (Flash funding), ranger/data-api.ts (arb signals)
    */
   async compareVenueFundingRates(): Promise<void> {
-    if (!this.flashClient) return;
+    const driftRates = await this.drift.getFundingRates();
 
     for (const asset of config.targetAssets.slice(0, 3)) {
       try {
-        const flashRate = await this.flashClient.getFundingRate(asset);
-        if (flashRate !== null) {
-          const driftRate = (await this.drift.getFundingRates())
-            .find((r) => r.asset === asset);
-          if (driftRate) {
-            const diff = Math.abs(
-              flashRate - driftRate.annualizedRate.toNumber()
-            );
-            if (diff > 0.05) { // >5% APY difference
-              logger.info("Cross-venue funding arb opportunity", {
-                asset,
-                driftRate: `${driftRate.annualizedRate.mul(100).toFixed(2)}%`,
-                flashRate: `${(flashRate * 100).toFixed(2)}%`,
-                diff: `${(diff * 100).toFixed(2)}%`,
-              });
-            }
+        const driftRate = driftRates.find((r) => r.asset === asset);
+        if (!driftRate) continue;
+        const driftAPY = driftRate.annualizedRate.toNumber();
+
+        const venueRates: Array<{ venue: string; rate: number }> = [
+          { venue: "Drift", rate: driftAPY },
+        ];
+
+        // Flash Trade funding rate
+        if (this.flashClient) {
+          const flashRate = await this.flashClient.getFundingRate(asset);
+          if (flashRate !== null) venueRates.push({ venue: "Flash", rate: flashRate });
+        }
+
+        // Adrena funding rate
+        if (this.adrenaClient) {
+          const adrenaRate = await this.adrenaClient.getFundingRate(asset);
+          if (adrenaRate !== null) venueRates.push({ venue: "Adrena", rate: adrenaRate });
+        }
+
+        // Find best arb opportunity across all 3 venues
+        if (venueRates.length >= 2) {
+          venueRates.sort((a, b) => b.rate - a.rate);
+          const best = venueRates[0];
+          const worst = venueRates[venueRates.length - 1];
+          const spread = Math.abs(best.rate - worst.rate);
+
+          if (spread > 0.05) { // >5% APY spread across venues
+            logger.info("Cross-venue funding arb opportunity", {
+              asset,
+              venues: venueRates.map((v) => `${v.venue}: ${(v.rate * 100).toFixed(2)}%`),
+              spread: `${(spread * 100).toFixed(2)}%`,
+              action: `Short on ${best.venue}, long on ${worst.venue}`,
+            });
           }
         }
       } catch { /* non-critical */ }
@@ -650,6 +672,7 @@ export class StrategyEngine {
       lendingRates: Object.fromEntries(this.lendingRates),
       venues: {
         flash: !!this.flashClient,
+        adrena: !!this.adrenaClient,
         orca: !!this.orcaClient,
         meteora: !!this.meteoraClient,
         debridge: true,

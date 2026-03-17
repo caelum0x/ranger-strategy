@@ -41,6 +41,7 @@ jest.mock("../lending/sanctum", () => ({ getBestLSTForYield: jest.fn().mockResol
 jest.mock("../utils/pyth-oracle", () => ({ fetchMultiplePrices: jest.fn().mockResolvedValue(new Map()) }));
 jest.mock("../utils/helius-enhanced", () => ({ HeliusClient: jest.fn().mockImplementation(() => ({ getPriorityFeeEstimate: jest.fn().mockResolvedValue(50000) })) }));
 jest.mock("../venues/flash", () => ({ FlashTradeClient: jest.fn().mockImplementation(() => ({ getFundingRate: jest.fn().mockResolvedValue(null) })) }));
+jest.mock("../venues/adrena", () => ({ AdrenaClient: jest.fn().mockImplementation(() => ({ getFundingRate: jest.fn().mockResolvedValue(null) })) }));
 jest.mock("../venues/orca", () => ({ OrcaWhirlpoolClient: jest.fn().mockImplementation(() => ({ getTopPools: jest.fn().mockResolvedValue([]) })) }));
 jest.mock("../venues/meteora", () => ({ MeteoraClient: jest.fn().mockImplementation(() => ({ getTopPools: jest.fn().mockResolvedValue([]) })) }));
 jest.mock("../venues/debridge", () => ({ DeBridgeClient: jest.fn().mockImplementation(() => ({})), CHAIN_IDS: {} }));
