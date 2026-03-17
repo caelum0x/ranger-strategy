@@ -1,1 +1,0 @@
-Drop-in replacement for the Solana/Agave PubSubClient with better disconnection handling

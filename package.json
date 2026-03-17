@@ -53,6 +53,9 @@
     "@coral-xyz/anchor": "^0.30.0",
     "@drift-labs/sdk": "^2.80.0",
     "@drift-labs/vaults-sdk": "^0.1.0",
+    "@meteora-ag/dlmm": "^1.9.4",
+    "@orca-so/common-sdk": "^0.7.0",
+    "@orca-so/whirlpools-sdk": "^0.20.0",
     "@solana/spl-token": "^0.4.0",
     "@solana/web3.js": "^1.95.0",
     "@voltr/vault-sdk": "latest",
@@ -62,6 +65,7 @@
     "cron": "^3.1.0",
     "decimal.js": "^10.4.3",
     "dotenv": "^16.4.0",
+    "flash-sdk": "^15.9.0",
     "winston": "^3.11.0"
   },
   "devDependencies": {

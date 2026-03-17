@@ -1,15 +1,13 @@
 /**
- * Meteora DLMM LP integration — dynamic liquidity market making.
+ * Meteora DLMM integration — real SDK for dynamic LP.
  *
  * Ported from meteora-plugin/tools/create_meteora_dlmm_pool.ts.
- * Meteora DLMM concentrates liquidity in bins around current price
- * for maximum fee capture efficiency.
- *
- * Used by: LP yield stacking strategy.
+ * Uses @meteora-ag/dlmm for actual DLMM pool management.
  */
+import DLMM from "@meteora-ag/dlmm";
 import { Connection, PublicKey } from "@solana/web3.js";
+import { BN } from "bn.js";
 import { logger } from "../utils/logger";
-import Decimal from "decimal.js";
 
 export interface MeteoraDLMMPool {
   address: string;
@@ -31,67 +29,8 @@ export class MeteoraClient {
   }
 
   /**
-   * Create a DLMM pool position.
-   * From: meteora-plugin/tools/create_meteora_dlmm_pool.ts
-   */
-  async createPool(params: {
-    mintA: PublicKey;
-    mintB: PublicKey;
-    binStep: number;
-    baseFeeRateBps: number;
-    initialPrice: Decimal;
-    walletPubkey: PublicKey;
-  }): Promise<string> {
-    logger.info("Meteora: creating DLMM pool", {
-      mintA: params.mintA.toBase58().slice(0, 8),
-      mintB: params.mintB.toBase58().slice(0, 8),
-      binStep: params.binStep,
-      initialPrice: params.initialPrice.toFixed(4),
-    });
-
-    // In production: uses @meteora-ag/dlmm SDK
-    // const dlmm = await DLMM.createCustomizablePermissionlessLbPair(...)
-    return "";
-  }
-
-  /**
-   * Add liquidity to existing DLMM pool.
-   */
-  async addLiquidity(params: {
-    poolAddress: PublicKey;
-    amountA: Decimal;
-    amountB: Decimal;
-    binRange: number; // number of bins around active bin
-    walletPubkey: PublicKey;
-  }): Promise<string> {
-    logger.info("Meteora: adding liquidity", {
-      pool: params.poolAddress.toBase58().slice(0, 8),
-      amountA: params.amountA.toFixed(4),
-      amountB: params.amountB.toFixed(4),
-      binRange: params.binRange,
-    });
-
-    return "";
-  }
-
-  /**
-   * Remove liquidity and claim fees.
-   */
-  async removeLiquidity(params: {
-    poolAddress: PublicKey;
-    percentage: number; // 0-100
-    walletPubkey: PublicKey;
-  }): Promise<string> {
-    logger.info("Meteora: removing liquidity", {
-      pool: params.poolAddress.toBase58().slice(0, 8),
-      percentage: params.percentage,
-    });
-
-    return "";
-  }
-
-  /**
    * Get top DLMM pools by APR.
+   * Real API call used by engine.scanLPYields() every cycle.
    */
   async getTopPools(limit = 10): Promise<MeteoraDLMMPool[]> {
     try {
@@ -99,10 +38,54 @@ export class MeteoraClient {
         `https://dlmm-api.meteora.ag/pair/all_with_pagination?limit=${limit}&sort_key=fee_apr&order_by=desc`
       );
       if (!response.ok) return [];
-      const data = ((await response.json()) as any);
-      return data.data || [];
+      const data = (await response.json()) as any;
+      return (data.data || data.pairs || []).map((p: any) => ({
+        address: p.address || "",
+        mintA: p.mint_x || "",
+        mintB: p.mint_y || "",
+        binStep: p.bin_step || 0,
+        baseFeeRateBps: p.base_fee_percentage ? parseFloat(p.base_fee_percentage) * 100 : 0,
+        activeId: p.active_id || 0,
+        currentPrice: p.current_price || 0,
+        tvl: p.liquidity ? parseFloat(p.liquidity) : 0,
+        apr24h: p.apr || p.fee_apr || 0,
+      }));
     } catch {
       return [];
+    }
+  }
+
+  /**
+   * Create a DLMM pool instance from on-chain data.
+   * From: meteora-plugin — DLMM.create()
+   */
+  async getPool(poolAddress: PublicKey): Promise<DLMM | null> {
+    try {
+      const dlmmPool = await DLMM.create(this.connection, poolAddress);
+      logger.info("Meteora: loaded DLMM pool", {
+        address: poolAddress.toBase58().slice(0, 8),
+        binStep: dlmmPool.lbPair.binStep,
+        activeId: dlmmPool.lbPair.activeId,
+      });
+      return dlmmPool;
+    } catch (err) {
+      logger.debug("Meteora pool load failed", { error: String(err) });
+      return null;
+    }
+  }
+
+  /**
+   * Get active bin price for a pool.
+   * From: @meteora-ag/dlmm — pool.getActiveBin()
+   */
+  async getActiveBinPrice(poolAddress: PublicKey): Promise<number | null> {
+    try {
+      const pool = await this.getPool(poolAddress);
+      if (!pool) return null;
+      const activeBin = await pool.getActiveBin();
+      return parseFloat(activeBin.price);
+    } catch {
+      return null;
     }
   }
 }
