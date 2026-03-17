@@ -48,7 +48,9 @@ import { OrcaWhirlpoolClient } from "../venues/orca";
 import { MeteoraClient } from "../venues/meteora";
 import { DeBridgeClient, CHAIN_IDS } from "../venues/debridge";
 import { AdrenaClient } from "../venues/adrena";
+import { RaydiumClient } from "../venues/raydium";
 import { VoltrClient } from "../ranger/voltr-client";
+import { RangerMCPServer } from "../mcp/ranger-tools";
 import { stakeToInsuranceFund } from "../drift/insurance";
 import { DriftBearAdaptorClient } from "../drift/adaptor-client";
 import {
@@ -161,6 +163,10 @@ export class StrategyEngine {
   private lendingRates: Map<string, LendBorrowAPY> = new Map();
   /** Best lending protocol for idle USDC */
   private bestLendingProtocol: { protocol: string; apy: number } | null = null;
+  /** Raydium client for pool creation/management */
+  private raydiumClient: RaydiumClient | null = null;
+  /** MCP tool server for AI agent integration */
+  private mcpServer: RangerMCPServer = new RangerMCPServer();
 
   constructor(
     drift: DriftManager,
@@ -433,8 +439,9 @@ export class StrategyEngine {
       this.orcaClient = new OrcaWhirlpoolClient(connection);
       this.meteoraClient = new MeteoraClient(connection);
       this.voltrClient = new VoltrClient(connection);
+      this.raydiumClient = new RaydiumClient(connection);
       logger.info("Multi-venue clients initialized", {
-        venues: ["Flash", "Adrena", "Orca", "Meteora", "deBridge", "Voltr"],
+        venues: ["Flash", "Adrena", "Orca", "Meteora", "Raydium", "deBridge", "Voltr"],
       });
     }
   }

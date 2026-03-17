@@ -48,6 +48,8 @@ jest.mock("../venues/debridge", () => ({ DeBridgeClient: jest.fn().mockImplement
 jest.mock("../ranger/voltr-client", () => ({ VoltrClient: jest.fn().mockImplementation(() => ({})) }));
 jest.mock("../drift/insurance", () => ({ stakeToInsuranceFund: jest.fn().mockResolvedValue("") }));
 jest.mock("../drift/adaptor-client", () => ({ DriftBearAdaptorClient: { devnetConfig: jest.fn().mockReturnValue({}) } }));
+jest.mock("../venues/raydium", () => ({ RaydiumClient: jest.fn().mockImplementation(() => ({ getTopPools: jest.fn().mockResolvedValue([]) })) }));
+jest.mock("../mcp/ranger-tools", () => ({ RangerMCPServer: jest.fn().mockImplementation(() => ({ getToolNames: jest.fn().mockReturnValue([]) })) }));
 jest.mock("../drift/spot-filler", () => ({ SpotFillerBot: jest.fn().mockImplementation(() => ({ start: jest.fn(), stop: jest.fn(), getStats: jest.fn().mockReturnValue({}) })) }));
 jest.mock("../drift/pnl-settler", () => ({ PnlSettler: jest.fn().mockImplementation(() => ({ start: jest.fn(), stop: jest.fn(), getStats: jest.fn().mockReturnValue({}) })) }));
 jest.mock("../drift/funding-updater", () => ({ FundingRateUpdater: jest.fn().mockImplementation(() => ({ start: jest.fn(), stop: jest.fn(), getStats: jest.fn().mockReturnValue({}) })) }));
