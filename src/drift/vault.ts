@@ -746,7 +746,7 @@ export class DriftVaultManager {
     amount: Decimal,
     spotMarketIndex: number = 0
   ): Promise<string> {
-    const amountBN = this.usdcToLamports(amount);
+    const amountBN = this.usdcToBN(amount);
 
     const txSig = await (this.vaultClient as any).managerBorrow(
       vaultAddress,
@@ -773,7 +773,7 @@ export class DriftVaultManager {
     amount: Decimal,
     spotMarketIndex: number = 0
   ): Promise<string> {
-    const amountBN = this.usdcToLamports(amount);
+    const amountBN = this.usdcToBN(amount);
 
     const txSig = await (this.vaultClient as any).managerRepay(
       vaultAddress,

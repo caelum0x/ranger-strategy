@@ -12,11 +12,10 @@ We have a LOT of code (150K+ lines) but need to be clear about what's real vs re
 
 | Category | Files | Lines | Status |
 |---|---|---|---|
-| Strategy engine + modules | 152 TS files | 44K | Working, tested (181/181 pass) |
-| Scripts (vault, lending, LP) | 81 TS files | 14K | Ready to run |
-| Rust programs (on-chain) | 6 programs | 95K | 1 deployed on devnet, rest = reference |
-| Plugin reference code | 975 files | ~40K | Copied, not all ported |
-| **Total** | **~1,200 files** | **~150K** | |
+| Strategy engine + modules | 161 TS files | 46K | Working, tested (181/181 pass) |
+| Scripts (vault, lending, LP, ops) | 107 TS files | 15K | Ready to run |
+| Rust programs (on-chain) | 4 programs | 17K | 1 deployed on devnet, 1 = Drift reference |
+| Plugin reference code | ~900 files | ~35K | Most ported, rest = SDK reference |
 
 ### What Actually Works Right Now
 - `npm run agent` — starts the full strategy engine with JIT/Filler/FloatingMaker
@@ -66,10 +65,22 @@ We don't have ONE strategy — we have 5 layers that stack:
 **Yield:** ~6-8% APY on top of funding
 **Files:** `lst.ts`, `lending/sanctum.ts`
 
+### Layer 6: Grid Orders (NEW — from Drift Workshop)
+**What:** Scale buy/sell orders at evenly spaced oracle offsets — captures volatility
+**Yield:** Variable (mean-reversion + maker rebates)
+**Files:** `grid-orders.ts` (228 lines)
+**Source:** Drift Workshop recommendation
+
+### Layer 7: Oracle Basis Arbitrage (NEW — from Drift Workshop)
+**What:** Exploit mark-oracle divergence with Pyth cross-validation
+**Yield:** Variable (basis spread capture)
+**Files:** `oracle-arb.ts` (266 lines)
+**Source:** Drift Workshop recommendation
+
 ### Combined Expected Yield
 Conservative: 20-30% APY (funding only)
-Moderate: 35-50% APY (funding + market making)
-Aggressive: 50-70% APY (all layers active)
+Moderate: 35-50% APY (funding + market making + grid)
+Aggressive: 50-70% APY (all 7 layers active)
 
 ---
 
@@ -194,10 +205,11 @@ Withdraw tx:   vp7hBrvnCqL5QV...
 | # | Task | Time | Status |
 |---|---|---|---|
 | 1 | Run realistic backtest | 10 min | DONE (+44.88% CAGR) |
-| 2 | Run devnet dry run and capture output for demo | 30 min | DONE (tx: 2cGsXk3t...) |
-| 3 | Record 3-min demo video | 1-2 hours | NOT DONE |
-| 4 | Submit on Superteam Earn (both tracks) | 30 min | NOT DONE |
-| 5 | Add @jakeyvee on GitHub (if private) | 2 min | NOT DONE |
+| 2 | Run devnet dry run | 30 min | DONE (live tx on devnet) |
+| 3 | Build grid orders + oracle arb | 2 hours | DONE (from Drift Workshop) |
+| 4 | Record 3-min demo video | 1-2 hours | NOT DONE |
+| 5 | Deploy vault on mainnet + share in TG | 1 hour | NOT DONE |
+| 6 | Submit on Superteam Earn (both tracks) | 30 min | NOT DONE |
 
 ### Should Do
 
