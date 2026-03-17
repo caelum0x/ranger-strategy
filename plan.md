@@ -259,6 +259,53 @@ Withdraw tx:   vp7hBrvnCqL5QV...
 
 ---
 
+## Infrastructure — Running 24/7
+
+The strategy agent runs off-chain (`npm run agent`). It needs a server running 24/7 to submit transactions.
+
+### Server Setup
+
+**Recommended:** Hetzner VPS (€4/mo) or DigitalOcean ($6/mo) — 1 CPU, 1GB RAM is enough.
+
+```bash
+# 1. SSH into server
+ssh root@your-server-ip
+
+# 2. Install Node.js
+curl -fsSL https://deb.nodesource.com/setup_20.x | bash -
+apt install -y nodejs git
+
+# 3. Clone repo & install
+git clone <repo-url> ranger && cd ranger
+npm install
+
+# 4. Set up environment (.env with wallet key, RPC, etc)
+nano .env
+
+# 5. Install pm2 & start agent
+npm install -g pm2
+pm2 start "npm run agent" --name ranger-agent
+
+# 6. Auto-restart on crash + server reboot
+pm2 save
+pm2 startup
+```
+
+### Monitoring
+```bash
+pm2 status              # Check if running
+pm2 logs ranger-agent   # View logs
+pm2 monit               # CPU/RAM usage
+```
+
+### Security Checklist
+- [ ] Use a dedicated wallet (not your main)
+- [ ] SSH key-only login (disable password auth)
+- [ ] Keep server updated (`apt update && apt upgrade`)
+- [ ] Firewall: only allow SSH (port 22)
+
+---
+
 ## Available Commands
 
 ```bash

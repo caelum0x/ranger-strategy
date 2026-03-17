@@ -1,24 +1,32 @@
 /**
- * Full vault deployment script — one command to deploy everything.
+ * Full vault deployment script — creates and initializes a Ranger Earn vault.
  *
- * This is the production deployment flow from the Workshop 1 guide:
+ * Uses the @voltr/vault-sdk to:
  *   1. Initialize Voltr vault with USDC base asset
- *   2. Add Drift adaptor
- *   3. Initialize Drift earn strategy
- *   4. Deposit initial USDC
- *   5. Log vault address for Ranger UI indexing
+ *   2. Save vault keypair + info for subsequent operations
+ *
+ * After creation, you still need to:
+ *   - Set up LP token metadata
+ *   - Initialize strategies (add Drift adaptor, init earn strategy)
+ *   - Allocate funds to strategies
  *
  * Usage:
  *   npm run deploy-vault
  *   npm run deploy-vault -- --amount 10 --network mainnet
+ *   npm run deploy-vault -- --name "My Vault" --description "Short description"
  *
- * After deployment, share vault address in Ranger TG for indexing:
- *   "Vault: <ADDRESS> — Delta-neutral funding + DLOB market making"
+ * After deployment, share vault address in Ranger TG for indexing.
  */
-import { Connection, Keypair, PublicKey } from "@solana/web3.js";
-import { VoltrClient } from "@voltr/vault-sdk";
+import { BN } from "@coral-xyz/anchor";
+import { VaultConfig, VaultParams, VoltrClient } from "@voltr/vault-sdk";
+import {
+  Connection,
+  Keypair,
+  PublicKey,
+  Transaction,
+  sendAndConfirmTransaction,
+} from "@solana/web3.js";
 import { config } from "../src/config";
-import { logger } from "../src/utils/logger";
 import * as fs from "fs";
 
 // ── Parse CLI args ──────────────────────────────────────────────
@@ -30,116 +38,201 @@ const getArg = (name: string, defaultVal: string) => {
 };
 
 const NETWORK = getArg("network", "devnet");
-const DEPOSIT_AMOUNT = parseInt(getArg("amount", "10")); // USDC
 const VAULT_NAME = getArg("name", "Delta-Neutral Funding Vault");
+const VAULT_DESCRIPTION = getArg("description", "Delta-neutral funding capture + DLOB maker");
 
 // ── Main ────────────────────────────────────────────────────────
 
 async function main() {
+  // Validate inputs
+  if (VAULT_NAME.length > 32) {
+    console.error("ERROR: Vault name must be 32 characters or fewer");
+    process.exit(1);
+  }
+  if (VAULT_DESCRIPTION.length > 64) {
+    console.error("ERROR: Vault description must be 64 characters or fewer");
+    process.exit(1);
+  }
+
   console.log("╔══════════════════════════════════════════════════════╗");
   console.log("║       Ranger Earn Vault Deployment                  ║");
   console.log("╠══════════════════════════════════════════════════════╣");
   console.log(`║  Network:  ${NETWORK.padEnd(41)}║`);
-  console.log(`║  Deposit:  ${DEPOSIT_AMOUNT} USDC${" ".repeat(36 - DEPOSIT_AMOUNT.toString().length)}║`);
-  console.log(`║  Strategy: Delta-neutral + DLOB maker${" ".repeat(15)}║`);
+  console.log(`║  Name:     ${VAULT_NAME.padEnd(41)}║`);
   console.log("╚══════════════════════════════════════════════════════╝");
   console.log("");
 
-  // Load keypair
-  const keypairPath = process.env.ANCHOR_WALLET ||
-    process.env.MANAGER_FILE_PATH ||
+  // ── Load admin keypair ──
+  const adminPath = process.env.ADMIN_KEYPAIR_PATH ||
+    process.env.ANCHOR_WALLET ||
     (NETWORK === "devnet" ? "./devnet-keypair.json" : undefined);
 
-  if (!keypairPath || !fs.existsSync(keypairPath)) {
-    console.error("ERROR: No keypair found. Set ANCHOR_WALLET or MANAGER_FILE_PATH");
+  if (!adminPath || !fs.existsSync(adminPath)) {
+    console.error("ERROR: No admin keypair found. Set ADMIN_KEYPAIR_PATH or ANCHOR_WALLET");
     process.exit(1);
   }
 
-  const keypair = Keypair.fromSecretKey(
-    Uint8Array.from(JSON.parse(fs.readFileSync(keypairPath, "utf-8")))
+  const adminKp = Keypair.fromSecretKey(
+    Uint8Array.from(JSON.parse(fs.readFileSync(adminPath, "utf-8")))
   );
-  console.log(`Wallet: ${keypair.publicKey.toBase58()}`);
+  console.log(`Admin:   ${adminKp.publicKey.toBase58()}`);
 
-  // Connect
+  // ── Load manager keypair (falls back to admin if not set) ──
+  const managerPath = process.env.MANAGER_KEYPAIR_PATH;
+  const managerKp = managerPath && fs.existsSync(managerPath)
+    ? Keypair.fromSecretKey(
+        Uint8Array.from(JSON.parse(fs.readFileSync(managerPath, "utf-8")))
+      )
+    : adminKp;
+  console.log(`Manager: ${managerKp.publicKey.toBase58()}`);
+
+  // ── Connect ──
   const rpcUrl = NETWORK === "mainnet"
     ? config.solanaRpcUrl
     : "https://api.devnet.solana.com";
   const connection = new Connection(rpcUrl, "confirmed");
 
-  const balance = await connection.getBalance(keypair.publicKey);
+  const balance = await connection.getBalance(adminKp.publicKey);
   console.log(`SOL Balance: ${(balance / 1e9).toFixed(4)} SOL`);
 
   if (balance < 0.05 * 1e9) {
     if (NETWORK === "devnet") {
       console.log("Airdropping 1 SOL...");
-      await connection.requestAirdrop(keypair.publicKey, 1e9);
-      await new Promise((r) => setTimeout(r, 2000));
+      const sig = await connection.requestAirdrop(adminKp.publicKey, 1e9);
+      await connection.confirmTransaction(sig, "confirmed");
     } else {
       console.error("ERROR: Insufficient SOL balance for mainnet deployment");
       process.exit(1);
     }
   }
 
-  // ── Step 1: Initialize Voltr Vault ──
-  console.log("\n═══ Step 1: Initialize Vault ═══");
-  const voltrClient = new VoltrClient(connection);
+  // ── Step 1: Configure vault parameters ──
+  console.log("\n═══ Step 1: Configure Vault ═══");
+
+  const vaultConfig: VaultConfig = {
+    maxCap: new BN("18446744073709551615"),         // Uncapped (u64 max)
+    startAtTs: new BN(0),                           // Immediate activation
+    lockedProfitDegradationDuration: new BN(86400), // 24 hours
+    managerPerformanceFee: 2000,                    // 20% in basis points
+    adminPerformanceFee: 0,                         // 0%
+    managerManagementFee: 100,                      // 1% in basis points
+    adminManagementFee: 0,                          // 0%
+    redemptionFee: 10,                              // 0.1% in basis points
+    issuanceFee: 10,                                // 0.1% in basis points
+    withdrawalWaitingPeriod: new BN(604800),        // 7 days in seconds
+  };
+
+  const vaultParams: VaultParams = {
+    config: vaultConfig,
+    name: VAULT_NAME,
+    description: VAULT_DESCRIPTION,
+  };
+
+  console.log("  Max cap:            Uncapped (u64 max)");
+  console.log("  Performance fee:    20% (manager)");
+  console.log("  Management fee:     1% (manager)");
+  console.log("  Redemption fee:     0.1%");
+  console.log("  Issuance fee:       0.1%");
+  console.log("  Withdrawal wait:    7 days");
+  console.log("  Profit degradation: 24 hours");
+
+  // ── Step 2: Generate vault keypair ──
+  console.log("\n═══ Step 2: Generate Vault Keypair ═══");
+  const vaultKp = Keypair.generate();
+  console.log(`  Vault address: ${vaultKp.publicKey.toBase58()}`);
 
   // USDC mint (mainnet or devnet)
   const USDC_MINT = NETWORK === "mainnet"
     ? new PublicKey("EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v")
-    : new PublicKey("8zGuJQqwhZafTah7Uc7Z4tXRnguqkn5KLFAP8oV6PHe2"); // devnet USDC
+    : new PublicKey("8zGuJQqwhZafTah7Uc7Z4tXRnguqkn5KLFAP8oV6PHe2");
+  console.log(`  Asset mint:    ${USDC_MINT.toBase58()}`);
 
-  console.log(`Asset mint: ${USDC_MINT.toBase58()}`);
-  console.log(`Vault name: ${VAULT_NAME}`);
+  // ── Step 3: Create vault initialization instruction ──
+  console.log("\n═══ Step 3: Initialize Vault ═══");
+  const client = new VoltrClient(connection);
+
+  const createVaultIx = await client.createInitializeVaultIx(
+    vaultParams,
+    {
+      vault: vaultKp.publicKey,
+      vaultAssetMint: USDC_MINT,
+      admin: adminKp.publicKey,
+      manager: managerKp.publicKey,
+      payer: adminKp.publicKey,
+    }
+  );
+
+  // ── Step 4: Send and confirm the transaction ──
+  console.log("  Sending transaction...");
+  const tx = new Transaction().add(createVaultIx);
+
+  const txSig = await sendAndConfirmTransaction(
+    connection,
+    tx,
+    [adminKp, vaultKp],
+    { commitment: "confirmed" }
+  );
+
+  console.log(`  Vault created: ${vaultKp.publicKey.toBase58()}`);
+  console.log(`  Transaction:   ${txSig}`);
+
+  // ── Step 5: Save vault info ──
+  console.log("\n═══ Step 5: Save Vault Info ═══");
+
+  // Save vault keypair
+  const vaultKeypairPath = `./vault-keypair-${NETWORK}.json`;
+  fs.writeFileSync(
+    vaultKeypairPath,
+    JSON.stringify(Array.from(vaultKp.secretKey))
+  );
+  console.log(`  Vault keypair saved: ${vaultKeypairPath}`);
+
+  // Save vault info
+  const vaultInfo = {
+    network: NETWORK,
+    vaultAddress: vaultKp.publicKey.toBase58(),
+    adminAddress: adminKp.publicKey.toBase58(),
+    managerAddress: managerKp.publicKey.toBase58(),
+    assetMint: USDC_MINT.toBase58(),
+    name: VAULT_NAME,
+    description: VAULT_DESCRIPTION,
+    txSignature: txSig,
+    createdAt: new Date().toISOString(),
+  };
+
+  fs.writeFileSync("./vault-info.json", JSON.stringify(vaultInfo, null, 2));
+  console.log("  Vault info saved: ./vault-info.json");
+
+  // ── Next steps ──
+  console.log("\n═══ Next Steps ═══");
   console.log("");
-  console.log("To complete deployment, run the Voltr scripts:");
+  console.log("  Your vault is created but won't generate yield yet.");
+  console.log("  Deposited funds sit idle until you:");
   console.log("");
-  console.log("  # In base-scripts/:");
-  console.log("  pnpm ts-node src/scripts/admin-init-vault.ts");
+  console.log("  1. Set up LP token metadata (so wallets display your token)");
+  console.log("  2. Initialize strategies (add Drift adaptor + init earn strategy)");
+  console.log("  3. Allocate funds to move idle funds into strategies");
   console.log("");
-  console.log("  # In drift-scripts/:");
+  console.log("  # Add Drift adaptor + init strategy:");
   console.log("  pnpm ts-node src/scripts/admin-add-adaptor.ts");
   console.log("  pnpm ts-node src/scripts/manager-init-earn.ts");
   console.log("");
-  console.log("  # In base-scripts/:");
-  console.log("  pnpm ts-node src/scripts/user-deposit-vault.ts");
-  console.log("");
-  console.log("  # Start the strategy:");
-  console.log("  npm run agent");
-  console.log("");
 
-  // ── Alternative: Use our devnet vault workflow ──
-  if (NETWORK === "devnet") {
-    console.log("═══ Alternative: Devnet Quick Test ═══");
-    console.log("");
-    console.log("  # Full devnet workflow (Drift vault + deposit + withdraw):");
-    console.log("  npm run devnet:vault-workflow");
-    console.log("");
-    console.log("  # Or quick strategy test:");
-    console.log("  npm run devnet:dry-run");
-    console.log("");
-  }
-
-  // ── Log vault info for Ranger TG ──
-  console.log("═══ After deployment, share in Ranger TG: ═══");
+  // ── Share in Ranger TG ──
+  console.log("═══ Share in Ranger TG for indexing: ═══");
   console.log("");
   console.log("  Hey team, deployed our vault for Build-A-Bear hackathon.");
-  console.log(`  Wallet: ${keypair.publicKey.toBase58()}`);
-  console.log("  Vault: <PASTE VAULT ADDRESS>");
-  console.log("  Strategy: Delta-neutral funding capture + DLOB market making");
-  console.log("  (USDC base, 5-asset weighted portfolio, 6 keeper modules)");
-  console.log("");
+  console.log(`  Wallet:   ${adminKp.publicKey.toBase58()}`);
+  console.log(`  Vault:    ${vaultKp.publicKey.toBase58()}`);
+  console.log(`  Strategy: ${VAULT_DESCRIPTION}`);
   console.log("  Would appreciate indexing on Ranger UI.");
-  console.log("  Repo: https://github.com/caelum0x/ranger-strategy");
   console.log("");
 
-  // ── Existing devnet adaptor info ──
-  console.log("═══ Already Deployed (Devnet) ═══");
-  console.log(`  Custom Adaptor: 4JW3mvrVGXpZZ3jxjw16o4REHnWuEGkbvLkPBg1RbFbQ`);
-  console.log(`  Vault: GRQrzTzz55Kd59uFSmW8mvkzUhzVTLCdjHGP4hnbxCna`);
-  console.log(`  Strategy: FJvUxNw6BdvApP3e5wDXjrfLn7pGCUrWx7hxWiHLk4mY`);
-  console.log(`  Drift User: 2xe1yY4tNcnzESvcKER8PHX3m3SKP74HHDNf2iQf5CZh`);
-  console.log(`  Current deposit: 20 USDC`);
+  // ── Save vault pubkey to .env ──
+  console.log("═══ Environment ═══");
+  console.log(`  Add to .env:`);
+  console.log(`  VAULT_PUBKEY=${vaultKp.publicKey.toBase58()}`);
+  console.log(`  VOLTR_VAULT_ADDRESS=${vaultKp.publicKey.toBase58()}`);
 }
 
 main().catch((err) => {

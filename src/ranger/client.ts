@@ -999,6 +999,118 @@ export class RangerVaultManager {
     return sig;
   }
 
+  // ── Missing SDK query methods ────────────────────────────────────────────
+
+  async getHighWaterMark(vaultAddress?: PublicKey): Promise<{
+    highestAssetPerLp: number;
+    lastUpdatedTs: number;
+  }> {
+    const vault = vaultAddress ?? this.vaultPubkey;
+    if (!vault) throw new Error("Vault not initialized");
+    return this.client.getHighWaterMarkForVault(vault);
+  }
+
+  async getLpSupplyBreakdown(vaultAddress?: PublicKey): Promise<{
+    circulating: BN;
+    unharvestedFees: BN;
+    unrealisedFees: BN;
+    total: BN;
+  }> {
+    const vault = vaultAddress ?? this.vaultPubkey;
+    if (!vault) throw new Error("Vault not initialized");
+    return this.client.getVaultLpSupplyBreakdown(vault);
+  }
+
+  async getAccumulatedFees(vaultAddress?: PublicKey): Promise<{
+    adminFees: BN;
+    managerFees: BN;
+  }> {
+    const vault = vaultAddress ?? this.vaultPubkey;
+    if (!vault) throw new Error("Vault not initialized");
+    const [adminFees, managerFees] = await Promise.all([
+      this.client.getAccumulatedAdminFeesForVault(vault),
+      this.client.getAccumulatedManagerFeesForVault(vault),
+    ]);
+    return { adminFees, managerFees };
+  }
+
+  async calculateLpForDeposit(amount: BN, vaultAddress?: PublicKey): Promise<BN> {
+    const vault = vaultAddress ?? this.vaultPubkey;
+    if (!vault) throw new Error("Vault not initialized");
+    return this.client.calculateLpForDeposit(vault, amount);
+  }
+
+  async calculateAssetsForWithdraw(lpAmount: BN, vaultAddress?: PublicKey): Promise<BN> {
+    const vault = vaultAddress ?? this.vaultPubkey;
+    if (!vault) throw new Error("Vault not initialized");
+    return this.client.calculateAssetsForWithdraw(vault, lpAmount);
+  }
+
+  async calculateLpForWithdraw(assetAmount: BN, vaultAddress?: PublicKey): Promise<BN> {
+    const vault = vaultAddress ?? this.vaultPubkey;
+    if (!vault) throw new Error("Vault not initialized");
+    return this.client.calculateLpForWithdraw(vault, assetAmount);
+  }
+
+  // ── Missing SDK admin operations ───────────────────────────────────────────
+
+  async removeAdaptor(adaptorProgram: PublicKey): Promise<string> {
+    if (!this.vaultPubkey) throw new Error("Vault not initialized");
+    const ix = await this.client.createRemoveAdaptorIx({
+      vault: this.vaultPubkey,
+      admin: this.adminKp.publicKey,
+      adaptorProgram,
+    });
+    const sig = await sendIx(this.connection, ix, [this.adminKp]);
+    logger.info("Adaptor removed from vault", {
+      adaptorProgram: adaptorProgram.toBase58(),
+      txSignature: sig,
+    });
+    return sig;
+  }
+
+  async calibrateHighWaterMark(): Promise<string> {
+    if (!this.vaultPubkey) throw new Error("Vault not initialized");
+    const ix = await this.client.createCalibrateHighWaterMarkIx({
+      vault: this.vaultPubkey,
+      admin: this.adminKp.publicKey,
+    });
+    const sig = await sendIx(this.connection, ix, [this.adminKp]);
+    logger.info("High water mark calibrated", { txSignature: sig });
+    return sig;
+  }
+
+  async createLpMetadata(name: string, symbol: string, uri: string): Promise<string> {
+    if (!this.vaultPubkey) throw new Error("Vault not initialized");
+    const ix = await this.client.createCreateLpMetadataIx(
+      { name, symbol, uri },
+      {
+        vault: this.vaultPubkey,
+        admin: this.adminKp.publicKey,
+        payer: this.adminKp.publicKey,
+      }
+    );
+    const sig = await sendIx(this.connection, ix, [this.adminKp]);
+    logger.info("LP metadata created", { name, symbol, uri, txSignature: sig });
+    return sig;
+  }
+
+  async closeStrategy(strategyPubkey: PublicKey): Promise<string> {
+    if (!this.vaultPubkey) throw new Error("Vault not initialized");
+    const ix = await this.client.createCloseStrategyIx({
+      payer: this.managerKp.publicKey,
+      manager: this.managerKp.publicKey,
+      vault: this.vaultPubkey,
+      strategy: strategyPubkey,
+    });
+    const sig = await sendIx(this.connection, ix, [this.managerKp]);
+    logger.info("Strategy closed", {
+      strategy: strategyPubkey.toBase58(),
+      txSignature: sig,
+    });
+    return sig;
+  }
+
   getVaultPubkey(): PublicKey | null {
     return this.vaultPubkey;
   }

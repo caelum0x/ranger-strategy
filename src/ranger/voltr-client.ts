@@ -384,4 +384,186 @@ export class VoltrClient {
     logger.info("Voltr: fees harvested", { txSig });
     return txSig;
   }
+
+  // ── Query Methods (SDK) ────────────────────────────────────────
+
+  /**
+   * Get high water mark for performance fee tracking.
+   */
+  async getHighWaterMark(vaultAddress: PublicKey): Promise<{
+    highestAssetPerLp: number;
+    lastUpdatedTs: number;
+  }> {
+    return this.sdk.getHighWaterMarkForVault(vaultAddress);
+  }
+
+  /**
+   * Get LP supply breakdown: circulating, unharvested fees, unrealised fees.
+   */
+  async getLpSupplyBreakdown(vaultAddress: PublicKey): Promise<{
+    circulating: BN;
+    unharvestedFees: BN;
+    unrealisedFees: BN;
+    total: BN;
+  }> {
+    return this.sdk.getVaultLpSupplyBreakdown(vaultAddress);
+  }
+
+  /**
+   * Get accumulated fees for admin and manager.
+   */
+  async getAccumulatedFees(vaultAddress: PublicKey): Promise<{
+    adminFees: BN;
+    managerFees: BN;
+  }> {
+    const [adminFees, managerFees] = await Promise.all([
+      this.sdk.getAccumulatedAdminFeesForVault(vaultAddress),
+      this.sdk.getAccumulatedManagerFeesForVault(vaultAddress),
+    ]);
+    return { adminFees, managerFees };
+  }
+
+  /**
+   * Get current share price (asset per LP token).
+   */
+  async getSharePrice(vaultAddress: PublicKey): Promise<number> {
+    return this.sdk.getCurrentAssetPerLpForVault(vaultAddress);
+  }
+
+  /**
+   * Get all pending withdrawals for a vault.
+   */
+  async getPendingWithdrawals(vaultAddress: PublicKey): Promise<any[]> {
+    return this.sdk.getAllPendingWithdrawalsForVault(vaultAddress);
+  }
+
+  /**
+   * Get pending withdrawal for a specific user.
+   */
+  async getPendingWithdrawalForUser(vaultAddress: PublicKey, userPubkey: PublicKey): Promise<any> {
+    return this.sdk.getPendingWithdrawalForUser(vaultAddress, userPubkey);
+  }
+
+  // ── Calculation Helpers ────────────────────────────────────────
+
+  /**
+   * Calculate LP tokens user would receive for a deposit amount.
+   */
+  async calculateLpForDeposit(vaultAddress: PublicKey, assetAmount: BN): Promise<BN> {
+    return this.sdk.calculateLpForDeposit(vaultAddress, assetAmount);
+  }
+
+  /**
+   * Calculate assets user would receive for burning LP tokens.
+   */
+  async calculateAssetsForWithdraw(vaultAddress: PublicKey, lpAmount: BN): Promise<BN> {
+    return this.sdk.calculateAssetsForWithdraw(vaultAddress, lpAmount);
+  }
+
+  /**
+   * Calculate LP tokens needed to withdraw a specific asset amount.
+   */
+  async calculateLpForWithdraw(vaultAddress: PublicKey, assetAmount: BN): Promise<BN> {
+    return this.sdk.calculateLpForWithdraw(vaultAddress, assetAmount);
+  }
+
+  // ── User Cancel & Instant Withdraw ─────────────────────────────
+
+  /**
+   * Cancel a pending withdrawal request.
+   */
+  async userCancelRequestWithdraw(
+    vaultAddress: PublicKey,
+    user: Keypair
+  ): Promise<string> {
+    logger.info("Voltr: user cancelling withdrawal request", {
+      vault: vaultAddress.toBase58().slice(0, 8),
+    });
+
+    const ix = await this.sdk.createCancelRequestWithdrawVaultIx({
+      userTransferAuthority: user.publicKey,
+      vault: vaultAddress,
+    });
+
+    const { blockhash } = await this.connection.getLatestBlockhash();
+    const message = new TransactionMessage({
+      payerKey: user.publicKey,
+      recentBlockhash: blockhash,
+      instructions: [ix],
+    }).compileToV0Message();
+
+    const tx = new VersionedTransaction(message);
+    tx.sign([user]);
+
+    const txSig = await this.connection.sendTransaction(tx);
+    logger.info("Voltr: cancel withdraw request tx sent", { txSig });
+    return txSig;
+  }
+
+  /**
+   * Instant withdraw from vault (no waiting period, may have higher fee).
+   */
+  async userInstantWithdraw(
+    vaultAddress: PublicKey,
+    amount: BN,
+    user: Keypair,
+    assetMint: PublicKey,
+    isAmountInLp: boolean = false,
+    isWithdrawAll: boolean = false,
+    assetTokenProgram: PublicKey = TOKEN_PROGRAM_ID
+  ): Promise<string> {
+    logger.info("Voltr: user instant withdrawing", {
+      vault: vaultAddress.toBase58().slice(0, 8),
+      amount: amount.toString(),
+    });
+
+    const ix = await this.sdk.createInstantWithdrawVaultIx(
+      { amount, isAmountInLp, isWithdrawAll },
+      {
+        userTransferAuthority: user.publicKey,
+        vault: vaultAddress,
+        vaultAssetMint: assetMint,
+        assetTokenProgram,
+      }
+    );
+
+    const { blockhash } = await this.connection.getLatestBlockhash();
+    const message = new TransactionMessage({
+      payerKey: user.publicKey,
+      recentBlockhash: blockhash,
+      instructions: [ix],
+    }).compileToV0Message();
+
+    const tx = new VersionedTransaction(message);
+    tx.sign([user]);
+
+    const txSig = await this.connection.sendTransaction(tx);
+    logger.info("Voltr: instant withdraw tx sent", { txSig });
+    return txSig;
+  }
+
+  // ── PDA Finders ────────────────────────────────────────────────
+
+  findVaultLpMint(vaultAddress: PublicKey): PublicKey {
+    return this.sdk.findVaultLpMint(vaultAddress);
+  }
+
+  findVaultAddresses(vaultAddress: PublicKey) {
+    return this.sdk.findVaultAddresses(vaultAddress);
+  }
+
+  findVaultStrategyAddresses(vaultAddress: PublicKey, strategy: PublicKey) {
+    return this.sdk.findVaultStrategyAddresses(vaultAddress, strategy);
+  }
+
+  findRequestWithdrawVaultReceipt(vaultAddress: PublicKey, user: PublicKey): PublicKey {
+    return this.sdk.findRequestWithdrawVaultReceipt(vaultAddress, user);
+  }
+
+  /**
+   * Expose the underlying SDK instance for advanced usage.
+   */
+  getSDK(): VoltrSDK {
+    return this.sdk;
+  }
 }

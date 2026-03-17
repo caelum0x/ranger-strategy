@@ -25,3 +25,8 @@ binance_trades_*.csv
 drift_funding_*.csv
 drift_trades_*.csv
 drift_lending_*.csv
+
+# Cloned plugin repos (reference code, not ours)
+src/plugins/kamino-scripts/
+src/plugins/trustful-scripts/
+src/plugins/voltr-drift-scripts/
