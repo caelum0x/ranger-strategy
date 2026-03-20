@@ -64,6 +64,9 @@ import {
 import { RaydiumLPStrategy } from "./raydium-lp";
 import { GridOrderStrategy } from "./grid-orders";
 import { OracleArbStrategy } from "./oracle-arb";
+import { CapitalRampManager } from "./capital-ramp";
+import { SlippageGuard } from "./slippage-guard";
+import { VenueHealthMonitor } from "./venue-health";
 import { BN } from "@drift-labs/sdk";
 
 export class StrategyEngine {
@@ -173,6 +176,25 @@ export class StrategyEngine {
   private oracleArbStrategy: OracleArbStrategy | null = null;
   /** MCP tool server for AI agent integration */
   private mcpServer: RangerMCPServer = new RangerMCPServer();
+
+  // ── $500K Hardening Modules ──
+
+  /** Phased capital deployment — ramps from 10% to 100% over configured days */
+  private capitalRamp: CapitalRampManager = new CapitalRampManager({
+    rampDays: config.capitalRampDays,
+    disabled: config.capitalRampDisabled,
+  });
+  /** Per-asset slippage guard — tier-based limits + DLOB depth checks */
+  private slippageGuard: SlippageGuard = new SlippageGuard({
+    tier1MaxSlippageBps: config.tier1MaxSlippageBps,
+    tier2MaxSlippageBps: config.tier2MaxSlippageBps,
+    tier2MaxDepthFraction: config.tier2MaxDepthFraction,
+  });
+  /** Venue health monitor — tracks Drift/Binance uptime + failover */
+  private venueHealth: VenueHealthMonitor = new VenueHealthMonitor({
+    rpcTimeoutMs: config.venueRpcTimeoutMs,
+    maxOracleAgeSeconds: config.venueMaxOracleAgeSeconds,
+  });
 
   constructor(
     drift: DriftManager,
@@ -856,8 +878,27 @@ export class StrategyEngine {
   async runCycle(): Promise<void> {
     logger.info("=== Strategy cycle starting ===");
 
+    // 0. Log capital ramp status
+    const rampStatus = this.capitalRamp.getStatus();
+    if (!rampStatus.fullyDeployed) {
+      logger.info(
+        `Capital ramp: day ${rampStatus.elapsedDays}, tier ${rampStatus.currentTier}`
+      );
+    }
+
     // 1. Update state
-    await this.refreshState();
+    try {
+      await this.refreshState();
+      this.venueHealth.recordDriftCall(true);
+    } catch (err) {
+      this.venueHealth.recordDriftCall(false);
+      logger.error("State refresh failed — Drift RPC issue?", { error: String(err) });
+      if (this.venueHealth.isDriftDown()) {
+        logger.error("Drift venue DOWN — skipping cycle");
+        return;
+      }
+      throw err;
+    }
 
     // 2. Check risk — emergency unwind if needed
     if (this.riskManager.shouldEmergencyUnwind(this.state)) {
@@ -876,7 +917,7 @@ export class StrategyEngine {
       return;
     }
 
-    // 3.5. Circuit breaker check
+    // 3.5. Circuit breaker check (now includes venue health)
     const breakerCheck = this.circuitBreaker.check({
       equity: this.state.totalCapital.add(this.state.totalPnl).toNumber(),
       dailyPnL: this.state.totalPnl.toNumber(),
@@ -1112,7 +1153,7 @@ export class StrategyEngine {
 
     // 5. Generate trade signals (new entries + rebalances)
     this.tradeLogger.setCycle(this.state.cycleCount);
-    const signals = [...positionSignals, ...this.generateSignals(driftRates, binanceRates, borrowRates)];
+    const signals = [...positionSignals, ...(await this.generateSignals(driftRates, binanceRates, borrowRates))];
 
     // Log all generated signals
     for (const signal of signals) {
@@ -1372,11 +1413,11 @@ export class StrategyEngine {
     return signals;
   }
 
-  generateSignals(
+  async generateSignals(
     driftRates: FundingRate[],
     binanceRates: FundingRate[],
     borrowRates: Map<string, number> = new Map()
-  ): TradeSignal[] {
+  ): Promise<TradeSignal[]> {
     const signals: TradeSignal[] = [];
     const isDriftOnly = config.strategyMode === "drift-only";
     const isDriftBear = this.isDriftBearMode();
@@ -1572,11 +1613,32 @@ export class StrategyEngine {
 
     // Open positions for attractive assets
     // As vault manager: reserve liquidity for pending withdrawals
-    const { deployable: deployableCapital } = this.vaultPerf.getDeployableCapital(
+    const { deployable: rawDeployable } = this.vaultPerf.getDeployableCapital(
       this.state.totalCapital,
       this.state.idleCapital,
       this.pendingWithdrawals
     );
+
+    // Apply capital ramp — phases in from 10% to 100% over configured days
+    const pnlFraction = this.state.totalPnl.div(
+      Decimal.max(this.state.totalCapital, new Decimal(1))
+    ).toNumber();
+    const { capped: deployableCapital, fraction: rampFraction } =
+      this.capitalRamp.applyRamp(rawDeployable, pnlFraction);
+    if (rampFraction < 1) {
+      logger.info(
+        `Capital ramp: ${(rampFraction * 100).toFixed(0)}% deployed ($${deployableCapital.toFixed(0)} of $${rawDeployable.toFixed(0)})`
+      );
+    }
+
+    // Block new entries if Drift venue is degraded/down
+    if (this.venueHealth.shouldBlockNewEntries()) {
+      const snapshot = this.venueHealth.getSnapshot("drift");
+      logger.warn(
+        `Venue health blocking new entries: ${snapshot.details}`
+      );
+      return signals;
+    }
 
     const allowNewEntries = !(
       indexerDecision &&
@@ -1679,6 +1741,27 @@ export class StrategyEngine {
         }
 
         if (positionSize.gte(new Decimal(5))) {
+          // Slippage guard: check DLOB depth for thin markets (Tier 2)
+          const slippageCheck = await this.slippageGuard.checkBeforeTrade(
+            ranked.asset,
+            ranked.perpSide,
+            positionSize.toNumber()
+          );
+          if (!slippageCheck.allowed) {
+            logger.warn(
+              `Slippage guard blocked ${ranked.asset}: ${slippageCheck.reason}`
+            );
+            continue;
+          }
+
+          // Skip assets with stale oracles (venue health)
+          if (this.venueHealth.isOracleStale(ranked.asset)) {
+            logger.warn(
+              `Venue health: skipping ${ranked.asset} — oracle stale`
+            );
+            continue;
+          }
+
           const premium = ranked.onChainAnalysis
             ? ` | premium: ${ranked.onChainAnalysis.premium.mul(100).toFixed(3)}%`
             : "";
@@ -1715,6 +1798,19 @@ export class StrategyEngine {
   }
 
   async executeSignal(signal: TradeSignal): Promise<void> {
+    // Venue health: check if we should failover perp venue
+    const hasBinance = this.binance !== null;
+    const venueSelection = this.venueHealth.selectPerpVenue(
+      signal.perpVenue,
+      hasBinance
+    );
+    if (venueSelection.failover) {
+      logger.warn(
+        `Venue failover for ${signal.asset}: ${signal.perpVenue} → ${venueSelection.venue} (${venueSelection.reason})`
+      );
+      signal = { ...signal, perpVenue: venueSelection.venue };
+    }
+
     logger.info(`Executing signal: ${signal.action} ${signal.asset}`, {
       signal: {
         asset: signal.asset,
@@ -1801,7 +1897,17 @@ export class StrategyEngine {
         default:
           logger.warn(`Unknown signal action: ${signal.action}`);
       }
+      // Record successful tx for venue health tracking
+      this.venueHealth.recordTxResult(true);
+      if (signal.perpVenue === "drift") {
+        this.venueHealth.recordDriftCall(true);
+      }
     } catch (err: any) {
+      // Record failed tx for venue health tracking
+      this.venueHealth.recordTxResult(false);
+      if (signal.perpVenue === "drift") {
+        this.venueHealth.recordDriftCall(false);
+      }
       this.tradeLogger.logFailure(signal.asset, signal.action, err.message || String(err));
       logger.error(`Failed to execute signal for ${signal.asset}`, {
         error: err,

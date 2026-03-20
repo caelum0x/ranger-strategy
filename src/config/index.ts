@@ -191,6 +191,26 @@ export const config = {
   /** Relax delta-neutrality checks for devnet (spot oracles are stale) */
   relaxDeltaChecks: process.env.RELAX_DELTA_CHECKS === "true",
 
+  // Capital Ramp
+  /** Number of days to ramp from 10% to 100% deployment (0 = disabled) */
+  capitalRampDays: parseInt(process.env.CAPITAL_RAMP_DAYS || "10"),
+  /** Disable ramp and deploy full capital immediately */
+  capitalRampDisabled: process.env.CAPITAL_RAMP_DISABLED === "true",
+
+  // Slippage Guard
+  /** Tier 1 (SOL/BTC/ETH) max slippage in bps */
+  tier1MaxSlippageBps: parseInt(process.env.TIER1_MAX_SLIPPAGE_BPS || "80"),
+  /** Tier 2 (JTO/INJ/etc.) max slippage in bps */
+  tier2MaxSlippageBps: parseInt(process.env.TIER2_MAX_SLIPPAGE_BPS || "150"),
+  /** Tier 2 max fraction of DLOB depth per order */
+  tier2MaxDepthFraction: parseFloat(process.env.TIER2_MAX_DEPTH_FRACTION || "0.15"),
+
+  // Venue Health
+  /** Drift RPC timeout in ms */
+  venueRpcTimeoutMs: parseInt(process.env.VENUE_RPC_TIMEOUT_MS || "10000"),
+  /** Max oracle age in seconds before flagging venue health */
+  venueMaxOracleAgeSeconds: parseInt(process.env.VENUE_MAX_ORACLE_AGE_SECONDS || "60"),
+
   // Token mints
   mints: {
     USDC: "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",

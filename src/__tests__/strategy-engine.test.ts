@@ -252,11 +252,11 @@ describe("StrategyEngine", () => {
   // ── generateSignals ────────────────────────────────────────────────
 
   describe("generateSignals", () => {
-    it("opens positions when funding is attractive (positive)", () => {
+    it("opens positions when funding is attractive (positive)", async () => {
       const driftRates = [makeFundingRate("SOL", "drift", 0.10)];
       const binanceRates: FundingRate[] = [];
 
-      const signals = engine.generateSignals(driftRates, binanceRates);
+      const signals = await engine.generateSignals(driftRates, binanceRates);
 
       const openSignals = signals.filter((s) => s.action === "open");
       expect(openSignals.length).toBeGreaterThan(0);
@@ -268,12 +268,12 @@ describe("StrategyEngine", () => {
       expect(openSignals[0].perpSide).toBe("short");
     });
 
-    it("opens positions for negative funding (bi-directional)", () => {
+    it("opens positions for negative funding (bi-directional)", async () => {
       // Negative funding → long perp (longs collect) + short spot
       const driftRates = [makeFundingRate("ETH", "drift", -0.12)];
       const binanceRates: FundingRate[] = [];
 
-      const signals = engine.generateSignals(driftRates, binanceRates);
+      const signals = await engine.generateSignals(driftRates, binanceRates);
 
       const openSignals = signals.filter(
         (s) => s.action === "open" && s.asset === "ETH"
@@ -283,7 +283,7 @@ describe("StrategyEngine", () => {
       expect(openSignals[0].spotSide).toBe("short");
     });
 
-    it("closes positions when funding becomes unattractive", () => {
+    it("closes positions when funding becomes unattractive", async () => {
       (engine as any).state.positions = [
         makePosition({ asset: "SOL", venue: "drift" }),
       ];
@@ -293,7 +293,7 @@ describe("StrategyEngine", () => {
       const driftRates = [makeFundingRate("SOL", "drift", 0.001)];
       const binanceRates: FundingRate[] = [];
 
-      const signals = engine.generateSignals(driftRates, binanceRates);
+      const signals = await engine.generateSignals(driftRates, binanceRates);
 
       const closeSignals = signals.filter((s) => s.action === "close");
       expect(closeSignals.length).toBeGreaterThan(0);
@@ -301,7 +301,7 @@ describe("StrategyEngine", () => {
       expect(closeSignals[0].reason).toContain("no longer attractive");
     });
 
-    it("generates rebalance signal on direction flip", () => {
+    it("generates rebalance signal on direction flip", async () => {
       // We have a long spot (= short perp) position on SOL
       (engine as any).state.positions = [
         makePosition({
@@ -317,7 +317,7 @@ describe("StrategyEngine", () => {
       const driftRates = [makeFundingRate("SOL", "drift", -0.10)];
       const binanceRates: FundingRate[] = [];
 
-      const signals = engine.generateSignals(driftRates, binanceRates);
+      const signals = await engine.generateSignals(driftRates, binanceRates);
 
       const rebalanceSignals = signals.filter((s) => s.action === "rebalance");
       expect(rebalanceSignals.length).toBe(1);
@@ -327,26 +327,26 @@ describe("StrategyEngine", () => {
       expect(rebalanceSignals[0].reason).toContain("Direction flip");
     });
 
-    it("does not open when idle capital is below minimum", () => {
+    it("does not open when idle capital is below minimum", async () => {
       (engine as any).state.idleCapital = new Decimal("3");
 
       const driftRates = [makeFundingRate("SOL", "drift", 0.10)];
       const binanceRates: FundingRate[] = [];
 
-      const signals = engine.generateSignals(driftRates, binanceRates);
+      const signals = await engine.generateSignals(driftRates, binanceRates);
 
       const openSignals = signals.filter((s) => s.action === "open");
       expect(openSignals).toHaveLength(0);
     });
 
-    it("ranks assets by absolute yield for bi-directional", () => {
+    it("ranks assets by absolute yield for bi-directional", async () => {
       const driftRates = [
         makeFundingRate("SOL", "drift", 0.08),    // 8% positive
         makeFundingRate("BTC", "drift", -0.15),   // 15% negative (higher abs)
         makeFundingRate("ETH", "drift", 0.06),    // 6% positive
       ];
 
-      const signals = engine.generateSignals(driftRates, []);
+      const signals = await engine.generateSignals(driftRates, []);
 
       const openSignals = signals.filter((s) => s.action === "open");
       // BTC should be first (highest |yield|), then SOL, then ETH
@@ -357,7 +357,7 @@ describe("StrategyEngine", () => {
       expect(openSignals[1].perpSide).toBe("short"); // positive funding → short perp
     });
 
-    it("suppresses new opens when the indexer says hold with high confidence", () => {
+    it("suppresses new opens when the indexer says hold with high confidence", async () => {
       engine.setIndexerContext({
         decision: {
           action: "hold",
@@ -368,19 +368,19 @@ describe("StrategyEngine", () => {
       });
 
       const driftRates = [makeFundingRate("SOL", "drift", 0.10)];
-      const signals = engine.generateSignals(driftRates, []);
+      const signals = await engine.generateSignals(driftRates, []);
 
       expect(signals.filter((s) => s.action === "open")).toHaveLength(0);
     });
 
-    it("caps driftbear entries at the target neutral allocation", () => {
+    it("caps driftbear entries at the target neutral allocation", async () => {
       (engine as any).state.strategyProfile = "driftbear-neutral-farmer";
       (engine as any).riskManager.calculatePositionSize.mockReturnValue(
         new Decimal("1000")
       );
 
       const driftRates = [makeFundingRate("SOL", "drift", 0.10)];
-      const signals = engine.generateSignals(driftRates, []);
+      const signals = await engine.generateSignals(driftRates, []);
       const openSignals = signals.filter((s) => s.action === "open");
 
       // In driftbear mode, entries are capped at neutral allocation (50%)

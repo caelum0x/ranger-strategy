@@ -98,6 +98,37 @@ The strategy engine runs off-chain as an autonomous agent with delegate authorit
 - Real-time health ratio monitoring
 - Emergency unwind triggers if delta exceeds threshold
 
+### Capital Ramp (Phased Deployment)
+- New vaults ramp from 10% → 25% → 50% → 75% → 100% over 10 days
+- Validates fills, slippage, and funding impact at each tier before scaling
+- Accelerates to next tier if cumulative PnL > +0.5%
+- Resets on circuit breaker trip; can be disabled for experienced operators
+- Config: `CAPITAL_RAMP_DAYS`, `CAPITAL_RAMP_DISABLED`
+
+### Slippage Guard (Per-Asset Liquidity Tiers)
+| Tier | Assets | Max Slippage | Depth Check |
+|------|--------|-------------|-------------|
+| 1 | SOL, BTC, ETH | 80 bps | No (deep markets) |
+| 2 | JTO, INJ, etc. | 150 bps | Yes — DLOB depth within 50bps of oracle |
+
+- Tier 2 orders blocked if they exceed 15% of available DLOB depth
+- Tracks actual execution slippage per asset; alerts on trends
+- Unknown assets default to Tier 2 (conservative)
+- Config: `TIER1_MAX_SLIPPAGE_BPS`, `TIER2_MAX_SLIPPAGE_BPS`, `TIER2_MAX_DEPTH_FRACTION`
+
+### Venue Health Monitor (Drift Failover)
+| Status | Trigger | Action |
+|--------|---------|--------|
+| HEALTHY | 0 consecutive failures | Normal operation |
+| WARNING | 2+ failures | Log + alert, continue trading |
+| DEGRADED | 5+ failures | Block new entries, keep existing positions |
+| DOWN | 10+ failures | Skip cycle, attempt Binance failover |
+
+- Tracks Drift RPC responsiveness, oracle freshness, tx success rate
+- Auto-routes perp leg to Binance when Drift is DEGRADED/DOWN
+- Per-asset oracle staleness tracking — stale assets excluded from trading
+- Config: `VENUE_RPC_TIMEOUT_MS`, `VENUE_MAX_ORACLE_AGE_SECONDS`
+
 ---
 
 ## Vault Configuration
@@ -179,6 +210,10 @@ Strategy Engine (src/strategy/engine.ts)
 │   ├── Lending Rate Scanner (Drift/Lulo/Sanctum)
 │   ├── LP Scanner (Orca/Meteora/Raydium)
 │   └── Insurance Fund Staking
+├── $500K Hardening
+│   ├── Capital Ramp (src/strategy/capital-ramp.ts)
+│   ├── Slippage Guard (src/strategy/slippage-guard.ts)
+│   └── Venue Health Monitor (src/strategy/venue-health.ts)
 └── AI Layer
     ├── Regime Detection (OpenRouter LLM)
     ├── Position Sizing Advisor

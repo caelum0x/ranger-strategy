@@ -302,6 +302,29 @@ On circuit breaker trigger:
 4. Alert vault manager
 5. Requires manual restart
 
+## 3.5 Scale-Ready Risk Controls ($500K+)
+
+### 3.5.1 Phased Capital Deployment
+
+New vaults ramp in over 10 days:
+
+$$D_t = C_{total} \times \phi(t), \quad \phi(t) \in \{0.10, 0.25, 0.50, 0.75, 1.00\}$$
+
+Acceleration: advance to next tier if $PnL_{cumulative} > 0.5\%$
+
+### 3.5.2 Per-Asset Liquidity Tiers
+
+| Tier | Assets | Max Slippage | Depth Check |
+|------|--------|-------------|-------------|
+| 1 | SOL, BTC, ETH | 80 bps | Not required |
+| 2 | JTO, INJ | 150 bps | DLOB depth within 50bps |
+
+Order blocked if: $Size > 0.15 \times Depth_{50bps}$
+
+### 3.5.3 Venue Health Monitor
+
+Drift RPC/oracle health tracked in real-time. Automatic perp leg failover to Binance when Drift is degraded (5+ consecutive RPC failures) or down (10+).
+
 ---
 
 # IV. Performance Attribution
@@ -554,7 +577,8 @@ This vault provides institutional-grade yield generation through systematic fund
 - **3-Year Proven Edge:** +45.76% CAGR (ideal) / +44.88% CAGR (realistic with 3.4x higher costs)
 - **Risk-Adjusted Returns:** Sharpe 9.58, Sortino 121.54, 0.32% max drawdown
 - **Ultra-Low Costs:** 0.9% cost/income ratio — 99.1% of gross funding flows to vault equity
-- **Production Ready:** 83 source files, 32 scripts, crash recovery, Telegram alerts, Helius webhooks
+- **Production Ready:** 164 source files, 32 scripts, 23 test suites (216 tests), crash recovery, Telegram alerts, Helius webhooks
+- **$500K Ready:** Phased capital ramp, per-asset liquidity tiers with DLOB depth gating, Drift/Binance venue failover
 - **On-Chain Verified:** Custom Anchor adaptor deployed on devnet (`4JW3mvrVGXpZZ3jxjw16o4REHnWuEGkbvLkPBg1RbFbQ`) with verified CPI to Drift
 
 ## What Makes This Different
@@ -564,10 +588,11 @@ Delta-neutral funding capture is a known strategy. Our differentiation is the **
 | Layer | What | Files |
 |---|---|---|
 | **On-Chain** | 1,059-line Anchor CPI adaptor, deployed + verified on devnet | `programs/driftbear_custom_adaptor/` |
-| **5 Alpha Sources** | Funding + JIT sniper fills + DLOB filling + FloatingMaker + LST yield | `jit-maker.ts`, `filler.ts`, `floating-maker.ts`, `lst.ts` |
+| **7 Alpha Sources** | Funding + JIT fills + DLOB filling + FloatingMaker + Grid Orders + Oracle Arb + LST yield | `jit-maker.ts`, `filler.ts`, `floating-maker.ts`, `grid-orders.ts`, `oracle-arb.ts`, `lst.ts` |
 | **AI Regime Detection** | LLM (Claude) classifies market regime, recommends per-asset allocation | `strategy-advisor.ts` |
 | **Cross-Venue Intelligence** | Ranger Data API: funding arbs, liquidation capitulation signals, OI-weighted rates | `data-api.ts` |
 | **Risk Management** | 6-trigger circuit breaker, oracle guard, 48h flip protection, Jito MEV bundles, tx simulation | `circuit-breaker.ts`, `executor.ts` |
+| **$500K Hardening** | Phased capital ramp (10%→100% over 10d), per-asset slippage tiers + DLOB depth checks, venue failover | `capital-ramp.ts`, `slippage-guard.ts`, `venue-health.ts` |
 | **19 Protocol Plugins** | Drift, Raydium, Orca, Sanctum, Lulo, Meteora, Voltr, Flash, deBridge, etc. | `src/plugins/` |
 
 ### Stress-Test Results

@@ -1,8 +1,8 @@
 # Ranger Build-A-Bear Hackathon Plan
 
 **Deadline:** April 6, 2026
-**Today:** March 17, 2026
-**Days remaining:** 20
+**Today:** March 20, 2026
+**Days remaining:** 17
 
 ---
 
@@ -12,7 +12,7 @@ We have a LOT of code (150K+ lines) but need to be clear about what's real vs re
 
 | Category | Files | Lines | Status |
 |---|---|---|---|
-| Strategy engine + modules | 161 TS files | 46K | Working, tested (181/181 pass) |
+| Strategy engine + modules | 164 TS files | 47K | Working, tested (216/216 pass) |
 | Scripts (vault, lending, LP, ops) | 107 TS files | 15K | Ready to run |
 | Rust programs (on-chain) | 4 programs | 17K | 1 deployed on devnet, 1 = Drift reference |
 | Plugin reference code | ~900 files | ~35K | Most ported, rest = SDK reference |
@@ -22,7 +22,7 @@ We have a LOT of code (150K+ lines) but need to be clear about what's real vs re
 - `npm run backtest:v2-s3` — 3-year backtest on real Drift S3 data
 - `npm run devnet:dry-run` — end-to-end pipeline test on devnet
 - `npm run rebalance-bot` — Voltr-compatible rebalance loop
-- 20/20 test suites, 181/181 tests pass, zero TS errors
+- 23/23 test suites, 216/216 tests pass, zero TS errors
 
 ### What's NOT Working
 - No mainnet trades (only devnet adaptor txs)
@@ -215,17 +215,18 @@ Withdraw tx:   vp7hBrvnCqL5QV...
 
 | # | Task | Time | Status |
 |---|---|---|---|
-| 6 | Confirm 181/181 tests pass | 1 min | DONE |
-| 7 | Clean up submission docs | 30 min | PARTIALLY DONE |
+| 6 | Confirm 216/216 tests pass | 1 min | DONE |
+| 7 | Clean up submission docs | 30 min | DONE |
 | 8 | Create strategies.json for vault | 5 min | DONE |
 | 9 | Document on-chain adaptor | 30 min | DONE |
+| 10 | $500K hardening (capital ramp, slippage guard, venue failover) | 2 hours | DONE |
 
 ### Nice to Have
 
 | # | Task | Time | Status |
 |---|---|---|---|
-| 10 | Try mainnet with $10-20 for real transactions | 1 hour | NOT DONE |
-| 11 | Deploy custom_adaptor_completed to devnet | 30 min | NOT DONE |
+| 11 | Try mainnet with $10-20 for real transactions | 1 hour | NOT DONE |
+| 12 | Deploy custom_adaptor_completed to devnet | 30 min | NOT DONE |
 
 ---
 
@@ -247,10 +248,13 @@ Withdraw tx:   vp7hBrvnCqL5QV...
 - `programs/custom_adaptor_completed/src/lib.rs` — Workshop 2 completed solution
 - `Anchor.toml` — program IDs + devnet config
 
-### Risk:
+### Risk & $500K Hardening:
 - `src/strategy/circuit-breaker.ts` — 6-trigger emergency stop
 - `src/risk/manager.ts` — health/drawdown/leverage
 - `src/risk/oracle-guard.ts` — oracle staleness detection
+- `src/strategy/capital-ramp.ts` — phased deployment (10% → 100% over 10 days)
+- `src/strategy/slippage-guard.ts` — per-asset liquidity tiers + DLOB depth checks
+- `src/strategy/venue-health.ts` — Drift uptime tracking + Binance failover
 
 ### Documentation:
 - `docs/ON_CHAIN_PROGRAMS.md` — deployed programs + verified txs

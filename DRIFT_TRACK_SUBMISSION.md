@@ -656,9 +656,11 @@ $$\sum_{t} F_t^{on-chain} \approx \sum_{t} F_t^{API}$$
 This strategy leverages Drift Protocol's unique features to capture funding yield systematically:
 
 - **100% Drift-Native:** Oracle-offset orders, DLOB integration, spot-perp cross-margin, JIT auction fills, insurance fund staking
-- **3-Year Backtest Proven:** +45.76% CAGR (ideal) / ~+30% CAGR (realistic), 0.32% max drawdown, Sharpe 9.58
+- **3-Year Backtest Proven:** +45.76% CAGR (ideal) / +44.88% CAGR (realistic), 0.32% max drawdown, Sharpe 9.58
 - **Risk-Controlled:** 6-trigger circuit breaker, oracle guard, 48h flip protection, auto-derisk
+- **$500K Ready:** Phased capital ramp, per-asset DLOB depth gating for thin markets (JTO/INJ), Drift venue health monitor with failover
 - **On-Chain Anchor Program:** Custom CPI adaptor (`4JW3mvrVGXpZZ3jxjw16o4REHnWuEGkbvLkPBg1RbFbQ`) deployed and verified on devnet
+- **216 Tests Passing:** 23 test suites covering strategy engine, risk management, execution pricing, slippage guard, venue health, capital ramp
 
 ## What Makes This a Full Drift Integration
 
@@ -673,6 +675,11 @@ Not just basic SDK calls — we ported production logic from Drift's own repos:
 | **Event Stream** (694 lines) | `events-publisher/` | WebSocket + Yellowstone gRPC, structured FillEvent/FundingEvent types |
 | **DLOB Orderbook** (252 lines) | `drift-plugin/drift.ts` | L2 orderbook fetch, price impact estimation, live TWAP funding rates, lending APY |
 | **Insurance Fund** (150 lines) | `drift-plugin/drift.ts` | Stake/unstake from Drift insurance fund for additional yield |
+| **Grid Orders** (228 lines) | Drift Workshop | Scale buy/sell orders at oracle offsets — captures volatility + maker rebates |
+| **Oracle Arb** (266 lines) | Drift Workshop | Mark-oracle divergence capture with Pyth cross-validation |
+| **Slippage Guard** (250 lines) | Original | Per-asset DLOB depth checks before Tier 2 (JTO/INJ) trades |
+| **Venue Health** (290 lines) | Original | Drift RPC/oracle health tracking, auto-failover to Binance |
+| **Capital Ramp** (140 lines) | Original | Phased deployment 10%→100% over 10 days for safe scaling |
 
 ### Drift Features Used
 
@@ -685,6 +692,8 @@ Not just basic SDK calls — we ported production logic from Drift's own repos:
 | Spot lending | Idle USDC earns deposit rate (~4-8% APY) while waiting for signals |
 | Insurance fund | Optional staking for additional protocol revenue share |
 | vAMM + DLOB hybrid | Price impact estimation via L2 orderbook before every trade |
+| Grid orders | Oracle-offset buy/sell grids for passive spread capture |
+| DLOB depth gating | Pre-trade liquidity check for thin markets — blocks oversized orders |
 
 ### Stress-Test Results
 
