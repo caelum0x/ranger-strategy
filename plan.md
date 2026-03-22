@@ -234,7 +234,7 @@ Withdraw tx:   vp7hBrvnCqL5QV...
 | 2 | Run devnet dry run | 30 min | DONE (live tx on devnet) |
 | 3 | Build grid orders + oracle arb | 2 hours | DONE (from Drift Workshop) |
 | 4 | Record 3-min demo video | 1-2 hours | NOT DONE |
-| 5 | Deploy vault on mainnet + share in TG | 1 hour | NOT DONE |
+| 5 | Deploy vault on mainnet + share in TG | 1 hour | DONE (Vault: GWawesKM7..., Drift Vault: HtMPaMXzJ..., agent live, JIT fill verified) |
 | 6 | Submit on Superteam Earn (both tracks) | 30 min | NOT DONE |
 
 ### Should Do
