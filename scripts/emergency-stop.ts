@@ -17,7 +17,6 @@ const isDevnet = process.argv.includes("--devnet");
 const isDryRun = process.argv.includes("--dry-run");
 dotenv.config({ path: isDevnet ? ".env.devnet" : ".env.mainnet" });
 
-import { Connection, Keypair, PublicKey } from "@solana/web3.js";
 import {
   DriftClient,
   Wallet,
@@ -33,6 +32,7 @@ import {
   getTokenAmount,
   QUOTE_SPOT_MARKET_INDEX,
 } from "@drift-labs/sdk";
+import { Connection, Keypair, PublicKey } from "@solana/web3.js";
 import * as fs from "fs";
 
 const RED = "\x1b[31m";
@@ -78,25 +78,39 @@ async function main() {
   }
 
   const connection = new Connection(rpcUrl, "confirmed");
-  const wallet = new Wallet(keypair);
+  const wallet = new Wallet(keypair as any);
 
   // Initialize Drift client
-  const accountLoader = new BulkAccountLoader(connection, "confirmed", 1000);
-  const driftClient = new DriftClient({
-    connection,
+  const accountLoader = new BulkAccountLoader(connection as any, "confirmed", 1000);
+  const vaultPubkey = process.env.DRIFT_VAULT_PUBKEY;
+  const driftClientOpts: any = {
+    connection: connection as any,
     wallet,
     env,
     accountSubscription: { type: "polling", accountLoader },
-  });
+  };
 
-  await driftClient.subscribe();
-  console.log(`${GREEN}Drift client connected${RESET}\n`);
-
-  // Check if we're operating as a vault delegate
-  const vaultPubkey = process.env.DRIFT_VAULT_PUBKEY;
+  // If operating as vault delegate, set authority to vault address
   if (vaultPubkey) {
     console.log(`${CYAN}Vault mode: ${vaultPubkey}${RESET}`);
+    driftClientOpts.authority = new PublicKey(vaultPubkey);
+    driftClientOpts.activeSubAccountId = 0;
+    driftClientOpts.authoritySubAccountMap = new Map([
+      [vaultPubkey, [0]],
+    ]);
   }
+
+  const driftClient = new DriftClient(driftClientOpts);
+
+  await driftClient.subscribe();
+
+  if (vaultPubkey) {
+    try {
+      await driftClient.addUser(0, new PublicKey(vaultPubkey));
+    } catch {}
+  }
+
+  console.log(`${GREEN}Drift client connected${RESET}\n`);
 
   // 1. Cancel all open orders
   console.log(`${BOLD}Step 1: Cancelling all open orders...${RESET}`);
@@ -106,7 +120,7 @@ async function main() {
 
   if (openOrders.length > 0 && !isDryRun) {
     try {
-      await driftClient.cancelAllOrders();
+      await driftClient.cancelOrders();
       console.log(`  ${GREEN}All orders cancelled${RESET}`);
     } catch (err: any) {
       console.error(`  ${RED}Failed to cancel orders: ${err.message}${RESET}`);
@@ -120,7 +134,7 @@ async function main() {
 
   for (const pos of perpPositions) {
     const baseAmount = convertToNumber(pos.baseAssetAmount, BASE_PRECISION);
-    const isLong = pos.baseAssetAmount.gt(pos.baseAssetAmount.mul(-1).add(pos.baseAssetAmount)); // baseAssetAmount > 0
+    const isLong = baseAmount > 0;
     const direction = baseAmount > 0 ? "LONG" : "SHORT";
     const absAmount = Math.abs(baseAmount);
 
@@ -156,6 +170,7 @@ async function main() {
 
   for (const pos of nonUsdcSpotPositions) {
     const spotMarket = driftClient.getSpotMarketAccount(pos.marketIndex);
+    if (!spotMarket) continue;
     const tokenAmount = getTokenAmount(
       pos.scaledBalance,
       spotMarket,
@@ -163,9 +178,8 @@ async function main() {
     );
     const isDeposit = isVariant(pos.balanceType, "deposit");
     const balanceLabel = isDeposit ? "DEPOSIT" : "BORROW";
-    const precision = new (await import("@drift-labs/sdk")).BN(
-      10 ** spotMarket.decimals
-    );
+    const { BN } = await import("@drift-labs/sdk");
+    const precision = new BN(10 ** spotMarket.decimals);
     const humanAmount = convertToNumber(tokenAmount, precision);
 
     console.log(
@@ -238,12 +252,14 @@ async function main() {
         const usdcSpotMarket = driftClient.getSpotMarketAccount(
           QUOTE_SPOT_MARKET_INDEX
         );
+        if (!usdcSpotMarket) throw new Error("USDC spot market not found");
         const usdcTokenAmount = getTokenAmount(
           usdcSpotPosition.scaledBalance,
           usdcSpotMarket,
           usdcSpotPosition.balanceType
         );
-        const usdcPrecision = new (await import("@drift-labs/sdk")).BN(1e6);
+        const { BN: BN2 } = await import("@drift-labs/sdk");
+        const usdcPrecision = new BN2(1e6);
         const humanUsdc = convertToNumber(usdcTokenAmount, usdcPrecision);
         console.log(`  USDC deposit balance: $${humanUsdc.toFixed(2)}`);
 
@@ -267,13 +283,14 @@ async function main() {
 
   // 4. Show final state
   console.log(`\n${BOLD}Step 4: Final state${RESET}`);
+  const { BN: BN3 } = await import("@drift-labs/sdk");
   const freeCollateral = convertToNumber(
     user.getFreeCollateral(),
-    new (await import("@drift-labs/sdk")).BN(1e6)
+    new BN3(1e6)
   );
   const totalCollateral = convertToNumber(
     user.getTotalCollateral(),
-    new (await import("@drift-labs/sdk")).BN(1e6)
+    new BN3(1e6)
   );
   const remainingOrders = user.getOpenOrders().length;
   const remainingPerps = user.getActivePerpPositions().length;

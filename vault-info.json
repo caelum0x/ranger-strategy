@@ -1,0 +1,11 @@
+{
+  "network": "mainnet",
+  "vaultAddress": "GWawesKM7xUqQF9d1E1phGWV2KMcvqYZFP1pAEXKJagk",
+  "adminAddress": "Aj28ULMXp3EiYjiXXxsFHU2rNGmcHj8zGgiz9uRtWo44",
+  "managerAddress": "Aj28ULMXp3EiYjiXXxsFHU2rNGmcHj8zGgiz9uRtWo44",
+  "assetMint": "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",
+  "name": "Delta-Neutral Funding Vault",
+  "description": "Delta-neutral funding capture + DLOB maker",
+  "txSignature": "2NXsRMjL2EQhDMpCRte66JAwtjip281XKGBqQhTAdsUmrkhRmdXfYfLsYNG78czrbvRXeqzYoCGAN4cShPR2h9AN",
+  "createdAt": "2026-03-22T16:42:39.639Z"
+}

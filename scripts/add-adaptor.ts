@@ -20,11 +20,7 @@
  *   ADMIN_KEYPAIR_PATH or ANCHOR_WALLET — admin keypair (only admin can add adaptors)
  *   HELIUS_RPC_URL or SOLANA_RPC_URL    — RPC endpoint
  */
-import {
-  VoltrClient,
-  LENDING_ADAPTOR_PROGRAM_ID,
-  DRIFT_ADAPTOR_PROGRAM_ID,
-} from "@voltr/vault-sdk";
+import { VoltrClient } from "@voltr/vault-sdk";
 import {
   Connection,
   Keypair,
@@ -40,8 +36,8 @@ dotenv.config();
 // ── Known adaptor program IDs (SDK exports + additional) ────────
 
 const KNOWN_ADAPTORS: Record<string, PublicKey> = {
-  lending: LENDING_ADAPTOR_PROGRAM_ID,
-  drift:   DRIFT_ADAPTOR_PROGRAM_ID,
+  lending: new PublicKey("aVoLTRCRt3NnnchvLYH6rMYehJHwM5m45RmLBZq7PGz"),
+  drift:   new PublicKey("EBN93eXs5fHGBABuajQqdsKRkCgaqtJa8vEFD6vKXiP"),
   kamino:  new PublicKey("to6Eti9CsC5FGkAtqiPphvKD2hiQiLsS8zWiDBqBPKR"),
   raydium: new PublicKey("A5a3Xo2JaKbXNShSHHP4Fe1LxcxNuCZs97gy3FJMSzkM"),
   jupiter: new PublicKey("EW35URAx3LiM13fFK3QxAXfGemHso9HWPixrv7YDY4AM"),

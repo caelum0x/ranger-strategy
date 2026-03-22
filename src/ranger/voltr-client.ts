@@ -87,16 +87,20 @@ export class VoltrClient {
 
     // Build deposit strategy instruction using SDK
     const ix = await this.sdk.createDepositStrategyIx(
-      amount,
       {
-        vault: vaultAddress,
-        strategy: strategyAddress,
-        manager: manager.publicKey,
-        assetMint,
-        assetTokenProgram,
+        depositAmount: amount,
+        instructionDiscriminator: additionalArgs.instructionDiscriminator,
+        additionalArgs: additionalArgs.additionalArgs || Buffer.alloc(0),
       },
-      remainingAccounts,
-      additionalArgs
+      {
+        manager: manager.publicKey,
+        vault: vaultAddress,
+        vaultAssetMint: assetMint,
+        strategy: strategyAddress,
+        assetTokenProgram,
+        adaptorProgram: remainingAccounts[0]?.pubkey || assetTokenProgram,
+        remainingAccounts,
+      }
     );
 
     // Build and send transaction
@@ -146,16 +150,20 @@ export class VoltrClient {
     const additionalArgs = apiData.additionalArgs || {};
 
     const ix = await this.sdk.createWithdrawStrategyIx(
-      amount,
       {
-        vault: vaultAddress,
-        strategy: strategyAddress,
-        manager: manager.publicKey,
-        assetMint,
-        assetTokenProgram,
+        withdrawAmount: amount,
+        instructionDiscriminator: additionalArgs.instructionDiscriminator,
+        additionalArgs: additionalArgs.additionalArgs || Buffer.alloc(0),
       },
-      remainingAccounts,
-      additionalArgs
+      {
+        manager: manager.publicKey,
+        vault: vaultAddress,
+        vaultAssetMint: assetMint,
+        strategy: strategyAddress,
+        assetTokenProgram,
+        adaptorProgram: remainingAccounts[0]?.pubkey || assetTokenProgram,
+        remainingAccounts,
+      }
     );
 
     const { blockhash } = await this.connection.getLatestBlockhash();
@@ -230,8 +238,8 @@ export class VoltrClient {
 
     const ix = await this.sdk.createDepositVaultIx(amount, {
       vault: vaultAddress,
-      userAuthority: user.publicKey,
-      assetMint,
+      userTransferAuthority: user.publicKey,
+      vaultAssetMint: assetMint,
       assetTokenProgram,
     });
 
@@ -266,12 +274,14 @@ export class VoltrClient {
       amount: amount.toString(),
     });
 
-    const ix = await this.sdk.createRequestWithdrawVaultIx(amount, {
-      vault: vaultAddress,
-      userAuthority: user.publicKey,
-      assetMint,
-      assetTokenProgram,
-    });
+    const ix = await this.sdk.createRequestWithdrawVaultIx(
+      { amount, isAmountInLp: false, isWithdrawAll: false },
+      {
+        payer: user.publicKey,
+        userTransferAuthority: user.publicKey,
+        vault: vaultAddress,
+      }
+    );
 
     const { blockhash } = await this.connection.getLatestBlockhash();
     const message = new TransactionMessage({
@@ -304,8 +314,8 @@ export class VoltrClient {
 
     const ix = await this.sdk.createWithdrawVaultIx({
       vault: vaultAddress,
-      userAuthority: user.publicKey,
-      assetMint,
+      userTransferAuthority: user.publicKey,
+      vaultAssetMint: assetMint,
       assetTokenProgram,
     });
 
@@ -365,9 +375,10 @@ export class VoltrClient {
   ): Promise<string> {
     const ix = await this.sdk.createHarvestFeeIx({
       vault: vaultAddress,
-      admin: admin.publicKey,
-      assetMint,
-      assetTokenProgram,
+      harvester: admin.publicKey,
+      vaultManager: admin.publicKey,
+      vaultAdmin: admin.publicKey,
+      protocolAdmin: admin.publicKey,
     });
 
     const { blockhash } = await this.connection.getLatestBlockhash();

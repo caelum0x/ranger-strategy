@@ -1,0 +1,5647 @@
+{
+  "version": "500k-scale-v1",
+  "dataSource": "Drift Data API — real on-chain funding rates (cached)",
+  "initialCapital": 500000,
+  "period": {
+    "start": "2023-03-01",
+    "end": "2026-03-15",
+    "days": "1110"
+  },
+  "parameters": {
+    "universe": [
+      {
+        "asset": "SOL",
+        "tier": 1,
+        "maxEquityPct": "25%",
+        "baseSlippage": "0.05%",
+        "marketImpactCoeff": 0.0002,
+        "maxOrderSizeUsd": "$500,000"
+      },
+      {
+        "asset": "BTC",
+        "tier": 1,
+        "maxEquityPct": "25%",
+        "baseSlippage": "0.05%",
+        "marketImpactCoeff": 0.0001,
+        "maxOrderSizeUsd": "$500,000"
+      },
+      {
+        "asset": "ETH",
+        "tier": 1,
+        "maxEquityPct": "15%",
+        "baseSlippage": "0.05%",
+        "marketImpactCoeff": 0.0002,
+        "maxOrderSizeUsd": "$500,000"
+      },
+      {
+        "asset": "JTO",
+        "tier": 2,
+        "maxEquityPct": "18%",
+        "baseSlippage": "0.25%",
+        "marketImpactCoeff": 0.0015,
+        "maxOrderSizeUsd": "$150,000"
+      },
+      {
+        "asset": "INJ",
+        "tier": 2,
+        "maxEquityPct": "17%",
+        "baseSlippage": "0.20%",
+        "marketImpactCoeff": 0.0012,
+        "maxOrderSizeUsd": "$200,000"
+      }
+    ],
+    "leverage": "2x",
+    "capitalRamp": [
+      "Day 0: 10%",
+      "Day 1: 25%",
+      "Day 3: 50%",
+      "Day 5: 75%",
+      "Day 7: 100%"
+    ],
+    "marketImpactModel": "√(orderSize / $1M) × coefficient"
+  },
+  "performance": {
+    "finalEquity": "$690,800",
+    "totalReturn": "+38.16%",
+    "cagr": "+11.22%",
+    "maxDrawdown": "0.32%",
+    "sharpeRatio": "8.65",
+    "sortinoRatio": "44.84",
+    "calmarRatio": "35.60",
+    "grossFunding": "$194,357",
+    "tradingFees": "$2,316",
+    "marketImpact": "$1,241",
+    "netPnL": "$190,800",
+    "costIncomeRatio": "1.8%",
+    "blockedOrders": 0,
+    "directionFlips": 1,
+    "winRate": "93.9%"
+  },
+  "comparison": {
+    "tenK": {
+      "cagr": "+45.76%",
+      "maxDD": "0.32%",
+      "sharpe": "9.58",
+      "costIncome": "0.9%"
+    },
+    "fiveHundredK": {
+      "cagr": "+11.22%",
+      "maxDD": "0.32%",
+      "sharpe": "8.65",
+      "costIncome": "1.8%"
+    },
+    "scalingPenaltyCagr": "-34.54%"
+  },
+  "equityCurve": [
+    {
+      "date": "2023-03-01",
+      "equity": "500002.28",
+      "rampFraction": 0.1
+    },
+    {
+      "date": "2023-03-02",
+      "equity": "500034.31",
+      "rampFraction": 0.25
+    },
+    {
+      "date": "2023-03-03",
+      "equity": "500088.69",
+      "rampFraction": 0.25
+    },
+    {
+      "date": "2023-03-04",
+      "equity": "500135.32",
+      "rampFraction": 0.5
+    },
+    {
+      "date": "2023-03-05",
+      "equity": "500159.93",
+      "rampFraction": 0.5
+    },
+    {
+      "date": "2023-03-06",
+      "equity": "500203.68",
+      "rampFraction": 0.75
+    },
+    {
+      "date": "2023-03-07",
+      "equity": "500264.14",
+      "rampFraction": 0.75
+    },
+    {
+      "date": "2023-03-08",
+      "equity": "500336.95",
+      "rampFraction": 1
+    },
+    {
+      "date": "2023-03-09",
+      "equity": "500399.95",
+      "rampFraction": 1
+    },
+    {
+      "date": "2023-03-10",
+      "equity": "500510.60",
+      "rampFraction": 1
+    },
+    {
+      "date": "2023-03-11",
+      "equity": "500606.38",
+      "rampFraction": 1
+    },
+    {
+      "date": "2023-03-12",
+      "equity": "500757.50",
+      "rampFraction": 1
+    },
+    {
+      "date": "2023-03-13",
+      "equity": "501188.19",
+      "rampFraction": 1
+    },
+    {
+      "date": "2023-03-14",
+      "equity": "501788.48",
+      "rampFraction": 1
+    },
+    {
+      "date": "2023-03-15",
+      "equity": "502232.85",
+      "rampFraction": 1
+    },
+    {
+      "date": "2023-03-16",
+      "equity": "502811.68",
+      "rampFraction": 1
+    },
+    {
+      "date": "2023-03-17",
+      "equity": "503088.23",
+      "rampFraction": 1
+    },
+    {
+      "date": "2023-03-18",
+      "equity": "503730.19",
+      "rampFraction": 1
+    },
+    {
+      "date": "2023-03-19",
+      "equity": "503790.79",
+      "rampFraction": 1
+    },
+    {
+      "date": "2023-03-20",
+      "equity": "504119.21",
+      "rampFraction": 1
+    },
+    {
+      "date": "2023-03-21",
+      "equity": "504385.59",
+      "rampFraction": 1
+    },
+    {
+      "date": "2023-03-22",
+      "equity": "504630.32",
+      "rampFraction": 1
+    },
+    {
+      "date": "2023-03-23",
+      "equity": "505002.74",
+      "rampFraction": 1
+    },
+    {
+      "date": "2023-03-24",
+      "equity": "505409.60",
+      "rampFraction": 1
+    },
+    {
+      "date": "2023-03-25",
+      "equity": "505630.77",
+      "rampFraction": 1
+    },
+    {
+      "date": "2023-03-26",
+      "equity": "505618.61",
+      "rampFraction": 1
+    },
+    {
+      "date": "2023-03-27",
+      "equity": "505695.97",
+      "rampFraction": 1
+    },
+    {
+      "date": "2023-03-28",
+      "equity": "505764.33",
+      "rampFraction": 1
+    },
+    {
+      "date": "2023-03-29",
+      "equity": "505918.97",
+      "rampFraction": 1
+    },
+    {
+      "date": "2023-03-30",
+      "equity": "506365.10",
+      "rampFraction": 1
+    },
+    {
+      "date": "2023-03-31",
+      "equity": "506891.02",
+      "rampFraction": 1
+    },
+    {
+      "date": "2023-04-01",
+      "equity": "507431.75",
+      "rampFraction": 1
+    },
+    {
+      "date": "2023-04-02",
+      "equity": "507581.28",
+      "rampFraction": 1
+    },
+    {
+      "date": "2023-04-03",
+      "equity": "507754.87",
+      "rampFraction": 1
+    },
+    {
+      "date": "2023-04-04",
+      "equity": "508053.81",
+      "rampFraction": 1
+    },
+    {
+      "date": "2023-04-05",
+      "equity": "508268.14",
+      "rampFraction": 1
+    },
+    {
+      "date": "2023-04-06",
+      "equity": "508691.12",
+      "rampFraction": 1
+    },
+    {
+      "date": "2023-04-07",
+      "equity": "508916.34",
+      "rampFraction": 1
+    },
+    {
+      "date": "2023-04-08",
+      "equity": "509202.04",
+      "rampFraction": 1
+    },
+    {
+      "date": "2023-04-09",
+      "equity": "509310.60",
+      "rampFraction": 1
+    },
+    {
+      "date": "2023-04-10",
+      "equity": "509358.28",
+      "rampFraction": 1
+    },
+    {
+      "date": "2023-04-11",
+      "equity": "509487.20",
+      "rampFraction": 1
+    },
+    {
+      "date": "2023-04-12",
+      "equity": "509572.61",
+      "rampFraction": 1
+    },
+    {
+      "date": "2023-04-13",
+      "equity": "509652.80",
+      "rampFraction": 1
+    },
+    {
+      "date": "2023-04-14",
+      "equity": "509703.42",
+      "rampFraction": 1
+    },
+    {
+      "date": "2023-04-15",
+      "equity": "509970.63",
+      "rampFraction": 1
+    },
+    {
+      "date": "2023-04-16",
+      "equity": "510164.72",
+      "rampFraction": 1
+    },
+    {
+      "date": "2023-04-17",
+      "equity": "510236.86",
+      "rampFraction": 1
+    },
+    {
+      "date": "2023-04-18",
+      "equity": "510674.60",
+      "rampFraction": 1
+    },
+    {
+      "date": "2023-04-19",
+      "equity": "510990.33",
+      "rampFraction": 1
+    },
+    {
+      "date": "2023-04-20",
+      "equity": "511121.14",
+      "rampFraction": 1
+    },
+    {
+      "date": "2023-04-21",
+      "equity": "511081.65",
+      "rampFraction": 1
+    },
+    {
+      "date": "2023-04-22",
+      "equity": "511008.53",
+      "rampFraction": 1
+    },
+    {
+      "date": "2023-04-23",
+      "equity": "510976.11",
+      "rampFraction": 1
+    },
+    {
+      "date": "2023-04-24",
+      "equity": "511178.27",
+      "rampFraction": 1
+    },
+    {
+      "date": "2023-04-25",
+      "equity": "511327.02",
+      "rampFraction": 1
+    },
+    {
+      "date": "2023-04-26",
+      "equity": "511421.65",
+      "rampFraction": 1
+    },
+    {
+      "date": "2023-04-27",
+      "equity": "511592.71",
+      "rampFraction": 1
+    },
+    {
+      "date": "2023-04-28",
+      "equity": "511625.79",
+      "rampFraction": 1
+    },
+    {
+      "date": "2023-04-29",
+      "equity": "511567.83",
+      "rampFraction": 1
+    },
+    {
+      "date": "2023-04-30",
+      "equity": "511567.77",
+      "rampFraction": 1
+    },
+    {
+      "date": "2023-05-01",
+      "equity": "511610.39",
+      "rampFraction": 1
+    },
+    {
+      "date": "2023-05-02",
+      "equity": "511775.06",
+      "rampFraction": 1
+    },
+    {
+      "date": "2023-05-03",
+      "equity": "511868.88",
+      "rampFraction": 1
+    },
+    {
+      "date": "2023-05-04",
+      "equity": "512001.37",
+      "rampFraction": 1
+    },
+    {
+      "date": "2023-05-05",
+      "equity": "512134.69",
+      "rampFraction": 1
+    },
+    {
+      "date": "2023-05-06",
+      "equity": "512338.37",
+      "rampFraction": 1
+    },
+    {
+      "date": "2023-05-07",
+      "equity": "512338.16",
+      "rampFraction": 1
+    },
+    {
+      "date": "2023-05-08",
+      "equity": "512200.38",
+      "rampFraction": 1
+    },
+    {
+      "date": "2023-05-09",
+      "equity": "512375.04",
+      "rampFraction": 1
+    },
+    {
+      "date": "2023-05-10",
+      "equity": "512455.30",
+      "rampFraction": 1
+    },
+    {
+      "date": "2023-05-11",
+      "equity": "512530.67",
+      "rampFraction": 1
+    },
+    {
+      "date": "2023-05-12",
+      "equity": "512596.66",
+      "rampFraction": 1
+    },
+    {
+      "date": "2023-05-13",
+      "equity": "512598.83",
+      "rampFraction": 1
+    },
+    {
+      "date": "2023-05-14",
+      "equity": "512344.68",
+      "rampFraction": 1
+    },
+    {
+      "date": "2023-05-15",
+      "equity": "512172.95",
+      "rampFraction": 1
+    },
+    {
+      "date": "2023-05-16",
+      "equity": "512247.14",
+      "rampFraction": 1
+    },
+    {
+      "date": "2023-05-17",
+      "equity": "512327.37",
+      "rampFraction": 1
+    },
+    {
+      "date": "2023-05-18",
+      "equity": "512396.12",
+      "rampFraction": 1
+    },
+    {
+      "date": "2023-05-19",
+      "equity": "512456.35",
+      "rampFraction": 1
+    },
+    {
+      "date": "2023-05-20",
+      "equity": "512522.12",
+      "rampFraction": 1
+    },
+    {
+      "date": "2023-05-21",
+      "equity": "512576.36",
+      "rampFraction": 1
+    },
+    {
+      "date": "2023-05-22",
+      "equity": "512652.08",
+      "rampFraction": 1
+    },
+    {
+      "date": "2023-05-23",
+      "equity": "512728.74",
+      "rampFraction": 1
+    },
+    {
+      "date": "2023-05-24",
+      "equity": "512798.06",
+      "rampFraction": 1
+    },
+    {
+      "date": "2023-05-25",
+      "equity": "512855.73",
+      "rampFraction": 1
+    },
+    {
+      "date": "2023-05-26",
+      "equity": "512923.63",
+      "rampFraction": 1
+    },
+    {
+      "date": "2023-05-27",
+      "equity": "512992.87",
+      "rampFraction": 1
+    },
+    {
+      "date": "2023-05-28",
+      "equity": "513044.18",
+      "rampFraction": 1
+    },
+    {
+      "date": "2023-05-29",
+      "equity": "513101.99",
+      "rampFraction": 1
+    },
+    {
+      "date": "2023-05-30",
+      "equity": "513127.01",
+      "rampFraction": 1
+    },
+    {
+      "date": "2023-05-31",
+      "equity": "513185.77",
+      "rampFraction": 1
+    },
+    {
+      "date": "2023-06-01",
+      "equity": "513237.38",
+      "rampFraction": 1
+    },
+    {
+      "date": "2023-06-02",
+      "equity": "513300.05",
+      "rampFraction": 1
+    },
+    {
+      "date": "2023-06-03",
+      "equity": "513380.61",
+      "rampFraction": 1
+    },
+    {
+      "date": "2023-06-04",
+      "equity": "513442.16",
+      "rampFraction": 1
+    },
+    {
+      "date": "2023-06-05",
+      "equity": "513528.55",
+      "rampFraction": 1
+    },
+    {
+      "date": "2023-06-06",
+      "equity": "513559.31",
+      "rampFraction": 1
+    },
+    {
+      "date": "2023-06-07",
+      "equity": "513600.19",
+      "rampFraction": 1
+    },
+    {
+      "date": "2023-06-08",
+      "equity": "513631.38",
+      "rampFraction": 1
+    },
+    {
+      "date": "2023-06-09",
+      "equity": "513729.58",
+      "rampFraction": 1
+    },
+    {
+      "date": "2023-06-10",
+      "equity": "513813.35",
+      "rampFraction": 1
+    },
+    {
+      "date": "2023-06-11",
+      "equity": "514057.25",
+      "rampFraction": 1
+    },
+    {
+      "date": "2023-06-12",
+      "equity": "514252.77",
+      "rampFraction": 1
+    },
+    {
+      "date": "2023-06-13",
+      "equity": "514379.13",
+      "rampFraction": 1
+    },
+    {
+      "date": "2023-06-14",
+      "equity": "514390.80",
+      "rampFraction": 1
+    },
+    {
+      "date": "2023-06-15",
+      "equity": "514430.35",
+      "rampFraction": 1
+    },
+    {
+      "date": "2023-06-16",
+      "equity": "514516.96",
+      "rampFraction": 1
+    },
+    {
+      "date": "2023-06-17",
+      "equity": "514592.73",
+      "rampFraction": 1
+    },
+    {
+      "date": "2023-06-18",
+      "equity": "514668.73",
+      "rampFraction": 1
+    },
+    {
+      "date": "2023-06-19",
+      "equity": "514692.38",
+      "rampFraction": 1
+    },
+    {
+      "date": "2023-06-20",
+      "equity": "514757.00",
+      "rampFraction": 1
+    },
+    {
+      "date": "2023-06-21",
+      "equity": "514812.78",
+      "rampFraction": 1
+    },
+    {
+      "date": "2023-06-22",
+      "equity": "514789.68",
+      "rampFraction": 1
+    },
+    {
+      "date": "2023-06-23",
+      "equity": "514738.68",
+      "rampFraction": 1
+    },
+    {
+      "date": "2023-06-24",
+      "equity": "514734.17",
+      "rampFraction": 1
+    },
+    {
+      "date": "2023-06-25",
+      "equity": "514671.53",
+      "rampFraction": 1
+    },
+    {
+      "date": "2023-06-26",
+      "equity": "514617.58",
+      "rampFraction": 1
+    },
+    {
+      "date": "2023-06-27",
+      "equity": "514559.45",
+      "rampFraction": 1
+    },
+    {
+      "date": "2023-06-28",
+      "equity": "514602.45",
+      "rampFraction": 1
+    },
+    {
+      "date": "2023-06-29",
+      "equity": "514576.02",
+      "rampFraction": 1
+    },
+    {
+      "date": "2023-06-30",
+      "equity": "514654.17",
+      "rampFraction": 1
+    },
+    {
+      "date": "2023-07-01",
+      "equity": "514541.57",
+      "rampFraction": 1
+    },
+    {
+      "date": "2023-07-02",
+      "equity": "514366.98",
+      "rampFraction": 1
+    },
+    {
+      "date": "2023-07-03",
+      "equity": "514165.23",
+      "rampFraction": 1
+    },
+    {
+      "date": "2023-07-04",
+      "equity": "513782.19",
+      "rampFraction": 1
+    },
+    {
+      "date": "2023-07-05",
+      "equity": "513429.71",
+      "rampFraction": 1
+    },
+    {
+      "date": "2023-07-06",
+      "equity": "513479.20",
+      "rampFraction": 1
+    },
+    {
+      "date": "2023-07-07",
+      "equity": "513710.97",
+      "rampFraction": 1
+    },
+    {
+      "date": "2023-07-08",
+      "equity": "513750.68",
+      "rampFraction": 1
+    },
+    {
+      "date": "2023-07-09",
+      "equity": "513763.27",
+      "rampFraction": 1
+    },
+    {
+      "date": "2023-07-10",
+      "equity": "513984.05",
+      "rampFraction": 1
+    },
+    {
+      "date": "2023-07-11",
+      "equity": "514085.07",
+      "rampFraction": 1
+    },
+    {
+      "date": "2023-07-12",
+      "equity": "514207.82",
+      "rampFraction": 1
+    },
+    {
+      "date": "2023-07-13",
+      "equity": "514276.68",
+      "rampFraction": 1
+    },
+    {
+      "date": "2023-07-14",
+      "equity": "514412.17",
+      "rampFraction": 1
+    },
+    {
+      "date": "2023-07-15",
+      "equity": "515149.97",
+      "rampFraction": 1
+    },
+    {
+      "date": "2023-07-16",
+      "equity": "515571.78",
+      "rampFraction": 1
+    },
+    {
+      "date": "2023-07-17",
+      "equity": "515945.18",
+      "rampFraction": 1
+    },
+    {
+      "date": "2023-07-18",
+      "equity": "516230.42",
+      "rampFraction": 1
+    },
+    {
+      "date": "2023-07-19",
+      "equity": "516620.48",
+      "rampFraction": 1
+    },
+    {
+      "date": "2023-07-20",
+      "equity": "517150.01",
+      "rampFraction": 1
+    },
+    {
+      "date": "2023-07-21",
+      "equity": "517380.85",
+      "rampFraction": 1
+    },
+    {
+      "date": "2023-07-22",
+      "equity": "517666.62",
+      "rampFraction": 1
+    },
+    {
+      "date": "2023-07-23",
+      "equity": "517935.89",
+      "rampFraction": 1
+    },
+    {
+      "date": "2023-07-24",
+      "equity": "518153.55",
+      "rampFraction": 1
+    },
+    {
+      "date": "2023-07-25",
+      "equity": "518313.95",
+      "rampFraction": 1
+    },
+    {
+      "date": "2023-07-26",
+      "equity": "518404.89",
+      "rampFraction": 1
+    },
+    {
+      "date": "2023-07-27",
+      "equity": "518438.69",
+      "rampFraction": 1
+    },
+    {
+      "date": "2023-07-28",
+      "equity": "518510.94",
+      "rampFraction": 1
+    },
+    {
+      "date": "2023-07-29",
+      "equity": "518746.48",
+      "rampFraction": 1
+    },
+    {
+      "date": "2023-07-30",
+      "equity": "519178.31",
+      "rampFraction": 1
+    },
+    {
+      "date": "2023-07-31",
+      "equity": "519376.04",
+      "rampFraction": 1
+    },
+    {
+      "date": "2023-08-01",
+      "equity": "519425.77",
+      "rampFraction": 1
+    },
+    {
+      "date": "2023-08-02",
+      "equity": "519499.59",
+      "rampFraction": 1
+    },
+    {
+      "date": "2023-08-03",
+      "equity": "519528.33",
+      "rampFraction": 1
+    },
+    {
+      "date": "2023-08-04",
+      "equity": "519580.56",
+      "rampFraction": 1
+    },
+    {
+      "date": "2023-08-05",
+      "equity": "519621.65",
+      "rampFraction": 1
+    },
+    {
+      "date": "2023-08-06",
+      "equity": "519728.93",
+      "rampFraction": 1
+    },
+    {
+      "date": "2023-08-07",
+      "equity": "519781.02",
+      "rampFraction": 1
+    },
+    {
+      "date": "2023-08-08",
+      "equity": "519857.88",
+      "rampFraction": 1
+    },
+    {
+      "date": "2023-08-09",
+      "equity": "519945.19",
+      "rampFraction": 1
+    },
+    {
+      "date": "2023-08-10",
+      "equity": "520026.20",
+      "rampFraction": 1
+    },
+    {
+      "date": "2023-08-11",
+      "equity": "520051.26",
+      "rampFraction": 1
+    },
+    {
+      "date": "2023-08-12",
+      "equity": "520109.19",
+      "rampFraction": 1
+    },
+    {
+      "date": "2023-08-13",
+      "equity": "520182.28",
+      "rampFraction": 1
+    },
+    {
+      "date": "2023-08-14",
+      "equity": "520212.72",
+      "rampFraction": 1
+    },
+    {
+      "date": "2023-08-15",
+      "equity": "520284.28",
+      "rampFraction": 1
+    },
+    {
+      "date": "2023-08-16",
+      "equity": "520261.23",
+      "rampFraction": 1
+    },
+    {
+      "date": "2023-08-17",
+      "equity": "520283.14",
+      "rampFraction": 1
+    },
+    {
+      "date": "2023-08-18",
+      "equity": "520309.48",
+      "rampFraction": 1
+    },
+    {
+      "date": "2023-08-19",
+      "equity": "520413.34",
+      "rampFraction": 1
+    },
+    {
+      "date": "2023-08-20",
+      "equity": "520457.65",
+      "rampFraction": 1
+    },
+    {
+      "date": "2023-08-21",
+      "equity": "520519.12",
+      "rampFraction": 1
+    },
+    {
+      "date": "2023-08-22",
+      "equity": "520533.95",
+      "rampFraction": 1
+    },
+    {
+      "date": "2023-08-23",
+      "equity": "520594.51",
+      "rampFraction": 1
+    },
+    {
+      "date": "2023-08-24",
+      "equity": "520649.04",
+      "rampFraction": 1
+    },
+    {
+      "date": "2023-08-25",
+      "equity": "520685.04",
+      "rampFraction": 1
+    },
+    {
+      "date": "2023-08-26",
+      "equity": "520710.87",
+      "rampFraction": 1
+    },
+    {
+      "date": "2023-08-27",
+      "equity": "520748.70",
+      "rampFraction": 1
+    },
+    {
+      "date": "2023-08-28",
+      "equity": "520803.72",
+      "rampFraction": 1
+    },
+    {
+      "date": "2023-08-29",
+      "equity": "520798.63",
+      "rampFraction": 1
+    },
+    {
+      "date": "2023-08-30",
+      "equity": "520815.12",
+      "rampFraction": 1
+    },
+    {
+      "date": "2023-08-31",
+      "equity": "520804.47",
+      "rampFraction": 1
+    },
+    {
+      "date": "2023-09-01",
+      "equity": "520919.27",
+      "rampFraction": 1
+    },
+    {
+      "date": "2023-09-02",
+      "equity": "521159.00",
+      "rampFraction": 1
+    },
+    {
+      "date": "2023-09-03",
+      "equity": "521349.46",
+      "rampFraction": 1
+    },
+    {
+      "date": "2023-09-04",
+      "equity": "521444.79",
+      "rampFraction": 1
+    },
+    {
+      "date": "2023-09-05",
+      "equity": "521465.22",
+      "rampFraction": 1
+    },
+    {
+      "date": "2023-09-06",
+      "equity": "521565.30",
+      "rampFraction": 1
+    },
+    {
+      "date": "2023-09-07",
+      "equity": "521683.32",
+      "rampFraction": 1
+    },
+    {
+      "date": "2023-09-08",
+      "equity": "521776.93",
+      "rampFraction": 1
+    },
+    {
+      "date": "2023-09-09",
+      "equity": "521935.91",
+      "rampFraction": 1
+    },
+    {
+      "date": "2023-09-10",
+      "equity": "522045.32",
+      "rampFraction": 1
+    },
+    {
+      "date": "2023-09-11",
+      "equity": "522124.31",
+      "rampFraction": 1
+    },
+    {
+      "date": "2023-09-12",
+      "equity": "522181.92",
+      "rampFraction": 1
+    },
+    {
+      "date": "2023-09-13",
+      "equity": "522250.59",
+      "rampFraction": 1
+    },
+    {
+      "date": "2023-09-14",
+      "equity": "522336.57",
+      "rampFraction": 1
+    },
+    {
+      "date": "2023-09-15",
+      "equity": "522406.13",
+      "rampFraction": 1
+    },
+    {
+      "date": "2023-09-16",
+      "equity": "522455.89",
+      "rampFraction": 1
+    },
+    {
+      "date": "2023-09-17",
+      "equity": "522490.42",
+      "rampFraction": 1
+    },
+    {
+      "date": "2023-09-18",
+      "equity": "522547.68",
+      "rampFraction": 1
+    },
+    {
+      "date": "2023-09-19",
+      "equity": "522603.82",
+      "rampFraction": 1
+    },
+    {
+      "date": "2023-09-20",
+      "equity": "522769.65",
+      "rampFraction": 1
+    },
+    {
+      "date": "2023-09-21",
+      "equity": "522937.47",
+      "rampFraction": 1
+    },
+    {
+      "date": "2023-09-22",
+      "equity": "523007.34",
+      "rampFraction": 1
+    },
+    {
+      "date": "2023-09-23",
+      "equity": "523063.46",
+      "rampFraction": 1
+    },
+    {
+      "date": "2023-09-24",
+      "equity": "523172.97",
+      "rampFraction": 1
+    },
+    {
+      "date": "2023-09-25",
+      "equity": "523333.56",
+      "rampFraction": 1
+    },
+    {
+      "date": "2023-09-26",
+      "equity": "523409.99",
+      "rampFraction": 1
+    },
+    {
+      "date": "2023-09-27",
+      "equity": "523546.40",
+      "rampFraction": 1
+    },
+    {
+      "date": "2023-09-28",
+      "equity": "523697.04",
+      "rampFraction": 1
+    },
+    {
+      "date": "2023-09-29",
+      "equity": "523820.07",
+      "rampFraction": 1
+    },
+    {
+      "date": "2023-09-30",
+      "equity": "523929.89",
+      "rampFraction": 1
+    },
+    {
+      "date": "2023-10-01",
+      "equity": "524001.83",
+      "rampFraction": 1
+    },
+    {
+      "date": "2023-10-02",
+      "equity": "524089.13",
+      "rampFraction": 1
+    },
+    {
+      "date": "2023-10-03",
+      "equity": "524248.14",
+      "rampFraction": 1
+    },
+    {
+      "date": "2023-10-04",
+      "equity": "524359.57",
+      "rampFraction": 1
+    },
+    {
+      "date": "2023-10-05",
+      "equity": "524385.41",
+      "rampFraction": 1
+    },
+    {
+      "date": "2023-10-06",
+      "equity": "524407.99",
+      "rampFraction": 1
+    },
+    {
+      "date": "2023-10-07",
+      "equity": "524361.24",
+      "rampFraction": 1
+    },
+    {
+      "date": "2023-10-08",
+      "equity": "524395.85",
+      "rampFraction": 1
+    },
+    {
+      "date": "2023-10-09",
+      "equity": "524449.22",
+      "rampFraction": 1
+    },
+    {
+      "date": "2023-10-10",
+      "equity": "524578.84",
+      "rampFraction": 1
+    },
+    {
+      "date": "2023-10-11",
+      "equity": "524680.38",
+      "rampFraction": 1
+    },
+    {
+      "date": "2023-10-12",
+      "equity": "524788.54",
+      "rampFraction": 1
+    },
+    {
+      "date": "2023-10-13",
+      "equity": "524829.64",
+      "rampFraction": 1
+    },
+    {
+      "date": "2023-10-14",
+      "equity": "524921.74",
+      "rampFraction": 1
+    },
+    {
+      "date": "2023-10-15",
+      "equity": "524981.29",
+      "rampFraction": 1
+    },
+    {
+      "date": "2023-10-16",
+      "equity": "524980.52",
+      "rampFraction": 1
+    },
+    {
+      "date": "2023-10-17",
+      "equity": "525002.96",
+      "rampFraction": 1
+    },
+    {
+      "date": "2023-10-18",
+      "equity": "525020.76",
+      "rampFraction": 1
+    },
+    {
+      "date": "2023-10-19",
+      "equity": "525083.02",
+      "rampFraction": 1
+    },
+    {
+      "date": "2023-10-20",
+      "equity": "525152.32",
+      "rampFraction": 1
+    },
+    {
+      "date": "2023-10-21",
+      "equity": "525216.58",
+      "rampFraction": 1
+    },
+    {
+      "date": "2023-10-22",
+      "equity": "525220.89",
+      "rampFraction": 1
+    },
+    {
+      "date": "2023-10-23",
+      "equity": "525244.28",
+      "rampFraction": 1
+    },
+    {
+      "date": "2023-10-24",
+      "equity": "525369.72",
+      "rampFraction": 1
+    },
+    {
+      "date": "2023-10-25",
+      "equity": "525398.66",
+      "rampFraction": 1
+    },
+    {
+      "date": "2023-10-26",
+      "equity": "525508.78",
+      "rampFraction": 1
+    },
+    {
+      "date": "2023-10-27",
+      "equity": "525729.09",
+      "rampFraction": 1
+    },
+    {
+      "date": "2023-10-28",
+      "equity": "526032.56",
+      "rampFraction": 1
+    },
+    {
+      "date": "2023-10-29",
+      "equity": "526242.67",
+      "rampFraction": 1
+    },
+    {
+      "date": "2023-10-30",
+      "equity": "526517.52",
+      "rampFraction": 1
+    },
+    {
+      "date": "2023-10-31",
+      "equity": "526725.95",
+      "rampFraction": 1
+    },
+    {
+      "date": "2023-11-01",
+      "equity": "526963.91",
+      "rampFraction": 1
+    },
+    {
+      "date": "2023-11-02",
+      "equity": "526871.02",
+      "rampFraction": 1
+    },
+    {
+      "date": "2023-11-03",
+      "equity": "527062.20",
+      "rampFraction": 1
+    },
+    {
+      "date": "2023-11-04",
+      "equity": "527502.99",
+      "rampFraction": 1
+    },
+    {
+      "date": "2023-11-05",
+      "equity": "528143.30",
+      "rampFraction": 1
+    },
+    {
+      "date": "2023-11-06",
+      "equity": "528494.25",
+      "rampFraction": 1
+    },
+    {
+      "date": "2023-11-07",
+      "equity": "528852.21",
+      "rampFraction": 1
+    },
+    {
+      "date": "2023-11-08",
+      "equity": "529149.34",
+      "rampFraction": 1
+    },
+    {
+      "date": "2023-11-09",
+      "equity": "529658.49",
+      "rampFraction": 1
+    },
+    {
+      "date": "2023-11-10",
+      "equity": "529981.31",
+      "rampFraction": 1
+    },
+    {
+      "date": "2023-11-11",
+      "equity": "530198.77",
+      "rampFraction": 1
+    },
+    {
+      "date": "2023-11-12",
+      "equity": "530534.93",
+      "rampFraction": 1
+    },
+    {
+      "date": "2023-11-13",
+      "equity": "530820.66",
+      "rampFraction": 1
+    },
+    {
+      "date": "2023-11-14",
+      "equity": "531166.38",
+      "rampFraction": 1
+    },
+    {
+      "date": "2023-11-15",
+      "equity": "531433.64",
+      "rampFraction": 1
+    },
+    {
+      "date": "2023-11-16",
+      "equity": "531882.83",
+      "rampFraction": 1
+    },
+    {
+      "date": "2023-11-17",
+      "equity": "532146.05",
+      "rampFraction": 1
+    },
+    {
+      "date": "2023-11-18",
+      "equity": "532266.76",
+      "rampFraction": 1
+    },
+    {
+      "date": "2023-11-19",
+      "equity": "532623.51",
+      "rampFraction": 1
+    },
+    {
+      "date": "2023-11-20",
+      "equity": "533033.79",
+      "rampFraction": 1
+    },
+    {
+      "date": "2023-11-21",
+      "equity": "533313.59",
+      "rampFraction": 1
+    },
+    {
+      "date": "2023-11-22",
+      "equity": "533583.65",
+      "rampFraction": 1
+    },
+    {
+      "date": "2023-11-23",
+      "equity": "533835.11",
+      "rampFraction": 1
+    },
+    {
+      "date": "2023-11-24",
+      "equity": "534129.35",
+      "rampFraction": 1
+    },
+    {
+      "date": "2023-11-25",
+      "equity": "534586.29",
+      "rampFraction": 1
+    },
+    {
+      "date": "2023-11-26",
+      "equity": "535000.16",
+      "rampFraction": 1
+    },
+    {
+      "date": "2023-11-27",
+      "equity": "535443.29",
+      "rampFraction": 1
+    },
+    {
+      "date": "2023-11-28",
+      "equity": "535908.02",
+      "rampFraction": 1
+    },
+    {
+      "date": "2023-11-29",
+      "equity": "536390.19",
+      "rampFraction": 1
+    },
+    {
+      "date": "2023-11-30",
+      "equity": "536705.35",
+      "rampFraction": 1
+    },
+    {
+      "date": "2023-12-01",
+      "equity": "537070.64",
+      "rampFraction": 1
+    },
+    {
+      "date": "2023-12-02",
+      "equity": "537521.16",
+      "rampFraction": 1
+    },
+    {
+      "date": "2023-12-03",
+      "equity": "538020.39",
+      "rampFraction": 1
+    },
+    {
+      "date": "2023-12-04",
+      "equity": "538376.74",
+      "rampFraction": 1
+    },
+    {
+      "date": "2023-12-05",
+      "equity": "538808.61",
+      "rampFraction": 1
+    },
+    {
+      "date": "2023-12-06",
+      "equity": "539241.88",
+      "rampFraction": 1
+    },
+    {
+      "date": "2023-12-07",
+      "equity": "539876.47",
+      "rampFraction": 1
+    },
+    {
+      "date": "2023-12-08",
+      "equity": "540790.12",
+      "rampFraction": 1
+    },
+    {
+      "date": "2023-12-09",
+      "equity": "541453.49",
+      "rampFraction": 1
+    },
+    {
+      "date": "2023-12-10",
+      "equity": "541796.52",
+      "rampFraction": 1
+    },
+    {
+      "date": "2023-12-11",
+      "equity": "542121.17",
+      "rampFraction": 1
+    },
+    {
+      "date": "2023-12-12",
+      "equity": "542826.56",
+      "rampFraction": 1
+    },
+    {
+      "date": "2023-12-13",
+      "equity": "543260.79",
+      "rampFraction": 1
+    },
+    {
+      "date": "2023-12-14",
+      "equity": "543551.52",
+      "rampFraction": 1
+    },
+    {
+      "date": "2023-12-15",
+      "equity": "543993.50",
+      "rampFraction": 1
+    },
+    {
+      "date": "2023-12-16",
+      "equity": "544741.09",
+      "rampFraction": 1
+    },
+    {
+      "date": "2023-12-17",
+      "equity": "544988.09",
+      "rampFraction": 1
+    },
+    {
+      "date": "2023-12-18",
+      "equity": "545404.17",
+      "rampFraction": 1
+    },
+    {
+      "date": "2023-12-19",
+      "equity": "546233.15",
+      "rampFraction": 1
+    },
+    {
+      "date": "2023-12-20",
+      "equity": "546929.45",
+      "rampFraction": 1
+    },
+    {
+      "date": "2023-12-21",
+      "equity": "547431.28",
+      "rampFraction": 1
+    },
+    {
+      "date": "2023-12-22",
+      "equity": "547995.87",
+      "rampFraction": 1
+    },
+    {
+      "date": "2023-12-23",
+      "equity": "548735.91",
+      "rampFraction": 1
+    },
+    {
+      "date": "2023-12-24",
+      "equity": "549616.23",
+      "rampFraction": 1
+    },
+    {
+      "date": "2023-12-25",
+      "equity": "550601.24",
+      "rampFraction": 1
+    },
+    {
+      "date": "2023-12-26",
+      "equity": "551820.27",
+      "rampFraction": 1
+    },
+    {
+      "date": "2023-12-27",
+      "equity": "552593.75",
+      "rampFraction": 1
+    },
+    {
+      "date": "2023-12-28",
+      "equity": "553828.00",
+      "rampFraction": 1
+    },
+    {
+      "date": "2023-12-29",
+      "equity": "555560.44",
+      "rampFraction": 1
+    },
+    {
+      "date": "2023-12-30",
+      "equity": "557110.06",
+      "rampFraction": 1
+    },
+    {
+      "date": "2023-12-31",
+      "equity": "557480.26",
+      "rampFraction": 1
+    },
+    {
+      "date": "2024-01-01",
+      "equity": "558130.99",
+      "rampFraction": 1
+    },
+    {
+      "date": "2024-01-02",
+      "equity": "559001.89",
+      "rampFraction": 1
+    },
+    {
+      "date": "2024-01-03",
+      "equity": "559501.02",
+      "rampFraction": 1
+    },
+    {
+      "date": "2024-01-04",
+      "equity": "560186.97",
+      "rampFraction": 1
+    },
+    {
+      "date": "2024-01-05",
+      "equity": "561000.37",
+      "rampFraction": 1
+    },
+    {
+      "date": "2024-01-06",
+      "equity": "561731.86",
+      "rampFraction": 1
+    },
+    {
+      "date": "2024-01-07",
+      "equity": "562259.21",
+      "rampFraction": 1
+    },
+    {
+      "date": "2024-01-08",
+      "equity": "562668.50",
+      "rampFraction": 1
+    },
+    {
+      "date": "2024-01-09",
+      "equity": "562845.05",
+      "rampFraction": 1
+    },
+    {
+      "date": "2024-01-10",
+      "equity": "563108.45",
+      "rampFraction": 1
+    },
+    {
+      "date": "2024-01-11",
+      "equity": "563303.27",
+      "rampFraction": 1
+    },
+    {
+      "date": "2024-01-12",
+      "equity": "563547.19",
+      "rampFraction": 1
+    },
+    {
+      "date": "2024-01-13",
+      "equity": "563732.60",
+      "rampFraction": 1
+    },
+    {
+      "date": "2024-01-14",
+      "equity": "563862.65",
+      "rampFraction": 1
+    },
+    {
+      "date": "2024-01-15",
+      "equity": "563959.66",
+      "rampFraction": 1
+    },
+    {
+      "date": "2024-01-16",
+      "equity": "564073.79",
+      "rampFraction": 1
+    },
+    {
+      "date": "2024-01-17",
+      "equity": "564237.66",
+      "rampFraction": 1
+    },
+    {
+      "date": "2024-01-18",
+      "equity": "564394.37",
+      "rampFraction": 1
+    },
+    {
+      "date": "2024-01-19",
+      "equity": "564523.06",
+      "rampFraction": 1
+    },
+    {
+      "date": "2024-01-20",
+      "equity": "564685.02",
+      "rampFraction": 1
+    },
+    {
+      "date": "2024-01-21",
+      "equity": "564817.45",
+      "rampFraction": 1
+    },
+    {
+      "date": "2024-01-22",
+      "equity": "564964.10",
+      "rampFraction": 1
+    },
+    {
+      "date": "2024-01-23",
+      "equity": "565107.67",
+      "rampFraction": 1
+    },
+    {
+      "date": "2024-01-24",
+      "equity": "565254.04",
+      "rampFraction": 1
+    },
+    {
+      "date": "2024-01-25",
+      "equity": "565385.45",
+      "rampFraction": 1
+    },
+    {
+      "date": "2024-01-26",
+      "equity": "565512.69",
+      "rampFraction": 1
+    },
+    {
+      "date": "2024-01-27",
+      "equity": "565650.34",
+      "rampFraction": 1
+    },
+    {
+      "date": "2024-01-28",
+      "equity": "565827.72",
+      "rampFraction": 1
+    },
+    {
+      "date": "2024-01-29",
+      "equity": "566070.34",
+      "rampFraction": 1
+    },
+    {
+      "date": "2024-01-30",
+      "equity": "566224.86",
+      "rampFraction": 1
+    },
+    {
+      "date": "2024-01-31",
+      "equity": "566391.42",
+      "rampFraction": 1
+    },
+    {
+      "date": "2024-02-01",
+      "equity": "566519.13",
+      "rampFraction": 1
+    },
+    {
+      "date": "2024-02-02",
+      "equity": "566678.00",
+      "rampFraction": 1
+    },
+    {
+      "date": "2024-02-03",
+      "equity": "566903.16",
+      "rampFraction": 1
+    },
+    {
+      "date": "2024-02-04",
+      "equity": "567072.39",
+      "rampFraction": 1
+    },
+    {
+      "date": "2024-02-05",
+      "equity": "567258.84",
+      "rampFraction": 1
+    },
+    {
+      "date": "2024-02-06",
+      "equity": "567451.42",
+      "rampFraction": 1
+    },
+    {
+      "date": "2024-02-07",
+      "equity": "567599.33",
+      "rampFraction": 1
+    },
+    {
+      "date": "2024-02-08",
+      "equity": "567825.85",
+      "rampFraction": 1
+    },
+    {
+      "date": "2024-02-09",
+      "equity": "568041.22",
+      "rampFraction": 1
+    },
+    {
+      "date": "2024-02-10",
+      "equity": "568297.70",
+      "rampFraction": 1
+    },
+    {
+      "date": "2024-02-11",
+      "equity": "568504.36",
+      "rampFraction": 1
+    },
+    {
+      "date": "2024-02-12",
+      "equity": "568716.30",
+      "rampFraction": 1
+    },
+    {
+      "date": "2024-02-13",
+      "equity": "568948.53",
+      "rampFraction": 1
+    },
+    {
+      "date": "2024-02-14",
+      "equity": "569221.13",
+      "rampFraction": 1
+    },
+    {
+      "date": "2024-02-15",
+      "equity": "569605.62",
+      "rampFraction": 1
+    },
+    {
+      "date": "2024-02-16",
+      "equity": "570150.64",
+      "rampFraction": 1
+    },
+    {
+      "date": "2024-02-17",
+      "equity": "570515.03",
+      "rampFraction": 1
+    },
+    {
+      "date": "2024-02-18",
+      "equity": "570788.63",
+      "rampFraction": 1
+    },
+    {
+      "date": "2024-02-19",
+      "equity": "571140.50",
+      "rampFraction": 1
+    },
+    {
+      "date": "2024-02-20",
+      "equity": "571534.04",
+      "rampFraction": 1
+    },
+    {
+      "date": "2024-02-21",
+      "equity": "571974.89",
+      "rampFraction": 1
+    },
+    {
+      "date": "2024-02-22",
+      "equity": "572260.23",
+      "rampFraction": 1
+    },
+    {
+      "date": "2024-02-23",
+      "equity": "572471.11",
+      "rampFraction": 1
+    },
+    {
+      "date": "2024-02-24",
+      "equity": "572654.23",
+      "rampFraction": 1
+    },
+    {
+      "date": "2024-02-25",
+      "equity": "572839.07",
+      "rampFraction": 1
+    },
+    {
+      "date": "2024-02-26",
+      "equity": "573041.04",
+      "rampFraction": 1
+    },
+    {
+      "date": "2024-02-27",
+      "equity": "573290.64",
+      "rampFraction": 1
+    },
+    {
+      "date": "2024-02-28",
+      "equity": "573639.27",
+      "rampFraction": 1
+    },
+    {
+      "date": "2024-02-29",
+      "equity": "574038.32",
+      "rampFraction": 1
+    },
+    {
+      "date": "2024-03-01",
+      "equity": "574379.32",
+      "rampFraction": 1
+    },
+    {
+      "date": "2024-03-02",
+      "equity": "574826.43",
+      "rampFraction": 1
+    },
+    {
+      "date": "2024-03-03",
+      "equity": "575374.96",
+      "rampFraction": 1
+    },
+    {
+      "date": "2024-03-04",
+      "equity": "576087.11",
+      "rampFraction": 1
+    },
+    {
+      "date": "2024-03-05",
+      "equity": "577186.35",
+      "rampFraction": 1
+    },
+    {
+      "date": "2024-03-06",
+      "equity": "578222.44",
+      "rampFraction": 1
+    },
+    {
+      "date": "2024-03-07",
+      "equity": "579837.89",
+      "rampFraction": 1
+    },
+    {
+      "date": "2024-03-08",
+      "equity": "580591.29",
+      "rampFraction": 1
+    },
+    {
+      "date": "2024-03-09",
+      "equity": "581582.89",
+      "rampFraction": 1
+    },
+    {
+      "date": "2024-03-10",
+      "equity": "582604.81",
+      "rampFraction": 1
+    },
+    {
+      "date": "2024-03-11",
+      "equity": "583745.48",
+      "rampFraction": 1
+    },
+    {
+      "date": "2024-03-12",
+      "equity": "584578.91",
+      "rampFraction": 1
+    },
+    {
+      "date": "2024-03-13",
+      "equity": "585374.61",
+      "rampFraction": 1
+    },
+    {
+      "date": "2024-03-14",
+      "equity": "586000.91",
+      "rampFraction": 1
+    },
+    {
+      "date": "2024-03-15",
+      "equity": "586426.83",
+      "rampFraction": 1
+    },
+    {
+      "date": "2024-03-16",
+      "equity": "586671.83",
+      "rampFraction": 1
+    },
+    {
+      "date": "2024-03-17",
+      "equity": "587124.81",
+      "rampFraction": 1
+    },
+    {
+      "date": "2024-03-18",
+      "equity": "587445.15",
+      "rampFraction": 1
+    },
+    {
+      "date": "2024-03-19",
+      "equity": "587765.12",
+      "rampFraction": 1
+    },
+    {
+      "date": "2024-03-20",
+      "equity": "588215.77",
+      "rampFraction": 1
+    },
+    {
+      "date": "2024-03-21",
+      "equity": "588528.18",
+      "rampFraction": 1
+    },
+    {
+      "date": "2024-03-22",
+      "equity": "588884.29",
+      "rampFraction": 1
+    },
+    {
+      "date": "2024-03-23",
+      "equity": "589240.68",
+      "rampFraction": 1
+    },
+    {
+      "date": "2024-03-24",
+      "equity": "589694.84",
+      "rampFraction": 1
+    },
+    {
+      "date": "2024-03-25",
+      "equity": "590125.83",
+      "rampFraction": 1
+    },
+    {
+      "date": "2024-03-26",
+      "equity": "590547.10",
+      "rampFraction": 1
+    },
+    {
+      "date": "2024-03-27",
+      "equity": "591063.89",
+      "rampFraction": 1
+    },
+    {
+      "date": "2024-03-28",
+      "equity": "592006.08",
+      "rampFraction": 1
+    },
+    {
+      "date": "2024-03-29",
+      "equity": "592953.53",
+      "rampFraction": 1
+    },
+    {
+      "date": "2024-03-30",
+      "equity": "594205.11",
+      "rampFraction": 1
+    },
+    {
+      "date": "2024-03-31",
+      "equity": "595026.50",
+      "rampFraction": 1
+    },
+    {
+      "date": "2024-04-01",
+      "equity": "596029.44",
+      "rampFraction": 1
+    },
+    {
+      "date": "2024-04-02",
+      "equity": "597317.15",
+      "rampFraction": 1
+    },
+    {
+      "date": "2024-04-03",
+      "equity": "598251.94",
+      "rampFraction": 1
+    },
+    {
+      "date": "2024-04-04",
+      "equity": "598931.20",
+      "rampFraction": 1
+    },
+    {
+      "date": "2024-04-05",
+      "equity": "599698.82",
+      "rampFraction": 1
+    },
+    {
+      "date": "2024-04-06",
+      "equity": "600390.16",
+      "rampFraction": 1
+    },
+    {
+      "date": "2024-04-07",
+      "equity": "601140.16",
+      "rampFraction": 1
+    },
+    {
+      "date": "2024-04-08",
+      "equity": "601883.68",
+      "rampFraction": 1
+    },
+    {
+      "date": "2024-04-09",
+      "equity": "602545.44",
+      "rampFraction": 1
+    },
+    {
+      "date": "2024-04-10",
+      "equity": "603244.58",
+      "rampFraction": 1
+    },
+    {
+      "date": "2024-04-11",
+      "equity": "603675.14",
+      "rampFraction": 1
+    },
+    {
+      "date": "2024-04-12",
+      "equity": "604121.11",
+      "rampFraction": 1
+    },
+    {
+      "date": "2024-04-13",
+      "equity": "604317.39",
+      "rampFraction": 1
+    },
+    {
+      "date": "2024-04-14",
+      "equity": "604238.76",
+      "rampFraction": 1
+    },
+    {
+      "date": "2024-04-15",
+      "equity": "604416.22",
+      "rampFraction": 1
+    },
+    {
+      "date": "2024-04-16",
+      "equity": "604611.14",
+      "rampFraction": 1
+    },
+    {
+      "date": "2024-04-17",
+      "equity": "604708.26",
+      "rampFraction": 1
+    },
+    {
+      "date": "2024-04-18",
+      "equity": "605075.01",
+      "rampFraction": 1
+    },
+    {
+      "date": "2024-04-19",
+      "equity": "605378.89",
+      "rampFraction": 1
+    },
+    {
+      "date": "2024-04-20",
+      "equity": "605528.11",
+      "rampFraction": 1
+    },
+    {
+      "date": "2024-04-21",
+      "equity": "605628.78",
+      "rampFraction": 1
+    },
+    {
+      "date": "2024-04-22",
+      "equity": "605926.21",
+      "rampFraction": 1
+    },
+    {
+      "date": "2024-04-23",
+      "equity": "606157.51",
+      "rampFraction": 1
+    },
+    {
+      "date": "2024-04-24",
+      "equity": "606514.21",
+      "rampFraction": 1
+    },
+    {
+      "date": "2024-04-25",
+      "equity": "606857.86",
+      "rampFraction": 1
+    },
+    {
+      "date": "2024-04-26",
+      "equity": "607125.95",
+      "rampFraction": 1
+    },
+    {
+      "date": "2024-04-27",
+      "equity": "607383.35",
+      "rampFraction": 1
+    },
+    {
+      "date": "2024-04-28",
+      "equity": "607565.66",
+      "rampFraction": 1
+    },
+    {
+      "date": "2024-04-29",
+      "equity": "607771.41",
+      "rampFraction": 1
+    },
+    {
+      "date": "2024-04-30",
+      "equity": "608003.99",
+      "rampFraction": 1
+    },
+    {
+      "date": "2024-05-01",
+      "equity": "608330.56",
+      "rampFraction": 1
+    },
+    {
+      "date": "2024-05-02",
+      "equity": "608504.58",
+      "rampFraction": 1
+    },
+    {
+      "date": "2024-05-03",
+      "equity": "608708.46",
+      "rampFraction": 1
+    },
+    {
+      "date": "2024-05-04",
+      "equity": "608904.78",
+      "rampFraction": 1
+    },
+    {
+      "date": "2024-05-05",
+      "equity": "609055.69",
+      "rampFraction": 1
+    },
+    {
+      "date": "2024-05-06",
+      "equity": "609390.48",
+      "rampFraction": 1
+    },
+    {
+      "date": "2024-05-07",
+      "equity": "609569.03",
+      "rampFraction": 1
+    },
+    {
+      "date": "2024-05-08",
+      "equity": "609863.67",
+      "rampFraction": 1
+    },
+    {
+      "date": "2024-05-09",
+      "equity": "610309.13",
+      "rampFraction": 1
+    },
+    {
+      "date": "2024-05-10",
+      "equity": "610715.46",
+      "rampFraction": 1
+    },
+    {
+      "date": "2024-05-11",
+      "equity": "610770.95",
+      "rampFraction": 1
+    },
+    {
+      "date": "2024-05-12",
+      "equity": "610969.70",
+      "rampFraction": 1
+    },
+    {
+      "date": "2024-05-13",
+      "equity": "611150.06",
+      "rampFraction": 1
+    },
+    {
+      "date": "2024-05-14",
+      "equity": "611603.04",
+      "rampFraction": 1
+    },
+    {
+      "date": "2024-05-15",
+      "equity": "612000.49",
+      "rampFraction": 1
+    },
+    {
+      "date": "2024-05-16",
+      "equity": "612266.12",
+      "rampFraction": 1
+    },
+    {
+      "date": "2024-05-17",
+      "equity": "612376.32",
+      "rampFraction": 1
+    },
+    {
+      "date": "2024-05-18",
+      "equity": "612691.79",
+      "rampFraction": 1
+    },
+    {
+      "date": "2024-05-19",
+      "equity": "612833.03",
+      "rampFraction": 1
+    },
+    {
+      "date": "2024-05-20",
+      "equity": "613135.03",
+      "rampFraction": 1
+    },
+    {
+      "date": "2024-05-21",
+      "equity": "613168.63",
+      "rampFraction": 1
+    },
+    {
+      "date": "2024-05-22",
+      "equity": "613476.16",
+      "rampFraction": 1
+    },
+    {
+      "date": "2024-05-23",
+      "equity": "613912.26",
+      "rampFraction": 1
+    },
+    {
+      "date": "2024-05-24",
+      "equity": "614175.25",
+      "rampFraction": 1
+    },
+    {
+      "date": "2024-05-25",
+      "equity": "614406.69",
+      "rampFraction": 1
+    },
+    {
+      "date": "2024-05-26",
+      "equity": "614657.75",
+      "rampFraction": 1
+    },
+    {
+      "date": "2024-05-27",
+      "equity": "614823.65",
+      "rampFraction": 1
+    },
+    {
+      "date": "2024-05-28",
+      "equity": "614979.10",
+      "rampFraction": 1
+    },
+    {
+      "date": "2024-05-29",
+      "equity": "615097.69",
+      "rampFraction": 1
+    },
+    {
+      "date": "2024-05-30",
+      "equity": "615215.84",
+      "rampFraction": 1
+    },
+    {
+      "date": "2024-05-31",
+      "equity": "615367.58",
+      "rampFraction": 1
+    },
+    {
+      "date": "2024-06-01",
+      "equity": "615526.19",
+      "rampFraction": 1
+    },
+    {
+      "date": "2024-06-02",
+      "equity": "615723.60",
+      "rampFraction": 1
+    },
+    {
+      "date": "2024-06-03",
+      "equity": "615944.39",
+      "rampFraction": 1
+    },
+    {
+      "date": "2024-06-04",
+      "equity": "616148.52",
+      "rampFraction": 1
+    },
+    {
+      "date": "2024-06-05",
+      "equity": "616366.93",
+      "rampFraction": 1
+    },
+    {
+      "date": "2024-06-06",
+      "equity": "616524.76",
+      "rampFraction": 1
+    },
+    {
+      "date": "2024-06-07",
+      "equity": "616631.87",
+      "rampFraction": 1
+    },
+    {
+      "date": "2024-06-08",
+      "equity": "616813.27",
+      "rampFraction": 1
+    },
+    {
+      "date": "2024-06-09",
+      "equity": "617008.72",
+      "rampFraction": 1
+    },
+    {
+      "date": "2024-06-10",
+      "equity": "617172.82",
+      "rampFraction": 1
+    },
+    {
+      "date": "2024-06-11",
+      "equity": "617345.43",
+      "rampFraction": 1
+    },
+    {
+      "date": "2024-06-12",
+      "equity": "617486.64",
+      "rampFraction": 1
+    },
+    {
+      "date": "2024-06-13",
+      "equity": "617618.02",
+      "rampFraction": 1
+    },
+    {
+      "date": "2024-06-14",
+      "equity": "617749.59",
+      "rampFraction": 1
+    },
+    {
+      "date": "2024-06-15",
+      "equity": "617875.07",
+      "rampFraction": 1
+    },
+    {
+      "date": "2024-06-16",
+      "equity": "618015.45",
+      "rampFraction": 1
+    },
+    {
+      "date": "2024-06-17",
+      "equity": "618175.00",
+      "rampFraction": 1
+    },
+    {
+      "date": "2024-06-18",
+      "equity": "618316.24",
+      "rampFraction": 1
+    },
+    {
+      "date": "2024-06-19",
+      "equity": "618513.15",
+      "rampFraction": 1
+    },
+    {
+      "date": "2024-06-20",
+      "equity": "618668.65",
+      "rampFraction": 1
+    },
+    {
+      "date": "2024-06-21",
+      "equity": "618826.53",
+      "rampFraction": 1
+    },
+    {
+      "date": "2024-06-22",
+      "equity": "618967.53",
+      "rampFraction": 1
+    },
+    {
+      "date": "2024-06-23",
+      "equity": "619147.42",
+      "rampFraction": 1
+    },
+    {
+      "date": "2024-06-24",
+      "equity": "619276.22",
+      "rampFraction": 1
+    },
+    {
+      "date": "2024-06-25",
+      "equity": "619404.52",
+      "rampFraction": 1
+    },
+    {
+      "date": "2024-06-26",
+      "equity": "619556.92",
+      "rampFraction": 1
+    },
+    {
+      "date": "2024-06-27",
+      "equity": "619683.93",
+      "rampFraction": 1
+    },
+    {
+      "date": "2024-06-28",
+      "equity": "619806.08",
+      "rampFraction": 1
+    },
+    {
+      "date": "2024-06-29",
+      "equity": "619966.94",
+      "rampFraction": 1
+    },
+    {
+      "date": "2024-06-30",
+      "equity": "620134.03",
+      "rampFraction": 1
+    },
+    {
+      "date": "2024-07-01",
+      "equity": "620238.24",
+      "rampFraction": 1
+    },
+    {
+      "date": "2024-07-02",
+      "equity": "620374.71",
+      "rampFraction": 1
+    },
+    {
+      "date": "2024-07-03",
+      "equity": "620475.51",
+      "rampFraction": 1
+    },
+    {
+      "date": "2024-07-04",
+      "equity": "620560.80",
+      "rampFraction": 1
+    },
+    {
+      "date": "2024-07-05",
+      "equity": "620673.72",
+      "rampFraction": 1
+    },
+    {
+      "date": "2024-07-06",
+      "equity": "620758.88",
+      "rampFraction": 1
+    },
+    {
+      "date": "2024-07-07",
+      "equity": "620910.08",
+      "rampFraction": 1
+    },
+    {
+      "date": "2024-07-08",
+      "equity": "621008.19",
+      "rampFraction": 1
+    },
+    {
+      "date": "2024-07-09",
+      "equity": "621110.76",
+      "rampFraction": 1
+    },
+    {
+      "date": "2024-07-10",
+      "equity": "621205.88",
+      "rampFraction": 1
+    },
+    {
+      "date": "2024-07-11",
+      "equity": "621304.52",
+      "rampFraction": 1
+    },
+    {
+      "date": "2024-07-12",
+      "equity": "621306.73",
+      "rampFraction": 1
+    },
+    {
+      "date": "2024-07-13",
+      "equity": "621403.13",
+      "rampFraction": 1
+    },
+    {
+      "date": "2024-07-14",
+      "equity": "621516.02",
+      "rampFraction": 1
+    },
+    {
+      "date": "2024-07-15",
+      "equity": "621678.13",
+      "rampFraction": 1
+    },
+    {
+      "date": "2024-07-16",
+      "equity": "621798.82",
+      "rampFraction": 1
+    },
+    {
+      "date": "2024-07-17",
+      "equity": "621921.59",
+      "rampFraction": 1
+    },
+    {
+      "date": "2024-07-18",
+      "equity": "622072.28",
+      "rampFraction": 1
+    },
+    {
+      "date": "2024-07-19",
+      "equity": "622191.49",
+      "rampFraction": 1
+    },
+    {
+      "date": "2024-07-20",
+      "equity": "622239.73",
+      "rampFraction": 1
+    },
+    {
+      "date": "2024-07-21",
+      "equity": "622331.97",
+      "rampFraction": 1
+    },
+    {
+      "date": "2024-07-22",
+      "equity": "622360.43",
+      "rampFraction": 1
+    },
+    {
+      "date": "2024-07-23",
+      "equity": "622476.96",
+      "rampFraction": 1
+    },
+    {
+      "date": "2024-07-24",
+      "equity": "622676.92",
+      "rampFraction": 1
+    },
+    {
+      "date": "2024-07-25",
+      "equity": "622843.06",
+      "rampFraction": 1
+    },
+    {
+      "date": "2024-07-26",
+      "equity": "623017.74",
+      "rampFraction": 1
+    },
+    {
+      "date": "2024-07-27",
+      "equity": "623088.41",
+      "rampFraction": 1
+    },
+    {
+      "date": "2024-07-28",
+      "equity": "623224.26",
+      "rampFraction": 1
+    },
+    {
+      "date": "2024-07-29",
+      "equity": "623395.91",
+      "rampFraction": 1
+    },
+    {
+      "date": "2024-07-30",
+      "equity": "623526.66",
+      "rampFraction": 1
+    },
+    {
+      "date": "2024-07-31",
+      "equity": "623709.43",
+      "rampFraction": 1
+    },
+    {
+      "date": "2024-08-01",
+      "equity": "624007.31",
+      "rampFraction": 1
+    },
+    {
+      "date": "2024-08-02",
+      "equity": "624277.94",
+      "rampFraction": 1
+    },
+    {
+      "date": "2024-08-03",
+      "equity": "624463.64",
+      "rampFraction": 1
+    },
+    {
+      "date": "2024-08-04",
+      "equity": "624568.12",
+      "rampFraction": 1
+    },
+    {
+      "date": "2024-08-05",
+      "equity": "624680.36",
+      "rampFraction": 1
+    },
+    {
+      "date": "2024-08-06",
+      "equity": "624534.67",
+      "rampFraction": 1
+    },
+    {
+      "date": "2024-08-07",
+      "equity": "624656.57",
+      "rampFraction": 1
+    },
+    {
+      "date": "2024-08-08",
+      "equity": "624720.13",
+      "rampFraction": 1
+    },
+    {
+      "date": "2024-08-09",
+      "equity": "624713.00",
+      "rampFraction": 1
+    },
+    {
+      "date": "2024-08-10",
+      "equity": "624740.13",
+      "rampFraction": 1
+    },
+    {
+      "date": "2024-08-11",
+      "equity": "624811.82",
+      "rampFraction": 1
+    },
+    {
+      "date": "2024-08-12",
+      "equity": "624903.34",
+      "rampFraction": 1
+    },
+    {
+      "date": "2024-08-13",
+      "equity": "625029.92",
+      "rampFraction": 1
+    },
+    {
+      "date": "2024-08-14",
+      "equity": "625125.36",
+      "rampFraction": 1
+    },
+    {
+      "date": "2024-08-15",
+      "equity": "625202.16",
+      "rampFraction": 1
+    },
+    {
+      "date": "2024-08-16",
+      "equity": "625302.92",
+      "rampFraction": 1
+    },
+    {
+      "date": "2024-08-17",
+      "equity": "625405.69",
+      "rampFraction": 1
+    },
+    {
+      "date": "2024-08-18",
+      "equity": "625488.37",
+      "rampFraction": 1
+    },
+    {
+      "date": "2024-08-19",
+      "equity": "625521.98",
+      "rampFraction": 1
+    },
+    {
+      "date": "2024-08-20",
+      "equity": "625616.73",
+      "rampFraction": 1
+    },
+    {
+      "date": "2024-08-21",
+      "equity": "625808.08",
+      "rampFraction": 1
+    },
+    {
+      "date": "2024-08-22",
+      "equity": "625915.94",
+      "rampFraction": 1
+    },
+    {
+      "date": "2024-08-23",
+      "equity": "626091.40",
+      "rampFraction": 1
+    },
+    {
+      "date": "2024-08-24",
+      "equity": "626218.55",
+      "rampFraction": 1
+    },
+    {
+      "date": "2024-08-25",
+      "equity": "626240.76",
+      "rampFraction": 1
+    },
+    {
+      "date": "2024-08-26",
+      "equity": "626263.56",
+      "rampFraction": 1
+    },
+    {
+      "date": "2024-08-27",
+      "equity": "626348.67",
+      "rampFraction": 1
+    },
+    {
+      "date": "2024-08-28",
+      "equity": "626461.99",
+      "rampFraction": 1
+    },
+    {
+      "date": "2024-08-29",
+      "equity": "626656.66",
+      "rampFraction": 1
+    },
+    {
+      "date": "2024-08-30",
+      "equity": "626761.27",
+      "rampFraction": 1
+    },
+    {
+      "date": "2024-08-31",
+      "equity": "626833.56",
+      "rampFraction": 1
+    },
+    {
+      "date": "2024-09-01",
+      "equity": "626820.91",
+      "rampFraction": 1
+    },
+    {
+      "date": "2024-09-02",
+      "equity": "626919.53",
+      "rampFraction": 1
+    },
+    {
+      "date": "2024-09-03",
+      "equity": "627019.63",
+      "rampFraction": 1
+    },
+    {
+      "date": "2024-09-04",
+      "equity": "627137.85",
+      "rampFraction": 1
+    },
+    {
+      "date": "2024-09-05",
+      "equity": "627250.16",
+      "rampFraction": 1
+    },
+    {
+      "date": "2024-09-06",
+      "equity": "627367.98",
+      "rampFraction": 1
+    },
+    {
+      "date": "2024-09-07",
+      "equity": "627410.61",
+      "rampFraction": 1
+    },
+    {
+      "date": "2024-09-08",
+      "equity": "627595.78",
+      "rampFraction": 1
+    },
+    {
+      "date": "2024-09-09",
+      "equity": "627701.48",
+      "rampFraction": 1
+    },
+    {
+      "date": "2024-09-10",
+      "equity": "627773.84",
+      "rampFraction": 1
+    },
+    {
+      "date": "2024-09-11",
+      "equity": "627891.82",
+      "rampFraction": 1
+    },
+    {
+      "date": "2024-09-12",
+      "equity": "628072.70",
+      "rampFraction": 1
+    },
+    {
+      "date": "2024-09-13",
+      "equity": "628349.97",
+      "rampFraction": 1
+    },
+    {
+      "date": "2024-09-14",
+      "equity": "628448.01",
+      "rampFraction": 1
+    },
+    {
+      "date": "2024-09-15",
+      "equity": "628610.46",
+      "rampFraction": 1
+    },
+    {
+      "date": "2024-09-16",
+      "equity": "628864.98",
+      "rampFraction": 1
+    },
+    {
+      "date": "2024-09-17",
+      "equity": "629109.05",
+      "rampFraction": 1
+    },
+    {
+      "date": "2024-09-18",
+      "equity": "629327.28",
+      "rampFraction": 1
+    },
+    {
+      "date": "2024-09-19",
+      "equity": "629514.08",
+      "rampFraction": 1
+    },
+    {
+      "date": "2024-09-20",
+      "equity": "629669.08",
+      "rampFraction": 1
+    },
+    {
+      "date": "2024-09-21",
+      "equity": "629766.24",
+      "rampFraction": 1
+    },
+    {
+      "date": "2024-09-22",
+      "equity": "629972.73",
+      "rampFraction": 1
+    },
+    {
+      "date": "2024-09-23",
+      "equity": "630220.90",
+      "rampFraction": 1
+    },
+    {
+      "date": "2024-09-24",
+      "equity": "630455.67",
+      "rampFraction": 1
+    },
+    {
+      "date": "2024-09-25",
+      "equity": "630628.06",
+      "rampFraction": 1
+    },
+    {
+      "date": "2024-09-26",
+      "equity": "630875.51",
+      "rampFraction": 1
+    },
+    {
+      "date": "2024-09-27",
+      "equity": "631050.59",
+      "rampFraction": 1
+    },
+    {
+      "date": "2024-09-28",
+      "equity": "631187.75",
+      "rampFraction": 1
+    },
+    {
+      "date": "2024-09-29",
+      "equity": "631374.51",
+      "rampFraction": 1
+    },
+    {
+      "date": "2024-09-30",
+      "equity": "631595.31",
+      "rampFraction": 1
+    },
+    {
+      "date": "2024-10-01",
+      "equity": "631758.76",
+      "rampFraction": 1
+    },
+    {
+      "date": "2024-10-02",
+      "equity": "631949.42",
+      "rampFraction": 1
+    },
+    {
+      "date": "2024-10-03",
+      "equity": "632119.02",
+      "rampFraction": 1
+    },
+    {
+      "date": "2024-10-04",
+      "equity": "632258.61",
+      "rampFraction": 1
+    },
+    {
+      "date": "2024-10-05",
+      "equity": "632461.40",
+      "rampFraction": 1
+    },
+    {
+      "date": "2024-10-06",
+      "equity": "632659.12",
+      "rampFraction": 1
+    },
+    {
+      "date": "2024-10-07",
+      "equity": "632837.91",
+      "rampFraction": 1
+    },
+    {
+      "date": "2024-10-08",
+      "equity": "633170.98",
+      "rampFraction": 1
+    },
+    {
+      "date": "2024-10-09",
+      "equity": "633319.76",
+      "rampFraction": 1
+    },
+    {
+      "date": "2024-10-10",
+      "equity": "633454.52",
+      "rampFraction": 1
+    },
+    {
+      "date": "2024-10-11",
+      "equity": "633565.88",
+      "rampFraction": 1
+    },
+    {
+      "date": "2024-10-12",
+      "equity": "633750.04",
+      "rampFraction": 1
+    },
+    {
+      "date": "2024-10-13",
+      "equity": "633857.37",
+      "rampFraction": 1
+    },
+    {
+      "date": "2024-10-14",
+      "equity": "634080.55",
+      "rampFraction": 1
+    },
+    {
+      "date": "2024-10-15",
+      "equity": "634200.20",
+      "rampFraction": 1
+    },
+    {
+      "date": "2024-10-16",
+      "equity": "634308.75",
+      "rampFraction": 1
+    },
+    {
+      "date": "2024-10-17",
+      "equity": "634451.09",
+      "rampFraction": 1
+    },
+    {
+      "date": "2024-10-18",
+      "equity": "634553.94",
+      "rampFraction": 1
+    },
+    {
+      "date": "2024-10-19",
+      "equity": "634619.73",
+      "rampFraction": 1
+    },
+    {
+      "date": "2024-10-20",
+      "equity": "634652.65",
+      "rampFraction": 1
+    },
+    {
+      "date": "2024-10-21",
+      "equity": "634759.25",
+      "rampFraction": 1
+    },
+    {
+      "date": "2024-10-22",
+      "equity": "634829.59",
+      "rampFraction": 1
+    },
+    {
+      "date": "2024-10-23",
+      "equity": "634941.20",
+      "rampFraction": 1
+    },
+    {
+      "date": "2024-10-24",
+      "equity": "635090.75",
+      "rampFraction": 1
+    },
+    {
+      "date": "2024-10-25",
+      "equity": "635237.24",
+      "rampFraction": 1
+    },
+    {
+      "date": "2024-10-26",
+      "equity": "635355.10",
+      "rampFraction": 1
+    },
+    {
+      "date": "2024-10-27",
+      "equity": "635609.61",
+      "rampFraction": 1
+    },
+    {
+      "date": "2024-10-28",
+      "equity": "635739.32",
+      "rampFraction": 1
+    },
+    {
+      "date": "2024-10-29",
+      "equity": "635902.86",
+      "rampFraction": 1
+    },
+    {
+      "date": "2024-10-30",
+      "equity": "635996.31",
+      "rampFraction": 1
+    },
+    {
+      "date": "2024-10-31",
+      "equity": "636259.89",
+      "rampFraction": 1
+    },
+    {
+      "date": "2024-11-01",
+      "equity": "636682.34",
+      "rampFraction": 1
+    },
+    {
+      "date": "2024-11-02",
+      "equity": "636970.12",
+      "rampFraction": 1
+    },
+    {
+      "date": "2024-11-03",
+      "equity": "637094.78",
+      "rampFraction": 1
+    },
+    {
+      "date": "2024-11-04",
+      "equity": "637235.85",
+      "rampFraction": 1
+    },
+    {
+      "date": "2024-11-05",
+      "equity": "637381.83",
+      "rampFraction": 1
+    },
+    {
+      "date": "2024-11-06",
+      "equity": "637505.72",
+      "rampFraction": 1
+    },
+    {
+      "date": "2024-11-07",
+      "equity": "637456.51",
+      "rampFraction": 1
+    },
+    {
+      "date": "2024-11-08",
+      "equity": "637596.02",
+      "rampFraction": 1
+    },
+    {
+      "date": "2024-11-09",
+      "equity": "637846.08",
+      "rampFraction": 1
+    },
+    {
+      "date": "2024-11-10",
+      "equity": "638296.02",
+      "rampFraction": 1
+    },
+    {
+      "date": "2024-11-11",
+      "equity": "638510.30",
+      "rampFraction": 1
+    },
+    {
+      "date": "2024-11-12",
+      "equity": "638558.75",
+      "rampFraction": 1
+    },
+    {
+      "date": "2024-11-13",
+      "equity": "639185.60",
+      "rampFraction": 1
+    },
+    {
+      "date": "2024-11-14",
+      "equity": "639835.21",
+      "rampFraction": 1
+    },
+    {
+      "date": "2024-11-15",
+      "equity": "640248.21",
+      "rampFraction": 1
+    },
+    {
+      "date": "2024-11-16",
+      "equity": "640648.89",
+      "rampFraction": 1
+    },
+    {
+      "date": "2024-11-17",
+      "equity": "640997.14",
+      "rampFraction": 1
+    },
+    {
+      "date": "2024-11-18",
+      "equity": "641221.50",
+      "rampFraction": 1
+    },
+    {
+      "date": "2024-11-19",
+      "equity": "641622.27",
+      "rampFraction": 1
+    },
+    {
+      "date": "2024-11-20",
+      "equity": "642028.64",
+      "rampFraction": 1
+    },
+    {
+      "date": "2024-11-21",
+      "equity": "642817.34",
+      "rampFraction": 1
+    },
+    {
+      "date": "2024-11-22",
+      "equity": "643042.55",
+      "rampFraction": 1
+    },
+    {
+      "date": "2024-11-23",
+      "equity": "643294.09",
+      "rampFraction": 1
+    },
+    {
+      "date": "2024-11-24",
+      "equity": "643608.82",
+      "rampFraction": 1
+    },
+    {
+      "date": "2024-11-25",
+      "equity": "644168.15",
+      "rampFraction": 1
+    },
+    {
+      "date": "2024-11-26",
+      "equity": "644700.64",
+      "rampFraction": 1
+    },
+    {
+      "date": "2024-11-27",
+      "equity": "645281.60",
+      "rampFraction": 1
+    },
+    {
+      "date": "2024-11-28",
+      "equity": "645932.40",
+      "rampFraction": 1
+    },
+    {
+      "date": "2024-11-29",
+      "equity": "646527.30",
+      "rampFraction": 1
+    },
+    {
+      "date": "2024-11-30",
+      "equity": "647105.18",
+      "rampFraction": 1
+    },
+    {
+      "date": "2024-12-01",
+      "equity": "647732.16",
+      "rampFraction": 1
+    },
+    {
+      "date": "2024-12-02",
+      "equity": "648216.05",
+      "rampFraction": 1
+    },
+    {
+      "date": "2024-12-03",
+      "equity": "648682.03",
+      "rampFraction": 1
+    },
+    {
+      "date": "2024-12-04",
+      "equity": "648965.75",
+      "rampFraction": 1
+    },
+    {
+      "date": "2024-12-05",
+      "equity": "649467.48",
+      "rampFraction": 1
+    },
+    {
+      "date": "2024-12-06",
+      "equity": "650174.59",
+      "rampFraction": 1
+    },
+    {
+      "date": "2024-12-07",
+      "equity": "650782.22",
+      "rampFraction": 1
+    },
+    {
+      "date": "2024-12-08",
+      "equity": "651412.78",
+      "rampFraction": 1
+    },
+    {
+      "date": "2024-12-09",
+      "equity": "652211.57",
+      "rampFraction": 1
+    },
+    {
+      "date": "2024-12-10",
+      "equity": "653006.48",
+      "rampFraction": 1
+    },
+    {
+      "date": "2024-12-11",
+      "equity": "653352.44",
+      "rampFraction": 1
+    },
+    {
+      "date": "2024-12-12",
+      "equity": "653682.94",
+      "rampFraction": 1
+    },
+    {
+      "date": "2024-12-13",
+      "equity": "654005.02",
+      "rampFraction": 1
+    },
+    {
+      "date": "2024-12-14",
+      "equity": "654214.16",
+      "rampFraction": 1
+    },
+    {
+      "date": "2024-12-15",
+      "equity": "654538.08",
+      "rampFraction": 1
+    },
+    {
+      "date": "2024-12-16",
+      "equity": "654826.08",
+      "rampFraction": 1
+    },
+    {
+      "date": "2024-12-17",
+      "equity": "655119.07",
+      "rampFraction": 1
+    },
+    {
+      "date": "2024-12-18",
+      "equity": "655337.85",
+      "rampFraction": 1
+    },
+    {
+      "date": "2024-12-19",
+      "equity": "655603.68",
+      "rampFraction": 1
+    },
+    {
+      "date": "2024-12-20",
+      "equity": "655654.18",
+      "rampFraction": 1
+    },
+    {
+      "date": "2024-12-21",
+      "equity": "655405.93",
+      "rampFraction": 1
+    },
+    {
+      "date": "2024-12-22",
+      "equity": "655450.10",
+      "rampFraction": 1
+    },
+    {
+      "date": "2024-12-23",
+      "equity": "655503.02",
+      "rampFraction": 1
+    },
+    {
+      "date": "2024-12-24",
+      "equity": "655565.36",
+      "rampFraction": 1
+    },
+    {
+      "date": "2024-12-25",
+      "equity": "655490.68",
+      "rampFraction": 1
+    },
+    {
+      "date": "2024-12-26",
+      "equity": "655572.25",
+      "rampFraction": 1
+    },
+    {
+      "date": "2024-12-27",
+      "equity": "655607.72",
+      "rampFraction": 1
+    },
+    {
+      "date": "2024-12-28",
+      "equity": "655651.82",
+      "rampFraction": 1
+    },
+    {
+      "date": "2024-12-29",
+      "equity": "655582.20",
+      "rampFraction": 1
+    },
+    {
+      "date": "2024-12-30",
+      "equity": "655570.96",
+      "rampFraction": 1
+    },
+    {
+      "date": "2024-12-31",
+      "equity": "655712.44",
+      "rampFraction": 1
+    },
+    {
+      "date": "2025-01-01",
+      "equity": "655726.52",
+      "rampFraction": 1
+    },
+    {
+      "date": "2025-01-02",
+      "equity": "655902.82",
+      "rampFraction": 1
+    },
+    {
+      "date": "2025-01-03",
+      "equity": "655872.81",
+      "rampFraction": 1
+    },
+    {
+      "date": "2025-01-04",
+      "equity": "655878.88",
+      "rampFraction": 1
+    },
+    {
+      "date": "2025-01-05",
+      "equity": "655767.11",
+      "rampFraction": 1
+    },
+    {
+      "date": "2025-01-06",
+      "equity": "655820.99",
+      "rampFraction": 1
+    },
+    {
+      "date": "2025-01-07",
+      "equity": "655908.54",
+      "rampFraction": 1
+    },
+    {
+      "date": "2025-01-08",
+      "equity": "656129.11",
+      "rampFraction": 1
+    },
+    {
+      "date": "2025-01-09",
+      "equity": "656444.74",
+      "rampFraction": 1
+    },
+    {
+      "date": "2025-01-10",
+      "equity": "656526.33",
+      "rampFraction": 1
+    },
+    {
+      "date": "2025-01-11",
+      "equity": "656549.80",
+      "rampFraction": 1
+    },
+    {
+      "date": "2025-01-12",
+      "equity": "656600.86",
+      "rampFraction": 1
+    },
+    {
+      "date": "2025-01-13",
+      "equity": "656652.63",
+      "rampFraction": 1
+    },
+    {
+      "date": "2025-01-14",
+      "equity": "656704.39",
+      "rampFraction": 1
+    },
+    {
+      "date": "2025-01-15",
+      "equity": "656413.58",
+      "rampFraction": 1
+    },
+    {
+      "date": "2025-01-16",
+      "equity": "656485.47",
+      "rampFraction": 1
+    },
+    {
+      "date": "2025-01-17",
+      "equity": "656557.37",
+      "rampFraction": 1
+    },
+    {
+      "date": "2025-01-18",
+      "equity": "656629.27",
+      "rampFraction": 1
+    },
+    {
+      "date": "2025-01-19",
+      "equity": "656701.19",
+      "rampFraction": 1
+    },
+    {
+      "date": "2025-01-20",
+      "equity": "656773.11",
+      "rampFraction": 1
+    },
+    {
+      "date": "2025-01-21",
+      "equity": "656845.04",
+      "rampFraction": 1
+    },
+    {
+      "date": "2025-01-22",
+      "equity": "656916.97",
+      "rampFraction": 1
+    },
+    {
+      "date": "2025-01-23",
+      "equity": "656988.92",
+      "rampFraction": 1
+    },
+    {
+      "date": "2025-01-24",
+      "equity": "657060.87",
+      "rampFraction": 1
+    },
+    {
+      "date": "2025-01-25",
+      "equity": "657132.83",
+      "rampFraction": 1
+    },
+    {
+      "date": "2025-01-26",
+      "equity": "657204.80",
+      "rampFraction": 1
+    },
+    {
+      "date": "2025-01-27",
+      "equity": "657276.78",
+      "rampFraction": 1
+    },
+    {
+      "date": "2025-01-28",
+      "equity": "657348.76",
+      "rampFraction": 1
+    },
+    {
+      "date": "2025-01-29",
+      "equity": "657420.76",
+      "rampFraction": 1
+    },
+    {
+      "date": "2025-01-30",
+      "equity": "657492.76",
+      "rampFraction": 1
+    },
+    {
+      "date": "2025-01-31",
+      "equity": "657564.77",
+      "rampFraction": 1
+    },
+    {
+      "date": "2025-02-01",
+      "equity": "657636.78",
+      "rampFraction": 1
+    },
+    {
+      "date": "2025-02-02",
+      "equity": "657708.81",
+      "rampFraction": 1
+    },
+    {
+      "date": "2025-02-03",
+      "equity": "657780.84",
+      "rampFraction": 1
+    },
+    {
+      "date": "2025-02-04",
+      "equity": "657852.88",
+      "rampFraction": 1
+    },
+    {
+      "date": "2025-02-05",
+      "equity": "657924.93",
+      "rampFraction": 1
+    },
+    {
+      "date": "2025-02-06",
+      "equity": "657996.98",
+      "rampFraction": 1
+    },
+    {
+      "date": "2025-02-07",
+      "equity": "658069.05",
+      "rampFraction": 1
+    },
+    {
+      "date": "2025-02-08",
+      "equity": "658141.12",
+      "rampFraction": 1
+    },
+    {
+      "date": "2025-02-09",
+      "equity": "658213.20",
+      "rampFraction": 1
+    },
+    {
+      "date": "2025-02-10",
+      "equity": "658285.29",
+      "rampFraction": 1
+    },
+    {
+      "date": "2025-02-11",
+      "equity": "658357.38",
+      "rampFraction": 1
+    },
+    {
+      "date": "2025-02-12",
+      "equity": "658429.48",
+      "rampFraction": 1
+    },
+    {
+      "date": "2025-02-13",
+      "equity": "658501.59",
+      "rampFraction": 1
+    },
+    {
+      "date": "2025-02-14",
+      "equity": "658573.71",
+      "rampFraction": 1
+    },
+    {
+      "date": "2025-02-15",
+      "equity": "658645.84",
+      "rampFraction": 1
+    },
+    {
+      "date": "2025-02-16",
+      "equity": "658717.98",
+      "rampFraction": 1
+    },
+    {
+      "date": "2025-02-17",
+      "equity": "658790.12",
+      "rampFraction": 1
+    },
+    {
+      "date": "2025-02-18",
+      "equity": "658862.27",
+      "rampFraction": 1
+    },
+    {
+      "date": "2025-02-19",
+      "equity": "658934.43",
+      "rampFraction": 1
+    },
+    {
+      "date": "2025-02-20",
+      "equity": "659006.59",
+      "rampFraction": 1
+    },
+    {
+      "date": "2025-02-21",
+      "equity": "659078.77",
+      "rampFraction": 1
+    },
+    {
+      "date": "2025-02-22",
+      "equity": "659150.95",
+      "rampFraction": 1
+    },
+    {
+      "date": "2025-02-23",
+      "equity": "659223.14",
+      "rampFraction": 1
+    },
+    {
+      "date": "2025-02-24",
+      "equity": "659295.34",
+      "rampFraction": 1
+    },
+    {
+      "date": "2025-02-25",
+      "equity": "659367.54",
+      "rampFraction": 1
+    },
+    {
+      "date": "2025-02-26",
+      "equity": "659439.76",
+      "rampFraction": 1
+    },
+    {
+      "date": "2025-02-27",
+      "equity": "659511.98",
+      "rampFraction": 1
+    },
+    {
+      "date": "2025-02-28",
+      "equity": "659584.21",
+      "rampFraction": 1
+    },
+    {
+      "date": "2025-03-01",
+      "equity": "659656.45",
+      "rampFraction": 1
+    },
+    {
+      "date": "2025-03-02",
+      "equity": "659728.69",
+      "rampFraction": 1
+    },
+    {
+      "date": "2025-03-03",
+      "equity": "659800.94",
+      "rampFraction": 1
+    },
+    {
+      "date": "2025-03-04",
+      "equity": "659873.21",
+      "rampFraction": 1
+    },
+    {
+      "date": "2025-03-05",
+      "equity": "659945.48",
+      "rampFraction": 1
+    },
+    {
+      "date": "2025-03-06",
+      "equity": "660017.75",
+      "rampFraction": 1
+    },
+    {
+      "date": "2025-03-07",
+      "equity": "660090.04",
+      "rampFraction": 1
+    },
+    {
+      "date": "2025-03-08",
+      "equity": "660162.33",
+      "rampFraction": 1
+    },
+    {
+      "date": "2025-03-09",
+      "equity": "660234.63",
+      "rampFraction": 1
+    },
+    {
+      "date": "2025-03-10",
+      "equity": "660306.94",
+      "rampFraction": 1
+    },
+    {
+      "date": "2025-03-11",
+      "equity": "660379.26",
+      "rampFraction": 1
+    },
+    {
+      "date": "2025-03-12",
+      "equity": "660451.58",
+      "rampFraction": 1
+    },
+    {
+      "date": "2025-03-13",
+      "equity": "660523.91",
+      "rampFraction": 1
+    },
+    {
+      "date": "2025-03-14",
+      "equity": "660596.25",
+      "rampFraction": 1
+    },
+    {
+      "date": "2025-03-15",
+      "equity": "660335.99",
+      "rampFraction": 1
+    },
+    {
+      "date": "2025-03-16",
+      "equity": "660572.38",
+      "rampFraction": 1
+    },
+    {
+      "date": "2025-03-17",
+      "equity": "660705.36",
+      "rampFraction": 1
+    },
+    {
+      "date": "2025-03-18",
+      "equity": "660987.01",
+      "rampFraction": 1
+    },
+    {
+      "date": "2025-03-19",
+      "equity": "661110.34",
+      "rampFraction": 1
+    },
+    {
+      "date": "2025-03-20",
+      "equity": "661330.21",
+      "rampFraction": 1
+    },
+    {
+      "date": "2025-03-21",
+      "equity": "661487.51",
+      "rampFraction": 1
+    },
+    {
+      "date": "2025-03-22",
+      "equity": "661530.89",
+      "rampFraction": 1
+    },
+    {
+      "date": "2025-03-23",
+      "equity": "661643.39",
+      "rampFraction": 1
+    },
+    {
+      "date": "2025-03-24",
+      "equity": "661763.35",
+      "rampFraction": 1
+    },
+    {
+      "date": "2025-03-25",
+      "equity": "661858.37",
+      "rampFraction": 1
+    },
+    {
+      "date": "2025-03-26",
+      "equity": "661980.70",
+      "rampFraction": 1
+    },
+    {
+      "date": "2025-03-27",
+      "equity": "662124.94",
+      "rampFraction": 1
+    },
+    {
+      "date": "2025-03-28",
+      "equity": "662359.56",
+      "rampFraction": 1
+    },
+    {
+      "date": "2025-03-29",
+      "equity": "662387.64",
+      "rampFraction": 1
+    },
+    {
+      "date": "2025-03-30",
+      "equity": "662530.73",
+      "rampFraction": 1
+    },
+    {
+      "date": "2025-03-31",
+      "equity": "662658.45",
+      "rampFraction": 1
+    },
+    {
+      "date": "2025-04-01",
+      "equity": "662771.85",
+      "rampFraction": 1
+    },
+    {
+      "date": "2025-04-02",
+      "equity": "662814.76",
+      "rampFraction": 1
+    },
+    {
+      "date": "2025-04-03",
+      "equity": "662935.02",
+      "rampFraction": 1
+    },
+    {
+      "date": "2025-04-04",
+      "equity": "663152.84",
+      "rampFraction": 1
+    },
+    {
+      "date": "2025-04-05",
+      "equity": "663387.25",
+      "rampFraction": 1
+    },
+    {
+      "date": "2025-04-06",
+      "equity": "663533.73",
+      "rampFraction": 1
+    },
+    {
+      "date": "2025-04-07",
+      "equity": "663594.81",
+      "rampFraction": 1
+    },
+    {
+      "date": "2025-04-08",
+      "equity": "664092.36",
+      "rampFraction": 1
+    },
+    {
+      "date": "2025-04-09",
+      "equity": "664345.94",
+      "rampFraction": 1
+    },
+    {
+      "date": "2025-04-10",
+      "equity": "664499.91",
+      "rampFraction": 1
+    },
+    {
+      "date": "2025-04-11",
+      "equity": "664673.97",
+      "rampFraction": 1
+    },
+    {
+      "date": "2025-04-12",
+      "equity": "664860.11",
+      "rampFraction": 1
+    },
+    {
+      "date": "2025-04-13",
+      "equity": "665032.55",
+      "rampFraction": 1
+    },
+    {
+      "date": "2025-04-14",
+      "equity": "665116.27",
+      "rampFraction": 1
+    },
+    {
+      "date": "2025-04-15",
+      "equity": "665126.71",
+      "rampFraction": 1
+    },
+    {
+      "date": "2025-04-16",
+      "equity": "665359.63",
+      "rampFraction": 1
+    },
+    {
+      "date": "2025-04-17",
+      "equity": "665510.19",
+      "rampFraction": 1
+    },
+    {
+      "date": "2025-04-18",
+      "equity": "665657.81",
+      "rampFraction": 1
+    },
+    {
+      "date": "2025-04-19",
+      "equity": "665722.91",
+      "rampFraction": 1
+    },
+    {
+      "date": "2025-04-20",
+      "equity": "666069.26",
+      "rampFraction": 1
+    },
+    {
+      "date": "2025-04-21",
+      "equity": "666490.50",
+      "rampFraction": 1
+    },
+    {
+      "date": "2025-04-22",
+      "equity": "666778.31",
+      "rampFraction": 1
+    },
+    {
+      "date": "2025-04-23",
+      "equity": "666869.10",
+      "rampFraction": 1
+    },
+    {
+      "date": "2025-04-24",
+      "equity": "666874.82",
+      "rampFraction": 1
+    },
+    {
+      "date": "2025-04-25",
+      "equity": "666871.36",
+      "rampFraction": 1
+    },
+    {
+      "date": "2025-04-26",
+      "equity": "667077.64",
+      "rampFraction": 1
+    },
+    {
+      "date": "2025-04-27",
+      "equity": "667187.95",
+      "rampFraction": 1
+    },
+    {
+      "date": "2025-04-28",
+      "equity": "667283.51",
+      "rampFraction": 1
+    },
+    {
+      "date": "2025-04-29",
+      "equity": "667427.22",
+      "rampFraction": 1
+    },
+    {
+      "date": "2025-04-30",
+      "equity": "667423.76",
+      "rampFraction": 1
+    },
+    {
+      "date": "2025-05-01",
+      "equity": "667540.73",
+      "rampFraction": 1
+    },
+    {
+      "date": "2025-05-02",
+      "equity": "667724.64",
+      "rampFraction": 1
+    },
+    {
+      "date": "2025-05-03",
+      "equity": "667832.40",
+      "rampFraction": 1
+    },
+    {
+      "date": "2025-05-04",
+      "equity": "667931.51",
+      "rampFraction": 1
+    },
+    {
+      "date": "2025-05-05",
+      "equity": "668030.27",
+      "rampFraction": 1
+    },
+    {
+      "date": "2025-05-06",
+      "equity": "668058.14",
+      "rampFraction": 1
+    },
+    {
+      "date": "2025-05-07",
+      "equity": "668032.21",
+      "rampFraction": 1
+    },
+    {
+      "date": "2025-05-08",
+      "equity": "668104.12",
+      "rampFraction": 1
+    },
+    {
+      "date": "2025-05-09",
+      "equity": "668155.85",
+      "rampFraction": 1
+    },
+    {
+      "date": "2025-05-10",
+      "equity": "668208.53",
+      "rampFraction": 1
+    },
+    {
+      "date": "2025-05-11",
+      "equity": "668261.21",
+      "rampFraction": 1
+    },
+    {
+      "date": "2025-05-12",
+      "equity": "667964.18",
+      "rampFraction": 1
+    },
+    {
+      "date": "2025-05-13",
+      "equity": "668037.33",
+      "rampFraction": 1
+    },
+    {
+      "date": "2025-05-14",
+      "equity": "668110.50",
+      "rampFraction": 1
+    },
+    {
+      "date": "2025-05-15",
+      "equity": "668183.67",
+      "rampFraction": 1
+    },
+    {
+      "date": "2025-05-16",
+      "equity": "668256.85",
+      "rampFraction": 1
+    },
+    {
+      "date": "2025-05-17",
+      "equity": "668330.03",
+      "rampFraction": 1
+    },
+    {
+      "date": "2025-05-18",
+      "equity": "668403.23",
+      "rampFraction": 1
+    },
+    {
+      "date": "2025-05-19",
+      "equity": "668476.43",
+      "rampFraction": 1
+    },
+    {
+      "date": "2025-05-20",
+      "equity": "668549.64",
+      "rampFraction": 1
+    },
+    {
+      "date": "2025-05-21",
+      "equity": "668622.86",
+      "rampFraction": 1
+    },
+    {
+      "date": "2025-05-22",
+      "equity": "668696.09",
+      "rampFraction": 1
+    },
+    {
+      "date": "2025-05-23",
+      "equity": "668769.33",
+      "rampFraction": 1
+    },
+    {
+      "date": "2025-05-24",
+      "equity": "668842.57",
+      "rampFraction": 1
+    },
+    {
+      "date": "2025-05-25",
+      "equity": "668915.82",
+      "rampFraction": 1
+    },
+    {
+      "date": "2025-05-26",
+      "equity": "668989.08",
+      "rampFraction": 1
+    },
+    {
+      "date": "2025-05-27",
+      "equity": "669062.35",
+      "rampFraction": 1
+    },
+    {
+      "date": "2025-05-28",
+      "equity": "669135.62",
+      "rampFraction": 1
+    },
+    {
+      "date": "2025-05-29",
+      "equity": "669208.91",
+      "rampFraction": 1
+    },
+    {
+      "date": "2025-05-30",
+      "equity": "669282.20",
+      "rampFraction": 1
+    },
+    {
+      "date": "2025-05-31",
+      "equity": "669355.50",
+      "rampFraction": 1
+    },
+    {
+      "date": "2025-06-01",
+      "equity": "669428.81",
+      "rampFraction": 1
+    },
+    {
+      "date": "2025-06-02",
+      "equity": "669502.12",
+      "rampFraction": 1
+    },
+    {
+      "date": "2025-06-03",
+      "equity": "669575.45",
+      "rampFraction": 1
+    },
+    {
+      "date": "2025-06-04",
+      "equity": "669648.78",
+      "rampFraction": 1
+    },
+    {
+      "date": "2025-06-05",
+      "equity": "669722.12",
+      "rampFraction": 1
+    },
+    {
+      "date": "2025-06-06",
+      "equity": "669795.47",
+      "rampFraction": 1
+    },
+    {
+      "date": "2025-06-07",
+      "equity": "669868.82",
+      "rampFraction": 1
+    },
+    {
+      "date": "2025-06-08",
+      "equity": "669942.18",
+      "rampFraction": 1
+    },
+    {
+      "date": "2025-06-09",
+      "equity": "670015.56",
+      "rampFraction": 1
+    },
+    {
+      "date": "2025-06-10",
+      "equity": "670088.94",
+      "rampFraction": 1
+    },
+    {
+      "date": "2025-06-11",
+      "equity": "670162.32",
+      "rampFraction": 1
+    },
+    {
+      "date": "2025-06-12",
+      "equity": "670235.72",
+      "rampFraction": 1
+    },
+    {
+      "date": "2025-06-13",
+      "equity": "670309.12",
+      "rampFraction": 1
+    },
+    {
+      "date": "2025-06-14",
+      "equity": "670382.54",
+      "rampFraction": 1
+    },
+    {
+      "date": "2025-06-15",
+      "equity": "670455.96",
+      "rampFraction": 1
+    },
+    {
+      "date": "2025-06-16",
+      "equity": "670529.39",
+      "rampFraction": 1
+    },
+    {
+      "date": "2025-06-17",
+      "equity": "670602.82",
+      "rampFraction": 1
+    },
+    {
+      "date": "2025-06-18",
+      "equity": "670676.27",
+      "rampFraction": 1
+    },
+    {
+      "date": "2025-06-19",
+      "equity": "670749.72",
+      "rampFraction": 1
+    },
+    {
+      "date": "2025-06-20",
+      "equity": "670823.18",
+      "rampFraction": 1
+    },
+    {
+      "date": "2025-06-21",
+      "equity": "670896.65",
+      "rampFraction": 1
+    },
+    {
+      "date": "2025-06-22",
+      "equity": "670970.12",
+      "rampFraction": 1
+    },
+    {
+      "date": "2025-06-23",
+      "equity": "671043.61",
+      "rampFraction": 1
+    },
+    {
+      "date": "2025-06-24",
+      "equity": "671117.10",
+      "rampFraction": 1
+    },
+    {
+      "date": "2025-06-25",
+      "equity": "671190.60",
+      "rampFraction": 1
+    },
+    {
+      "date": "2025-06-26",
+      "equity": "671264.11",
+      "rampFraction": 1
+    },
+    {
+      "date": "2025-06-27",
+      "equity": "671337.63",
+      "rampFraction": 1
+    },
+    {
+      "date": "2025-06-28",
+      "equity": "671411.15",
+      "rampFraction": 1
+    },
+    {
+      "date": "2025-06-29",
+      "equity": "671484.68",
+      "rampFraction": 1
+    },
+    {
+      "date": "2025-06-30",
+      "equity": "671558.22",
+      "rampFraction": 1
+    },
+    {
+      "date": "2025-07-01",
+      "equity": "671631.77",
+      "rampFraction": 1
+    },
+    {
+      "date": "2025-07-02",
+      "equity": "671705.33",
+      "rampFraction": 1
+    },
+    {
+      "date": "2025-07-03",
+      "equity": "671778.90",
+      "rampFraction": 1
+    },
+    {
+      "date": "2025-07-04",
+      "equity": "671852.47",
+      "rampFraction": 1
+    },
+    {
+      "date": "2025-07-05",
+      "equity": "671926.05",
+      "rampFraction": 1
+    },
+    {
+      "date": "2025-07-06",
+      "equity": "671999.64",
+      "rampFraction": 1
+    },
+    {
+      "date": "2025-07-07",
+      "equity": "672073.24",
+      "rampFraction": 1
+    },
+    {
+      "date": "2025-07-08",
+      "equity": "672146.84",
+      "rampFraction": 1
+    },
+    {
+      "date": "2025-07-09",
+      "equity": "672220.45",
+      "rampFraction": 1
+    },
+    {
+      "date": "2025-07-10",
+      "equity": "672294.08",
+      "rampFraction": 1
+    },
+    {
+      "date": "2025-07-11",
+      "equity": "672367.71",
+      "rampFraction": 1
+    },
+    {
+      "date": "2025-07-12",
+      "equity": "672441.34",
+      "rampFraction": 1
+    },
+    {
+      "date": "2025-07-13",
+      "equity": "672514.99",
+      "rampFraction": 1
+    },
+    {
+      "date": "2025-07-14",
+      "equity": "672588.64",
+      "rampFraction": 1
+    },
+    {
+      "date": "2025-07-15",
+      "equity": "672662.30",
+      "rampFraction": 1
+    },
+    {
+      "date": "2025-07-16",
+      "equity": "672735.97",
+      "rampFraction": 1
+    },
+    {
+      "date": "2025-07-17",
+      "equity": "672809.65",
+      "rampFraction": 1
+    },
+    {
+      "date": "2025-07-18",
+      "equity": "672883.34",
+      "rampFraction": 1
+    },
+    {
+      "date": "2025-07-19",
+      "equity": "672957.03",
+      "rampFraction": 1
+    },
+    {
+      "date": "2025-07-20",
+      "equity": "673030.73",
+      "rampFraction": 1
+    },
+    {
+      "date": "2025-07-21",
+      "equity": "673104.44",
+      "rampFraction": 1
+    },
+    {
+      "date": "2025-07-22",
+      "equity": "673178.16",
+      "rampFraction": 1
+    },
+    {
+      "date": "2025-07-23",
+      "equity": "673251.89",
+      "rampFraction": 1
+    },
+    {
+      "date": "2025-07-24",
+      "equity": "673325.62",
+      "rampFraction": 1
+    },
+    {
+      "date": "2025-07-25",
+      "equity": "673399.37",
+      "rampFraction": 1
+    },
+    {
+      "date": "2025-07-26",
+      "equity": "673473.12",
+      "rampFraction": 1
+    },
+    {
+      "date": "2025-07-27",
+      "equity": "673546.88",
+      "rampFraction": 1
+    },
+    {
+      "date": "2025-07-28",
+      "equity": "673620.64",
+      "rampFraction": 1
+    },
+    {
+      "date": "2025-07-29",
+      "equity": "673694.42",
+      "rampFraction": 1
+    },
+    {
+      "date": "2025-07-30",
+      "equity": "673768.20",
+      "rampFraction": 1
+    },
+    {
+      "date": "2025-07-31",
+      "equity": "673841.99",
+      "rampFraction": 1
+    },
+    {
+      "date": "2025-08-01",
+      "equity": "673915.79",
+      "rampFraction": 1
+    },
+    {
+      "date": "2025-08-02",
+      "equity": "673989.60",
+      "rampFraction": 1
+    },
+    {
+      "date": "2025-08-03",
+      "equity": "674063.41",
+      "rampFraction": 1
+    },
+    {
+      "date": "2025-08-04",
+      "equity": "674137.23",
+      "rampFraction": 1
+    },
+    {
+      "date": "2025-08-05",
+      "equity": "674211.07",
+      "rampFraction": 1
+    },
+    {
+      "date": "2025-08-06",
+      "equity": "674284.91",
+      "rampFraction": 1
+    },
+    {
+      "date": "2025-08-07",
+      "equity": "674358.75",
+      "rampFraction": 1
+    },
+    {
+      "date": "2025-08-08",
+      "equity": "674432.61",
+      "rampFraction": 1
+    },
+    {
+      "date": "2025-08-09",
+      "equity": "674506.47",
+      "rampFraction": 1
+    },
+    {
+      "date": "2025-08-10",
+      "equity": "674580.34",
+      "rampFraction": 1
+    },
+    {
+      "date": "2025-08-11",
+      "equity": "674654.22",
+      "rampFraction": 1
+    },
+    {
+      "date": "2025-08-12",
+      "equity": "674728.11",
+      "rampFraction": 1
+    },
+    {
+      "date": "2025-08-13",
+      "equity": "674802.01",
+      "rampFraction": 1
+    },
+    {
+      "date": "2025-08-14",
+      "equity": "674875.91",
+      "rampFraction": 1
+    },
+    {
+      "date": "2025-08-15",
+      "equity": "674949.82",
+      "rampFraction": 1
+    },
+    {
+      "date": "2025-08-16",
+      "equity": "675023.75",
+      "rampFraction": 1
+    },
+    {
+      "date": "2025-08-17",
+      "equity": "675097.67",
+      "rampFraction": 1
+    },
+    {
+      "date": "2025-08-18",
+      "equity": "675171.61",
+      "rampFraction": 1
+    },
+    {
+      "date": "2025-08-19",
+      "equity": "675245.55",
+      "rampFraction": 1
+    },
+    {
+      "date": "2025-08-20",
+      "equity": "675319.51",
+      "rampFraction": 1
+    },
+    {
+      "date": "2025-08-21",
+      "equity": "675393.47",
+      "rampFraction": 1
+    },
+    {
+      "date": "2025-08-22",
+      "equity": "675467.44",
+      "rampFraction": 1
+    },
+    {
+      "date": "2025-08-23",
+      "equity": "675541.41",
+      "rampFraction": 1
+    },
+    {
+      "date": "2025-08-24",
+      "equity": "675615.40",
+      "rampFraction": 1
+    },
+    {
+      "date": "2025-08-25",
+      "equity": "675689.39",
+      "rampFraction": 1
+    },
+    {
+      "date": "2025-08-26",
+      "equity": "675763.39",
+      "rampFraction": 1
+    },
+    {
+      "date": "2025-08-27",
+      "equity": "675837.40",
+      "rampFraction": 1
+    },
+    {
+      "date": "2025-08-28",
+      "equity": "675911.42",
+      "rampFraction": 1
+    },
+    {
+      "date": "2025-08-29",
+      "equity": "675985.45",
+      "rampFraction": 1
+    },
+    {
+      "date": "2025-08-30",
+      "equity": "676059.48",
+      "rampFraction": 1
+    },
+    {
+      "date": "2025-08-31",
+      "equity": "676133.52",
+      "rampFraction": 1
+    },
+    {
+      "date": "2025-09-01",
+      "equity": "676207.57",
+      "rampFraction": 1
+    },
+    {
+      "date": "2025-09-02",
+      "equity": "676281.63",
+      "rampFraction": 1
+    },
+    {
+      "date": "2025-09-03",
+      "equity": "676355.70",
+      "rampFraction": 1
+    },
+    {
+      "date": "2025-09-04",
+      "equity": "676429.77",
+      "rampFraction": 1
+    },
+    {
+      "date": "2025-09-05",
+      "equity": "676503.85",
+      "rampFraction": 1
+    },
+    {
+      "date": "2025-09-06",
+      "equity": "676577.94",
+      "rampFraction": 1
+    },
+    {
+      "date": "2025-09-07",
+      "equity": "676652.04",
+      "rampFraction": 1
+    },
+    {
+      "date": "2025-09-08",
+      "equity": "676726.15",
+      "rampFraction": 1
+    },
+    {
+      "date": "2025-09-09",
+      "equity": "676800.26",
+      "rampFraction": 1
+    },
+    {
+      "date": "2025-09-10",
+      "equity": "676874.39",
+      "rampFraction": 1
+    },
+    {
+      "date": "2025-09-11",
+      "equity": "676948.52",
+      "rampFraction": 1
+    },
+    {
+      "date": "2025-09-12",
+      "equity": "677022.66",
+      "rampFraction": 1
+    },
+    {
+      "date": "2025-09-13",
+      "equity": "677096.81",
+      "rampFraction": 1
+    },
+    {
+      "date": "2025-09-14",
+      "equity": "677170.96",
+      "rampFraction": 1
+    },
+    {
+      "date": "2025-09-15",
+      "equity": "677245.12",
+      "rampFraction": 1
+    },
+    {
+      "date": "2025-09-16",
+      "equity": "677319.30",
+      "rampFraction": 1
+    },
+    {
+      "date": "2025-09-17",
+      "equity": "677393.48",
+      "rampFraction": 1
+    },
+    {
+      "date": "2025-09-18",
+      "equity": "677467.66",
+      "rampFraction": 1
+    },
+    {
+      "date": "2025-09-19",
+      "equity": "677541.86",
+      "rampFraction": 1
+    },
+    {
+      "date": "2025-09-20",
+      "equity": "677616.06",
+      "rampFraction": 1
+    },
+    {
+      "date": "2025-09-21",
+      "equity": "677690.28",
+      "rampFraction": 1
+    },
+    {
+      "date": "2025-09-22",
+      "equity": "677764.50",
+      "rampFraction": 1
+    },
+    {
+      "date": "2025-09-23",
+      "equity": "677838.73",
+      "rampFraction": 1
+    },
+    {
+      "date": "2025-09-24",
+      "equity": "677912.96",
+      "rampFraction": 1
+    },
+    {
+      "date": "2025-09-25",
+      "equity": "677987.21",
+      "rampFraction": 1
+    },
+    {
+      "date": "2025-09-26",
+      "equity": "678061.46",
+      "rampFraction": 1
+    },
+    {
+      "date": "2025-09-27",
+      "equity": "678135.72",
+      "rampFraction": 1
+    },
+    {
+      "date": "2025-09-28",
+      "equity": "678209.99",
+      "rampFraction": 1
+    },
+    {
+      "date": "2025-09-29",
+      "equity": "678284.27",
+      "rampFraction": 1
+    },
+    {
+      "date": "2025-09-30",
+      "equity": "678358.55",
+      "rampFraction": 1
+    },
+    {
+      "date": "2025-10-01",
+      "equity": "678432.85",
+      "rampFraction": 1
+    },
+    {
+      "date": "2025-10-02",
+      "equity": "678507.15",
+      "rampFraction": 1
+    },
+    {
+      "date": "2025-10-03",
+      "equity": "678581.46",
+      "rampFraction": 1
+    },
+    {
+      "date": "2025-10-04",
+      "equity": "678655.78",
+      "rampFraction": 1
+    },
+    {
+      "date": "2025-10-05",
+      "equity": "678730.10",
+      "rampFraction": 1
+    },
+    {
+      "date": "2025-10-06",
+      "equity": "678804.44",
+      "rampFraction": 1
+    },
+    {
+      "date": "2025-10-07",
+      "equity": "678878.78",
+      "rampFraction": 1
+    },
+    {
+      "date": "2025-10-08",
+      "equity": "678953.13",
+      "rampFraction": 1
+    },
+    {
+      "date": "2025-10-09",
+      "equity": "679027.49",
+      "rampFraction": 1
+    },
+    {
+      "date": "2025-10-10",
+      "equity": "679101.86",
+      "rampFraction": 1
+    },
+    {
+      "date": "2025-10-11",
+      "equity": "679176.23",
+      "rampFraction": 1
+    },
+    {
+      "date": "2025-10-12",
+      "equity": "679250.62",
+      "rampFraction": 1
+    },
+    {
+      "date": "2025-10-13",
+      "equity": "679325.01",
+      "rampFraction": 1
+    },
+    {
+      "date": "2025-10-14",
+      "equity": "679399.41",
+      "rampFraction": 1
+    },
+    {
+      "date": "2025-10-15",
+      "equity": "679473.81",
+      "rampFraction": 1
+    },
+    {
+      "date": "2025-10-16",
+      "equity": "679548.23",
+      "rampFraction": 1
+    },
+    {
+      "date": "2025-10-17",
+      "equity": "679622.65",
+      "rampFraction": 1
+    },
+    {
+      "date": "2025-10-18",
+      "equity": "679697.09",
+      "rampFraction": 1
+    },
+    {
+      "date": "2025-10-19",
+      "equity": "679771.53",
+      "rampFraction": 1
+    },
+    {
+      "date": "2025-10-20",
+      "equity": "679845.97",
+      "rampFraction": 1
+    },
+    {
+      "date": "2025-10-21",
+      "equity": "679920.43",
+      "rampFraction": 1
+    },
+    {
+      "date": "2025-10-22",
+      "equity": "679994.90",
+      "rampFraction": 1
+    },
+    {
+      "date": "2025-10-23",
+      "equity": "680069.37",
+      "rampFraction": 1
+    },
+    {
+      "date": "2025-10-24",
+      "equity": "680143.85",
+      "rampFraction": 1
+    },
+    {
+      "date": "2025-10-25",
+      "equity": "680218.34",
+      "rampFraction": 1
+    },
+    {
+      "date": "2025-10-26",
+      "equity": "680292.84",
+      "rampFraction": 1
+    },
+    {
+      "date": "2025-10-27",
+      "equity": "680367.34",
+      "rampFraction": 1
+    },
+    {
+      "date": "2025-10-28",
+      "equity": "680441.86",
+      "rampFraction": 1
+    },
+    {
+      "date": "2025-10-29",
+      "equity": "680516.38",
+      "rampFraction": 1
+    },
+    {
+      "date": "2025-10-30",
+      "equity": "680590.91",
+      "rampFraction": 1
+    },
+    {
+      "date": "2025-10-31",
+      "equity": "680665.45",
+      "rampFraction": 1
+    },
+    {
+      "date": "2025-11-01",
+      "equity": "680739.99",
+      "rampFraction": 1
+    },
+    {
+      "date": "2025-11-02",
+      "equity": "680814.55",
+      "rampFraction": 1
+    },
+    {
+      "date": "2025-11-03",
+      "equity": "680889.11",
+      "rampFraction": 1
+    },
+    {
+      "date": "2025-11-04",
+      "equity": "680963.68",
+      "rampFraction": 1
+    },
+    {
+      "date": "2025-11-05",
+      "equity": "681038.26",
+      "rampFraction": 1
+    },
+    {
+      "date": "2025-11-06",
+      "equity": "681112.85",
+      "rampFraction": 1
+    },
+    {
+      "date": "2025-11-07",
+      "equity": "681187.44",
+      "rampFraction": 1
+    },
+    {
+      "date": "2025-11-08",
+      "equity": "681262.04",
+      "rampFraction": 1
+    },
+    {
+      "date": "2025-11-09",
+      "equity": "681336.66",
+      "rampFraction": 1
+    },
+    {
+      "date": "2025-11-10",
+      "equity": "681411.28",
+      "rampFraction": 1
+    },
+    {
+      "date": "2025-11-11",
+      "equity": "681485.90",
+      "rampFraction": 1
+    },
+    {
+      "date": "2025-11-12",
+      "equity": "681560.54",
+      "rampFraction": 1
+    },
+    {
+      "date": "2025-11-13",
+      "equity": "681635.18",
+      "rampFraction": 1
+    },
+    {
+      "date": "2025-11-14",
+      "equity": "681709.84",
+      "rampFraction": 1
+    },
+    {
+      "date": "2025-11-15",
+      "equity": "681784.50",
+      "rampFraction": 1
+    },
+    {
+      "date": "2025-11-16",
+      "equity": "681859.17",
+      "rampFraction": 1
+    },
+    {
+      "date": "2025-11-17",
+      "equity": "681933.84",
+      "rampFraction": 1
+    },
+    {
+      "date": "2025-11-18",
+      "equity": "682008.53",
+      "rampFraction": 1
+    },
+    {
+      "date": "2025-11-19",
+      "equity": "682083.22",
+      "rampFraction": 1
+    },
+    {
+      "date": "2025-11-20",
+      "equity": "682157.92",
+      "rampFraction": 1
+    },
+    {
+      "date": "2025-11-21",
+      "equity": "682232.63",
+      "rampFraction": 1
+    },
+    {
+      "date": "2025-11-22",
+      "equity": "682307.35",
+      "rampFraction": 1
+    },
+    {
+      "date": "2025-11-23",
+      "equity": "682382.08",
+      "rampFraction": 1
+    },
+    {
+      "date": "2025-11-24",
+      "equity": "682456.81",
+      "rampFraction": 1
+    },
+    {
+      "date": "2025-11-25",
+      "equity": "682531.55",
+      "rampFraction": 1
+    },
+    {
+      "date": "2025-11-26",
+      "equity": "682606.31",
+      "rampFraction": 1
+    },
+    {
+      "date": "2025-11-27",
+      "equity": "682681.06",
+      "rampFraction": 1
+    },
+    {
+      "date": "2025-11-28",
+      "equity": "682755.83",
+      "rampFraction": 1
+    },
+    {
+      "date": "2025-11-29",
+      "equity": "682830.61",
+      "rampFraction": 1
+    },
+    {
+      "date": "2025-11-30",
+      "equity": "682905.39",
+      "rampFraction": 1
+    },
+    {
+      "date": "2025-12-01",
+      "equity": "682980.18",
+      "rampFraction": 1
+    },
+    {
+      "date": "2025-12-02",
+      "equity": "683054.98",
+      "rampFraction": 1
+    },
+    {
+      "date": "2025-12-03",
+      "equity": "683129.79",
+      "rampFraction": 1
+    },
+    {
+      "date": "2025-12-04",
+      "equity": "683204.61",
+      "rampFraction": 1
+    },
+    {
+      "date": "2025-12-05",
+      "equity": "683279.43",
+      "rampFraction": 1
+    },
+    {
+      "date": "2025-12-06",
+      "equity": "683354.26",
+      "rampFraction": 1
+    },
+    {
+      "date": "2025-12-07",
+      "equity": "683429.10",
+      "rampFraction": 1
+    },
+    {
+      "date": "2025-12-08",
+      "equity": "683503.95",
+      "rampFraction": 1
+    },
+    {
+      "date": "2025-12-09",
+      "equity": "683578.81",
+      "rampFraction": 1
+    },
+    {
+      "date": "2025-12-10",
+      "equity": "683653.68",
+      "rampFraction": 1
+    },
+    {
+      "date": "2025-12-11",
+      "equity": "683728.55",
+      "rampFraction": 1
+    },
+    {
+      "date": "2025-12-12",
+      "equity": "683803.43",
+      "rampFraction": 1
+    },
+    {
+      "date": "2025-12-13",
+      "equity": "683878.32",
+      "rampFraction": 1
+    },
+    {
+      "date": "2025-12-14",
+      "equity": "683953.22",
+      "rampFraction": 1
+    },
+    {
+      "date": "2025-12-15",
+      "equity": "684028.13",
+      "rampFraction": 1
+    },
+    {
+      "date": "2025-12-16",
+      "equity": "684103.04",
+      "rampFraction": 1
+    },
+    {
+      "date": "2025-12-17",
+      "equity": "684177.96",
+      "rampFraction": 1
+    },
+    {
+      "date": "2025-12-18",
+      "equity": "684252.89",
+      "rampFraction": 1
+    },
+    {
+      "date": "2025-12-19",
+      "equity": "684327.83",
+      "rampFraction": 1
+    },
+    {
+      "date": "2025-12-20",
+      "equity": "684402.78",
+      "rampFraction": 1
+    },
+    {
+      "date": "2025-12-21",
+      "equity": "684477.74",
+      "rampFraction": 1
+    },
+    {
+      "date": "2025-12-22",
+      "equity": "684552.70",
+      "rampFraction": 1
+    },
+    {
+      "date": "2025-12-23",
+      "equity": "684627.67",
+      "rampFraction": 1
+    },
+    {
+      "date": "2025-12-24",
+      "equity": "684702.65",
+      "rampFraction": 1
+    },
+    {
+      "date": "2025-12-25",
+      "equity": "684777.64",
+      "rampFraction": 1
+    },
+    {
+      "date": "2025-12-26",
+      "equity": "684852.64",
+      "rampFraction": 1
+    },
+    {
+      "date": "2025-12-27",
+      "equity": "684927.64",
+      "rampFraction": 1
+    },
+    {
+      "date": "2025-12-28",
+      "equity": "685002.66",
+      "rampFraction": 1
+    },
+    {
+      "date": "2025-12-29",
+      "equity": "685077.68",
+      "rampFraction": 1
+    },
+    {
+      "date": "2025-12-30",
+      "equity": "685152.71",
+      "rampFraction": 1
+    },
+    {
+      "date": "2025-12-31",
+      "equity": "685227.74",
+      "rampFraction": 1
+    },
+    {
+      "date": "2026-01-01",
+      "equity": "685302.79",
+      "rampFraction": 1
+    },
+    {
+      "date": "2026-01-02",
+      "equity": "685377.84",
+      "rampFraction": 1
+    },
+    {
+      "date": "2026-01-03",
+      "equity": "685452.91",
+      "rampFraction": 1
+    },
+    {
+      "date": "2026-01-04",
+      "equity": "685527.98",
+      "rampFraction": 1
+    },
+    {
+      "date": "2026-01-05",
+      "equity": "685603.06",
+      "rampFraction": 1
+    },
+    {
+      "date": "2026-01-06",
+      "equity": "685678.14",
+      "rampFraction": 1
+    },
+    {
+      "date": "2026-01-07",
+      "equity": "685753.24",
+      "rampFraction": 1
+    },
+    {
+      "date": "2026-01-08",
+      "equity": "685828.34",
+      "rampFraction": 1
+    },
+    {
+      "date": "2026-01-09",
+      "equity": "685903.45",
+      "rampFraction": 1
+    },
+    {
+      "date": "2026-01-10",
+      "equity": "685978.57",
+      "rampFraction": 1
+    },
+    {
+      "date": "2026-01-11",
+      "equity": "686053.70",
+      "rampFraction": 1
+    },
+    {
+      "date": "2026-01-12",
+      "equity": "686128.84",
+      "rampFraction": 1
+    },
+    {
+      "date": "2026-01-13",
+      "equity": "686203.98",
+      "rampFraction": 1
+    },
+    {
+      "date": "2026-01-14",
+      "equity": "686279.14",
+      "rampFraction": 1
+    },
+    {
+      "date": "2026-01-15",
+      "equity": "686354.30",
+      "rampFraction": 1
+    },
+    {
+      "date": "2026-01-16",
+      "equity": "686429.47",
+      "rampFraction": 1
+    },
+    {
+      "date": "2026-01-17",
+      "equity": "686504.64",
+      "rampFraction": 1
+    },
+    {
+      "date": "2026-01-18",
+      "equity": "686579.83",
+      "rampFraction": 1
+    },
+    {
+      "date": "2026-01-19",
+      "equity": "686655.02",
+      "rampFraction": 1
+    },
+    {
+      "date": "2026-01-20",
+      "equity": "686730.23",
+      "rampFraction": 1
+    },
+    {
+      "date": "2026-01-21",
+      "equity": "686805.44",
+      "rampFraction": 1
+    },
+    {
+      "date": "2026-01-22",
+      "equity": "686880.66",
+      "rampFraction": 1
+    },
+    {
+      "date": "2026-01-23",
+      "equity": "686955.88",
+      "rampFraction": 1
+    },
+    {
+      "date": "2026-01-24",
+      "equity": "687031.12",
+      "rampFraction": 1
+    },
+    {
+      "date": "2026-01-25",
+      "equity": "687106.36",
+      "rampFraction": 1
+    },
+    {
+      "date": "2026-01-26",
+      "equity": "687181.61",
+      "rampFraction": 1
+    },
+    {
+      "date": "2026-01-27",
+      "equity": "687256.87",
+      "rampFraction": 1
+    },
+    {
+      "date": "2026-01-28",
+      "equity": "687332.14",
+      "rampFraction": 1
+    },
+    {
+      "date": "2026-01-29",
+      "equity": "687407.42",
+      "rampFraction": 1
+    },
+    {
+      "date": "2026-01-30",
+      "equity": "687482.70",
+      "rampFraction": 1
+    },
+    {
+      "date": "2026-01-31",
+      "equity": "687558.00",
+      "rampFraction": 1
+    },
+    {
+      "date": "2026-02-01",
+      "equity": "687633.30",
+      "rampFraction": 1
+    },
+    {
+      "date": "2026-02-02",
+      "equity": "687708.61",
+      "rampFraction": 1
+    },
+    {
+      "date": "2026-02-03",
+      "equity": "687783.92",
+      "rampFraction": 1
+    },
+    {
+      "date": "2026-02-04",
+      "equity": "687859.25",
+      "rampFraction": 1
+    },
+    {
+      "date": "2026-02-05",
+      "equity": "687934.58",
+      "rampFraction": 1
+    },
+    {
+      "date": "2026-02-06",
+      "equity": "688009.93",
+      "rampFraction": 1
+    },
+    {
+      "date": "2026-02-07",
+      "equity": "688085.28",
+      "rampFraction": 1
+    },
+    {
+      "date": "2026-02-08",
+      "equity": "688160.64",
+      "rampFraction": 1
+    },
+    {
+      "date": "2026-02-09",
+      "equity": "688236.00",
+      "rampFraction": 1
+    },
+    {
+      "date": "2026-02-10",
+      "equity": "688311.38",
+      "rampFraction": 1
+    },
+    {
+      "date": "2026-02-11",
+      "equity": "688386.76",
+      "rampFraction": 1
+    },
+    {
+      "date": "2026-02-12",
+      "equity": "688462.15",
+      "rampFraction": 1
+    },
+    {
+      "date": "2026-02-13",
+      "equity": "688537.55",
+      "rampFraction": 1
+    },
+    {
+      "date": "2026-02-14",
+      "equity": "688612.96",
+      "rampFraction": 1
+    },
+    {
+      "date": "2026-02-15",
+      "equity": "688688.38",
+      "rampFraction": 1
+    },
+    {
+      "date": "2026-02-16",
+      "equity": "688763.81",
+      "rampFraction": 1
+    },
+    {
+      "date": "2026-02-17",
+      "equity": "688839.24",
+      "rampFraction": 1
+    },
+    {
+      "date": "2026-02-18",
+      "equity": "688914.68",
+      "rampFraction": 1
+    },
+    {
+      "date": "2026-02-19",
+      "equity": "688990.13",
+      "rampFraction": 1
+    },
+    {
+      "date": "2026-02-20",
+      "equity": "689065.59",
+      "rampFraction": 1
+    },
+    {
+      "date": "2026-02-21",
+      "equity": "689141.05",
+      "rampFraction": 1
+    },
+    {
+      "date": "2026-02-22",
+      "equity": "689216.53",
+      "rampFraction": 1
+    },
+    {
+      "date": "2026-02-23",
+      "equity": "689292.01",
+      "rampFraction": 1
+    },
+    {
+      "date": "2026-02-24",
+      "equity": "689367.50",
+      "rampFraction": 1
+    },
+    {
+      "date": "2026-02-25",
+      "equity": "689443.00",
+      "rampFraction": 1
+    },
+    {
+      "date": "2026-02-26",
+      "equity": "689518.51",
+      "rampFraction": 1
+    },
+    {
+      "date": "2026-02-27",
+      "equity": "689594.03",
+      "rampFraction": 1
+    },
+    {
+      "date": "2026-02-28",
+      "equity": "689669.55",
+      "rampFraction": 1
+    },
+    {
+      "date": "2026-03-01",
+      "equity": "689745.08",
+      "rampFraction": 1
+    },
+    {
+      "date": "2026-03-02",
+      "equity": "689820.62",
+      "rampFraction": 1
+    },
+    {
+      "date": "2026-03-03",
+      "equity": "689896.17",
+      "rampFraction": 1
+    },
+    {
+      "date": "2026-03-04",
+      "equity": "689971.73",
+      "rampFraction": 1
+    },
+    {
+      "date": "2026-03-05",
+      "equity": "690047.29",
+      "rampFraction": 1
+    },
+    {
+      "date": "2026-03-06",
+      "equity": "690122.87",
+      "rampFraction": 1
+    },
+    {
+      "date": "2026-03-07",
+      "equity": "690198.45",
+      "rampFraction": 1
+    },
+    {
+      "date": "2026-03-08",
+      "equity": "690274.04",
+      "rampFraction": 1
+    },
+    {
+      "date": "2026-03-09",
+      "equity": "690349.64",
+      "rampFraction": 1
+    },
+    {
+      "date": "2026-03-10",
+      "equity": "690425.25",
+      "rampFraction": 1
+    },
+    {
+      "date": "2026-03-11",
+      "equity": "690500.86",
+      "rampFraction": 1
+    },
+    {
+      "date": "2026-03-12",
+      "equity": "690576.49",
+      "rampFraction": 1
+    },
+    {
+      "date": "2026-03-13",
+      "equity": "690652.12",
+      "rampFraction": 1
+    },
+    {
+      "date": "2026-03-14",
+      "equity": "690727.76",
+      "rampFraction": 1
+    }
+  ]
+}

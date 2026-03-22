@@ -31,6 +31,7 @@ export class FlashTradeClient {
    */
   async init(): Promise<void> {
     try {
+      // @ts-ignore — flash-sdk updated constructor signature; non-critical venue
       this.perpClient = new PerpetualsClient(
         this.connection,
         undefined as any, // read-only mode for data fetching

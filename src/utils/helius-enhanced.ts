@@ -72,7 +72,7 @@ export class HeliusClient {
 
   constructor(apiKey?: string) {
     this.apiKey = apiKey || config.heliusRpcUrl?.split("/v0/")[1] || process.env.HELIUS_API_KEY || "";
-    this.rpcUrl = `https://mainnet.helius-rpc.com/?api-key=${this.apiKey}`;
+    this.rpcUrl = process.env.HELIUS_RPC_URL || `https://mainnet.helius-rpc.com/?api-key=${this.apiKey}`;
   }
 
   /**

@@ -86,8 +86,9 @@ export class RaydiumClient {
   }): Promise<string> {
     try {
       // Dynamic import to avoid requiring SDK when not used
+      const raydiumPkg = "@raydium-io/raydium-sdk-v2";
       const { Raydium, CLMM_PROGRAM_ID, TxVersion } = await import(
-        "@raydium-io/raydium-sdk-v2"
+        /* webpackIgnore: true */ raydiumPkg
       );
 
       const raydium = await Raydium.load({ connection: this.connection });
@@ -132,8 +133,9 @@ export class RaydiumClient {
     signer: Keypair;
   }): Promise<string> {
     try {
+      const raydiumPkg2 = "@raydium-io/raydium-sdk-v2";
       const { Raydium, TxVersion } = await import(
-        "@raydium-io/raydium-sdk-v2"
+        /* webpackIgnore: true */ raydiumPkg2
       );
 
       const raydium = await Raydium.load({ connection: this.connection });
