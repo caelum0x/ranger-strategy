@@ -30,3 +30,4 @@ drift_lending_*.csv
 src/plugins/kamino-scripts/
 src/plugins/trustful-scripts/
 src/plugins/voltr-drift-scripts/
+.env.mainnet
